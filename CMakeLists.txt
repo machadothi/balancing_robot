@@ -6,6 +6,8 @@ set(SOURCE_FILES
     src/main.c
     src/robot.c
     src/motor.c
+    src/imu/imu.c
+    src/imu/mpu6050.c
 )
 
 # Add the source files for the test cases
