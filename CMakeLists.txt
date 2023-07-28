@@ -5,9 +5,11 @@ project(project_robot C CXX)
 set(SOURCE_FILES
     src/main.c
     src/robot.c
-    src/motor.c
+    src/motor/motor.c
     src/imu/imu.c
     src/imu/mpu6050.c
+    src/communication/comm_bus.c
+    src/communication/i2c.c
 )
 
 # Add the source files for the test cases
