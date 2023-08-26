@@ -1,27 +1,49 @@
-#include <stdio.h>
+/* Simple LED task demo:
+ *
+ * The LED on PC13 is toggled in task1.
+ */
+#include "FreeRTOS.h"
+#include "task.h"
 
-#include "robot.h"
-#include "imu/mpu6050.h"
-#include "communication/i2c.h"
+#include <libopencm3/stm32/rcc.h>
+#include <libopencm3/stm32/gpio.h>
 
-int main() {
+extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
+                                        char * pcTaskName );
 
-    IMU *imu = get_mpu6050_imu();
-    CommBus *comm = get_i2c_bus();
-
-    imu_init(imu);
-    comm_bus_init(comm);
-
-    float pitch = imu_pitch(imu);
-    float roll = imu_roll(imu);
-    float yaw = imu_yaw(imu);
-
-    printf("imu values: %f %f %f\n", pitch, roll, yaw);
-
-    comm_bus_write_byte(comm, 0x00);
-    uint8_t a = comm_bus_read_byte(comm);
-    comm_bus_start(comm);
-    comm_bus_stop(comm);
-
-    return 0;
+void
+vApplicationStackOverflowHook( TaskHandle_t xTask,
+                                        char * pcTaskName ) {
+	(void)xTask;
+	(void)pcTaskName;
+	for(;;);
 }
+
+static void
+task1(void *args) {
+	int i;
+
+	(void)args;
+
+	for (;;) {
+		gpio_toggle(GPIOC,GPIO13);
+		for (i = 0; i < 1000000; i++)
+			__asm__("nop");
+	}
+}
+
+int
+main(void) {
+
+	rcc_clock_setup_in_hse_8mhz_out_72mhz();	// Use this for "blue pill"
+	rcc_periph_clock_enable(RCC_GPIOC);
+	gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
+
+	xTaskCreate(task1,"LED",100,NULL,configMAX_PRIORITIES-1,NULL);
+	vTaskStartScheduler();
+	for (;;);
+
+	return 0;
+}
+
+// End
