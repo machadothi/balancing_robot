@@ -63,7 +63,7 @@ void
 i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,uint32_t ticks) {
 
     dev->device = i2c;
-    dev->addr = address;
+    dev->addr = (address|((0)&7));
     dev->timeout = ticks;
 
     i2c_peripheral_disable(dev->device);
@@ -82,101 +82,104 @@ i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,uint32_t ticks) {
  * Return when I2C is not busy
  *********************************************************************/
 
+bool
+i2c_is_busy(uint32_t i2c) {
+    return (I2C_SR2(i2c) & I2C_SR2_BUSY);
+}
+
+/*********************************************************************
+ * Return when I2C slave set ACK fails
+ *********************************************************************/
+
+bool
+i2c_slv_ack_fail(uint32_t i2c) {
+    return ( I2C_SR1(i2c) & I2C_SR1_AF );
+}
+
+/*********************************************************************
+ * Clears I2C Status Registers 1 and 2
+ *********************************************************************/
+
 void
-i2c_wait_busy(I2C_Control *dev) {
+i2c_clear_status_flags(uint32_t i2c, Status_Flag flag) {
+    switch (flag)
+    {
+    case SF_1:
+        (void)I2C_SR1(i2c);
+        break;
+    case SF_2:
+        (void)I2C_SR2(i2c);
+        break;
+    case SF_BOTH:
+        (void)I2C_SR1(i2c);
+        (void)I2C_SR2(i2c);
+        break;
+    
+    default:
+        break;
+    }
+}
 
-    while ( I2C_SR2(dev->device) & I2C_SR2_BUSY )
-        taskYIELD();            // I2C Busy
+/*********************************************************************
+ * Clears I2C Status Registers 1 and 2
+ *********************************************************************/
 
+bool
+i2c_slave_found(uint32_t i2c) {
+    return (I2C_SR1(i2c) & I2C_SR1_ADDR);
+}
+
+/*********************************************************************
+ * Return if the Start bit was successfully set.
+ *********************************************************************/
+
+bool
+i2c_start_bit(uint32_t i2c){
+    return (I2C_SR1(i2c) & I2C_SR1_SB);
 }
 
 /*********************************************************************
  * Start I2C Read/Write Transaction with indicated 7-bit address:
  *********************************************************************/
 
-void
+I2C_Fails
 i2c_start_addr(I2C_Control *dev, enum I2C_RW rw) {
-    TickType_t t0 = systicks();
-
-    i2c_wait_busy(dev);            // Block until not busy
-    I2C_SR1(dev->device) &= ~I2C_SR1_AF;    // Clear Acknowledge failure
+    i2c_clear_status_flags(dev->device, SF_2);
     i2c_clear_stop(dev->device);        // Do not generate a Stop
     if ( rw == Read )
         i2c_enable_ack(dev->device);
-    i2c_send_start(dev->device);        // Generate a Start/Restart
-    TickType_t LastWakeTime;
-    // Loop until ready:
-    while ( !((I2C_SR1(dev->device) & I2C_SR1_SB) 
-      && (I2C_SR2(dev->device) & (I2C_SR2_MSL|I2C_SR2_BUSY))) ) {
-        // if ( diff_ticks(t0,systicks()) > dev->timeout )
-        //     longjmp(i2c_exception,I2C_Addr_Timeout);
 
-        // taskYIELD();
-        LastWakeTime = xTaskGetTickCount();
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(10));
-    }
+    i2c_send_start(dev->device);        // Generate a Start/Restart
+
+	// Loop until ready:
+    TickType_t t0 = systicks();
+    while ( !i2c_start_bit(dev->device) && i2c_is_busy(dev->device)) {
+		if ( diff_ticks(t0,systicks()) > dev->timeout )
+			return I2C_Busy_Timeout;
+		// taskYIELD(); //?
+	}
 
     // Send Address & R/W flag:
-    uint8_t addr = (dev->addr|((0)&7));
-    i2c_send_7bit_address(dev->device,dev->addr,
-        rw == Read ? I2C_READ : I2C_WRITE);
+    i2c_send_7bit_address(dev->device,dev->addr, rw == Read ? I2C_READ : I2C_WRITE);
 
     // Wait until completion, NAK or timeout
     t0 = systicks();
-
-    while ( !(I2C_SR1(dev->device) & I2C_SR1_ADDR) ) {
-        if ( I2C_SR1(dev->device) & I2C_SR1_AF ) {
+    while ( !i2c_slave_found(dev->device) ) {
+        if ( i2c_slv_ack_fail(dev->device)) {
             i2c_send_stop(dev->device);
-            (void)I2C_SR1(dev->device);
-            (void)I2C_SR2(dev->device);     // Clear flags
-            // NAK Received (no ADDR flag will be set here)
-            // longjmp(i2c_exception,I2C_Addr_NAK); 
+            i2c_clear_status_flags(dev->device, SF_BOTH);
+            return I2C_Addr_NAK; 
         }
-        // if ( diff_ticks(t0,systicks()) > dev->timeout )
-            // longjmp(i2c_exception,I2C_Addr_Timeout); 
-        // taskYIELD();
-        LastWakeTime = xTaskGetTickCount();
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(50));
+        if ( diff_ticks(t0,systicks()) > dev->timeout )
+            return I2C_Addr_Timeout;        
     }
 
-    (void)I2C_SR2(dev->device);        // Clear flags
+    i2c_clear_status_flags(dev->device, SF_2);
+    return I2C_Ok;
 }
 
-/*********************************************************************
- * Write one byte of data
- *********************************************************************/
-
-void
-i2c_write(I2C_Control *dev,uint8_t byte) {
-    TickType_t t0 = systicks();
-
-    i2c_send_data(dev->device,byte);
-    while ( !(I2C_SR1(dev->device) & (I2C_SR1_BTF)) ) {
-        // if ( diff_ticks(t0,systicks()) > dev->timeout )
-        //     longjmp(i2c_exception,I2C_Write_Timeout);
-        // taskYIELD();
-    }
-}
-
-/*********************************************************************
- * Read one byte of data. Set lastf=true, if this is the last/only
- * byte being read.
- *********************************************************************/
-
-uint8_t
-i2c_read(I2C_Control *dev,bool lastf) {
-    TickType_t t0 = systicks();
-
-    if ( lastf )
-        i2c_disable_ack(dev->device);    // Reading last/only byte
-
-    while ( !(I2C_SR1(dev->device) & I2C_SR1_RxNE) ) {
-        // if ( diff_ticks(t0,systicks()) > dev->timeout )
-        //     longjmp(i2c_exception,I2C_Read_Timeout);
-        // taskYIELD();
-    }
-    
-    return i2c_get_data(dev->device);
+bool i2c_byte_transfer_finished(uint32_t i2c) {
+    return (I2C_SR1(i2c) & (I2C_SR1_BTF));
 }
 
 /*********************************************************************
@@ -184,81 +187,86 @@ i2c_read(I2C_Control *dev,bool lastf) {
  * read to follow.
  *********************************************************************/
 
-void
+I2C_Fails
 i2c_write_restart(I2C_Control *dev,uint8_t byte) {
-    TickType_t t0 = systicks();
+	taskENTER_CRITICAL();
+	i2c_send_data(dev->device,byte);
+	// Must set start before byte has written out
+	i2c_send_start(dev->device);
+	taskEXIT_CRITICAL();
 
-    taskENTER_CRITICAL();
-    i2c_send_data(dev->device,byte);
-    // Must set start before byte has written out
-    i2c_send_start(dev->device);
-    taskEXIT_CRITICAL();
+	// Wait for transmit to complete
+	TickType_t t0 = systicks();
+	while ( !i2c_byte_transfer_finished(dev->device) ) {
+		if ( diff_ticks(t0,systicks()) > dev->timeout )
+			return I2C_Write_Timeout;
+	}
 
-    // Wait for transmit to complete
-    while ( !(I2C_SR1(dev->device) & (I2C_SR1_BTF)) ) {
-        if ( diff_ticks(t0,systicks()) > dev->timeout )
-            longjmp(i2c_exception,I2C_Write_Timeout);
-        taskYIELD();
-    }
+	// Loop until restart ready:
+	t0 = systicks();
+    while ( !i2c_start_bit(dev->device) && i2c_is_busy(dev->device)) {
+		if ( diff_ticks(t0,systicks()) > dev->timeout )
+			return I2C_Busy_Timeout;
+	}
 
-    // Loop until restart ready:
-    t0 = systicks();
-        while ( !((I2C_SR1(dev->device) & I2C_SR1_SB) 
-      && (I2C_SR2(dev->device) & (I2C_SR2_MSL|I2C_SR2_BUSY))) ) {
-        if ( diff_ticks(t0,systicks()) > dev->timeout )
-            longjmp(i2c_exception,I2C_Addr_Timeout);
-        taskYIELD();
-    }
+	// Send Address & Read command bit
+	i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
 
-    // Send Address & Read command bit
-    i2c_send_7bit_address(dev->device,dev->addr,I2C_READ);
-
-    // Wait until completion, NAK or timeout
-    t0 = systicks();
-    while ( !(I2C_SR1(dev->device) & I2C_SR1_ADDR) ) {
-        if ( I2C_SR1(dev->device) & I2C_SR1_AF ) {
+	// Wait until completion, NAK or timeout
+	t0 = systicks();
+    while ( !i2c_slave_found(dev->device) ) {
+        if ( i2c_slv_ack_fail(dev->device)) {
             i2c_send_stop(dev->device);
-            (void)I2C_SR1(dev->device);
-            (void)I2C_SR2(dev->device);     // Clear flags
-            // NAK Received (no ADDR flag will be set here)
-            longjmp(i2c_exception,I2C_Addr_NAK); 
+            i2c_clear_status_flags(dev->device, SF_BOTH);
+            return I2C_Addr_NAK; 
         }
         if ( diff_ticks(t0,systicks()) > dev->timeout )
-            longjmp(i2c_exception,I2C_Addr_Timeout); 
-        taskYIELD();
+            return I2C_Addr_Timeout;        
     }
 
-    (void)I2C_SR2(dev->device);        // Clear flags
+	i2c_clear_status_flags(dev->device, SF_2);
+    return I2C_Ok;
 }
 
 // -----------------------------------------------------------------------------
-
-void readBit(I2C_Control *dev, uint8_t bitNum, uint8_t *data) {
+// FIXXXXXXXXX
+I2C_Fails
+readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
     uint8_t b;
-    readByte(dev, &b);
+    readByte(dev, regAddr, &b);
     *data = b & (1 << bitNum);
+    return I2C_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-void readByte(I2C_Control *dev, uint8_t *data) {
-    i2c_start_addr(dev,Read);
-    *data = i2c_read(dev,true);
+I2C_Fails
+readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data) {
+
+    i2c_start_addr(dev,Write);
+    i2c_write_restart(dev, regAddr);
+
+    // i2c_start_addr(dev,Read);
+    *data = i2c_get_data(dev->device);;
     i2c_stop(dev);
+
+    return I2C_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-bool writeBit(I2C_Control *dev, uint8_t bitNum, uint8_t data) {
+I2C_Fails
+writeBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data) {
     uint8_t b = 0;
-    readByte(dev, &b);
+    readByte(dev, regAddr, &b);
     b = (data != 0) ? (b | (1 << bitNum)) : (b & ~(1 << bitNum));
-    return writeByte(dev, b);
+    return writeByte(dev, regAddr, b);
 }
 
 // -----------------------------------------------------------------------------
 
-bool writeBits(I2C_Control *dev, uint8_t bitStart, uint8_t length, uint8_t data) {
+I2C_Fails
+writeBits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, uint8_t length, uint8_t data) {
     //      010 value to write
     // 76543210 bit numbers
     //    xxx   args: bitStart=4, length=3
@@ -267,23 +275,38 @@ bool writeBits(I2C_Control *dev, uint8_t bitStart, uint8_t length, uint8_t data)
     // 10100011 original & ~mask
     // 10101011 masked | value
     uint8_t b = 0;
-    readByte(dev, &b);
+    readByte(dev, regAddr, &b);
     uint8_t mask = ((1 << length) - 1) << (bitStart - length + 1);
     data <<= (bitStart - length + 1); // shift data into correct position
     data &= mask; // zero all non-important bits in data
     b &= ~(mask); // zero all important bits in existing byte
     b |= data; // combine data with existing byte
-    return writeByte(dev, b);
+    return writeByte(dev, regAddr, b);
 }
 
 // -----------------------------------------------------------------------------
 
-bool writeByte(I2C_Control *dev, uint8_t data) {
+I2C_Fails
+writeByte(I2C_Control *dev, uint8_t regAddr, uint8_t data) {
     i2c_start_addr(dev,Write);
-    i2c_write(dev,data);
+    i2c_send_data(dev->device,regAddr);
+
+    TickType_t t0 = systicks();
+    while ( i2c_slv_ack_fail(dev->device) ) {
+        if ( diff_ticks(t0,systicks()) > dev->timeout )
+            return I2C_Addr_NAK;        
+    }
+
+    i2c_send_data(dev->device, data);
+    t0 = systicks();
+    while ( i2c_slv_ack_fail(dev->device) ) {
+        if ( diff_ticks(t0,systicks()) > dev->timeout )
+            return I2C_Addr_NAK;        
+    }
+
     i2c_stop(dev);
 
-    return true;
+    return I2C_Ok;
 }
 
 // i2c.c
