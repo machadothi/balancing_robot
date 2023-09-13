@@ -3,7 +3,18 @@
 ######################################################################
 
 BINARY		= main
-SRCFILES	= main.c rtos/heap_4.c rtos/list.c rtos/port.c rtos/queue.c rtos/tasks.c rtos/opencm3.c
+
+SRCFILES := main.c
+SRCFILES += rtos/heap_4.c
+SRCFILES += rtos/list.c
+SRCFILES += rtos/port.c
+SRCFILES += rtos/queue.c
+SRCFILES += rtos/tasks.c
+SRCFILES += rtos/opencm3.c
+SRCFILES += communication/i2c.c
+# SRCFILES += imu/imu.c
+SRCFILES += imu/mpu6050.c
+
 LDSCRIPT	= stm32f103c8t6.ld
 
 # DEPS		= 	# Any additional dependencies for your build
