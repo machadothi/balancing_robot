@@ -50,8 +50,6 @@ I2C_Fails i2c_start_addr(I2C_Control *dev, enum I2C_RW rw);
 I2C_Fails i2c_write_restart(I2C_Control *dev,uint8_t byte);
 bool i2c_byte_transfer_finished(uint32_t i2c);
 
-inline void i2c_stop(I2C_Control *dev) { i2c_send_stop(dev->device); }
-
 /** Read a single bit from an 8-bit device register.
  * @param devAddr I2C slave device address
  * @param regAddr Register regAddr to read from

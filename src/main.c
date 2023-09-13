@@ -100,6 +100,9 @@ uart_puts(const char *s) {
 static void
 demo_task(void *args __attribute__((unused))) {
 
+    // IMU - needs to be initialized after the scheduler.
+    initialize();
+
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
@@ -124,9 +127,6 @@ main(void) {
     rcc_periph_clock_enable(RCC_GPIOC);
     gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
 
-    // UART
-    uart_setup();
-
     // I2c
     rcc_periph_clock_enable(RCC_GPIOB);	// I2C
     rcc_periph_clock_enable(RCC_I2C1);	// I2C
@@ -136,8 +136,8 @@ main(void) {
         GPIO6|GPIO7);            // I2C
     gpio_set(GPIOB,GPIO6|GPIO7);        // Idle high
 
-    // IMU
-    initialize();
+    // UART
+    uart_setup();
 
     xTaskCreate(led,"LED",100,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",100,NULL,configMAX_PRIORITIES-1,NULL);
