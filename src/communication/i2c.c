@@ -1,6 +1,6 @@
-/* A stm32f103 application I2C library
- * Warren W. Gay VE3WWG
- * Sat Nov 25 11:56:51 2017
+/** A stm32f103 I2C library for user applications
+ * Thiago Cunha
+ * Thu Sep 14 2023
  *
  * Notes:
  *    1. Master I2C mode only
@@ -20,20 +20,9 @@
 
 #define systicks    xTaskGetTickCount
 
-static const char *i2c_msg[] = {
-    "OK",
-    "Address timeout",
-    "Address NAK",
-    "Write timeout",
-    "Read timeout"
-};
-
-jmp_buf i2c_exception;
-
-/*********************************************************************
+/**
  * Compute the difference in ticks:
- *********************************************************************/
-
+*/
 static inline TickType_t
 diff_ticks(TickType_t early,TickType_t later) {
 
@@ -42,22 +31,7 @@ diff_ticks(TickType_t early,TickType_t later) {
     return ~(TickType_t)0 - early + 1 + later;
 }
 
-/*********************************************************************
- * Return a character string message for I2C_Fails code
- *********************************************************************/
-
-const char *
-i2c_error(I2C_Fails fcode) {
-    int icode = (int)fcode;
-
-    if ( icode < 0 || icode > (int)I2C_Read_Timeout )
-        return "Bad I2C_Fails code";
-    return i2c_msg[icode];
-}
-
-/*********************************************************************
- * Configure I2C device for 100 kHz, 7-bit addresses
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 void
 i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,uint32_t ticks) {
@@ -78,27 +52,21 @@ i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,uint32_t ticks) {
     i2c_clear_stop(dev->device);
 }
 
-/*********************************************************************
- * Return when I2C is not busy
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 bool
 i2c_is_busy(uint32_t i2c) {
     return ((I2C_SR2(i2c) & I2C_SR2_BUSY) == I2C_SR2_BUSY);
 }
 
-/*********************************************************************
- * Return when I2C slave set ACK fails
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 bool
 i2c_slv_ack_fail(uint32_t i2c) {
     return (( I2C_SR1(i2c) & I2C_SR1_AF ) == I2C_SR1_AF );
 }
 
-/*********************************************************************
- * Clears I2C Status Registers 1 and 2
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 void
 i2c_clear_status_flags(uint32_t i2c, Status_Flag flag) {
@@ -120,27 +88,21 @@ i2c_clear_status_flags(uint32_t i2c, Status_Flag flag) {
     }
 }
 
-/*********************************************************************
- * Clears I2C Status Registers 1 and 2
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 bool
 i2c_slave_found(uint32_t i2c) {
     return ((I2C_SR1(i2c) & I2C_SR1_ADDR) == I2C_SR1_ADDR );
 }
 
-/*********************************************************************
- * Return if the Start bit was successfully set.
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 bool
 i2c_start_bit(uint32_t i2c){
     return ((I2C_SR1(i2c) & I2C_SR1_SB) == I2C_SR1_SB );
 }
 
-/*********************************************************************
- * Start I2C Read/Write Transaction with indicated 7-bit address:
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 I2C_Fails
 i2c_start_addr(I2C_Control *dev, enum I2C_RW rw) {
@@ -148,22 +110,17 @@ i2c_start_addr(I2C_Control *dev, enum I2C_RW rw) {
 
 	// Loop until ready:
     TickType_t t0 = systicks();
-    // while ( !i2c_start_bit(dev->device) && i2c_is_busy(dev->device)) {
     while ( !i2c_start_bit(dev->device) ) {
-		// if ( diff_ticks(t0,systicks()) > dev->timeout )
-		// 	return I2C_Busy_Timeout;
         taskYIELD();
 	}
     i2c_clear_status_flags(dev->device, SF_1);
     // Send Address & R/W flag:
-    i2c_send_7bit_address(dev->device,dev->addr, rw == Read ? I2C_READ : I2C_WRITE);
+    i2c_send_7bit_address(dev->device,dev->addr, 
+      rw == Read ? I2C_READ : I2C_WRITE);
 
     // Wait until completion, NAK or timeout
     t0 = systicks();
     while ( !i2c_slave_found(dev->device) ) {
-		// if ( diff_ticks(t0,xTaskGetTickCount()) > dev->timeout )
-        //     return I2C_Addr_Timeout;
-        
         taskYIELD();
     }
 
@@ -171,14 +128,13 @@ i2c_start_addr(I2C_Control *dev, enum I2C_RW rw) {
     return I2C_Ok;
 }
 
+// -----------------------------------------------------------------------------
+
 bool i2c_byte_transfer_finished(uint32_t i2c) {
     return ((I2C_SR1(i2c) & (I2C_SR1_BTF)) == I2C_SR1_BTF);
 }
 
-/*********************************************************************
- * Write one byte of data, then initiate a repeated start for a
- * read to follow.
- *********************************************************************/
+// -----------------------------------------------------------------------------
 
 I2C_Fails
 i2c_write_restart(I2C_Control *dev,uint8_t byte) {
@@ -191,20 +147,12 @@ i2c_write_restart(I2C_Control *dev,uint8_t byte) {
 	// Wait for transmit to complete
 	TickType_t t0 = systicks();
 	while ( !i2c_byte_transfer_finished(dev->device) ) {
-        // TickType_t sys = systicks();
-		// if ( diff_ticks(t0,sys) > dev->timeout )
-		// 	return I2C_Write_Timeout;
-
         taskYIELD();
 	}
 
 	// Loop until restart ready:
 	t0 = systicks();
-    // while ( !i2c_start_bit(dev->device) && i2c_is_busy(dev->device)) {
     while ( !i2c_start_bit(dev->device)) {
-		// if ( diff_ticks(t0,systicks()) > dev->timeout )
-		// 	return I2C_Busy_Timeout;
-
         taskYIELD();
 	}
 
@@ -214,10 +162,7 @@ i2c_write_restart(I2C_Control *dev,uint8_t byte) {
 
 	// Wait until completion, NAK or timeout
 	t0 = systicks();
-    while ( !i2c_slave_found(dev->device) ) {
-		// if ( diff_ticks(t0,xTaskGetTickCount()) > dev->timeout )
-        //     return I2C_Addr_Timeout;
-        
+    while ( !i2c_slave_found(dev->device) ) {        
         taskYIELD();
     }
 
@@ -226,7 +171,7 @@ i2c_write_restart(I2C_Control *dev,uint8_t byte) {
 }
 
 // -----------------------------------------------------------------------------
-// FIXXXXXXXXX
+
 I2C_Fails
 readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
     uint8_t b;
@@ -243,7 +188,6 @@ readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data) {
     i2c_start_addr(dev,Write);
     i2c_write_restart(dev, regAddr);
 
-    // i2c_start_addr(dev,Read);
     *data = i2c_get_data(dev->device);;
     i2c_send_stop(dev->device);
 
