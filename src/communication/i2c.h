@@ -56,6 +56,8 @@ void i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
  */
 bool i2c_is_busy(uint32_t i2c);
 
+void i2c_reset(uint32_t i2c);
+
 /**
  * @brief Return the ACK Fail register status
  * 
@@ -114,19 +116,34 @@ bool i2c_byte_transfer_finished(uint32_t i2c);
  * @param regAddr Register regAddr to read from
  * @param bitNum Bit position to read (0-7)
  * @param data Container for single bit value
- * @param timeout Optional read timeout in milliseconds (0 to disable, leave off to use default class value in I2Cdev::readTimeout)
- * @return Status of read operation (true = success)
+ * @param timeout Optional read timeout in milliseconds (0 to disable, 
+ * leave off to use default class value in I2Cdev::readTimeout)
+ * @return I2C_Fails
  */
-I2C_Fails readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data);
+I2C_Fails readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
+  uint8_t *data);
 
 /** Read single byte from an 8-bit device register.
  * @param devAddr I2C slave device address
  * @param regAddr Register regAddr to read from
  * @param data Container for byte value read from device
- * @param timeout Optional read timeout in milliseconds (0 to disable, leave off to use default class value in I2Cdev::readTimeout)
- * @return Status of read operation (true = success)
+ * @param timeout Optional read timeout in milliseconds (0 to disable, leave off
+ *  to use default class value in I2Cdev::readTimeout)
+ * @return I2C_Fails
  */
 I2C_Fails readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
+
+/** Read multiple bytes from an 8-bit device register.
+ * @param devAddr I2C slave device address
+ * @param regAddr First register regAddr to read from
+ * @param length Number of bytes to read
+ * @param data Buffer to store read data in
+ * @param timeout Optional read timeout in milliseconds (0 to disable, leave off
+ *  to use default class value in I2Cdev::readTimeout)
+ * @return I2C_Fails
+ */
+I2C_Fails readBytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data, 
+  uint8_t length);
 
 /**
  * @brief Write one byte of data, then initiate a repeated start for a
@@ -143,7 +160,7 @@ I2C_Fails i2c_write_restart(I2C_Control *dev,uint8_t byte);
  * @param regAddr Register regAddr to write to
  * @param bitNum Bit position to write (0-7)
  * @param value New bit value to write
- * @return Status of operation (true = success)
+ * @return I2C_Fails
  */
 I2C_Fails writeBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
                         uint8_t data);
@@ -154,7 +171,7 @@ I2C_Fails writeBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum,
  * @param bitStart First bit position to write (0-7)
  * @param length Number of bits to write (not more than 8)
  * @param data Right-aligned value to write
- * @return Status of operation (true = success)
+ * @return I2C_Fails
  */
 I2C_Fails writeBits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, 
                 uint8_t length, uint8_t data);
@@ -163,8 +180,26 @@ I2C_Fails writeBits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart,
  * @param devAddr I2C slave device address
  * @param regAddr Register address to write to
  * @param data New byte value to write
- * @return Status of operation (true = success)
+ * @return I2C_Fails
  */
 I2C_Fails writeByte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
+
+/**
+ * Run a write/read transaction to a given 7bit i2c address
+ * If both write & read are provided, the read will use repeated start.
+ * Both write and read are optional
+ * There are likely still issues with repeated start/stop condtions!
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param w buffer of data to write
+ * @param wn length of w
+ * @param r destination buffer to read into
+ * @param rn number of bytes to read (r should be at least this long)
+ */
+void i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn);
+
+void i2c_read_v1(uint32_t i2c, int addr, uint8_t *res, size_t n);
+
+void i2c_write_v1(uint32_t i2c, int addr, const uint8_t *data, size_t n);
 
 #endif // I2C_H

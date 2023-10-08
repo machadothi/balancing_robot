@@ -1,13 +1,14 @@
 #include "mpu6050.h"
 #include "../communication/i2c.h"
 
+#define NO_OPT __attribute__((optimize("O0")))
 
 static I2C_Control i2c;            // I2C Control struct
 
-void initialize(void) {
+void NO_OPT initialize(void) {
     i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000);
-    // i2c_configure(&i2c, I2C1, MPU6050_ADDRESS_AD0_HIGH, 1000);
 
+    // imu_reset();
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
     setFullScaleGyroRange(MPU6050_GYRO_FS_250);
     setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
@@ -22,7 +23,8 @@ bool testConnection(void) {
 
 // -----------------------------------------------------------------------------
 
-uint8_t getDeviceID(void) {
+uint8_t NO_OPT
+getDeviceID(void) {
     uint8_t buffer = 0;
     readByte(&i2c, MPU6050_RA_WHO_AM_I, &buffer);
     return buffer;
@@ -36,24 +38,37 @@ void setDeviceID(uint8_t id) {
 
 // -----------------------------------------------------------------------------
 
-void setClockSource(uint8_t source) {
-    writeBits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, MPU6050_PWR1_CLKSEL_LENGTH, source);
+void NO_OPT
+imu_reset(void) {
+    writeBit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
 }
 
 // -----------------------------------------------------------------------------
 
-void setFullScaleGyroRange(uint8_t range) {
+void NO_OPT
+setClockSource(uint8_t source) {
+
+    writeBits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, MPU6050_PWR1_CLKSEL_LENGTH, source);
+
+}
+
+// -----------------------------------------------------------------------------
+
+void NO_OPT
+setFullScaleGyroRange(uint8_t range) {
     writeBits(&i2c, MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, MPU6050_GCONFIG_FS_SEL_LENGTH, range);
 }
 
 // -----------------------------------------------------------------------------
 
-void setFullScaleAccelRange(uint8_t range) {
+void NO_OPT
+setFullScaleAccelRange(uint8_t range) {
     writeBits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, MPU6050_ACONFIG_AFS_SEL_LENGTH, range);
 }
 
 // -----------------------------------------------------------------------------
 
-void setSleepEnabled(bool enabled) {
+void NO_OPT
+setSleepEnabled(bool enabled) {
     writeBit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, enabled);
 }

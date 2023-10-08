@@ -102,6 +102,7 @@ demo_task(void *args __attribute__((unused))) {
 
     // IMU - needs to be initialized after the scheduler.
     initialize();
+    uint8_t buffer = 0;
 
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
@@ -109,10 +110,12 @@ demo_task(void *args __attribute__((unused))) {
         uart_puts("Now this is a message..\n\r");
         uart_puts("  sent via FreeRTOS queues.\n\n\r");
 
-        // uint8_t data = getDeviceID();
-        // uart_puts("  device id: ");
-        // uart_puts(&data);
-        // uart_puts(".\n\n\r");
+        int data = 0;
+        data = getDeviceID();
+
+        uart_puts("  device id: ");
+        uart_puts(&data);
+        uart_puts(".\n\n\r");
         
         vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(1000));
     }
@@ -139,8 +142,8 @@ main(void) {
     // UART
     uart_setup();
 
-    xTaskCreate(led,"LED",100,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(uart_task,"UART",100,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(demo_task,"DEMO",100,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();
