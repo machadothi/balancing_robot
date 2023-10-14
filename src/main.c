@@ -84,13 +84,18 @@ uart_task(void *args __attribute__((unused))) {
  * Queue a string of characters to be TX
  *********************************************************************/
 static void
-uart_puts(const char *s) {
-    
-    for ( ; *s; ++s ) {
-        // blocks when queue is full
-        xQueueSend(uart_txq,s,portMAX_DELAY); 
+uart_puts(const char *s, size_t n) {
+    if (n ==1 )
+        xQueueSend(uart_txq,s,portMAX_DELAY);
+
+    else {
+        for ( ; *s; ++s ) {
+            // blocks when queue is full
+            xQueueSend(uart_txq,s,portMAX_DELAY); 
+        }
     }
 }
+
 
 /*********************************************************************
  * Demo Task:
@@ -107,15 +112,15 @@ demo_task(void *args __attribute__((unused))) {
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
-        uart_puts("Now this is a message..\n\r");
-        uart_puts("  sent via FreeRTOS queues.\n\n\r");
+        uart_puts("Now this is a message..\n\r",0);
+        uart_puts("  sent via FreeRTOS queues.\n\n\r",0);
 
-        int data = 0;
+        uint8_t data = 0;
         data = getDeviceID();
 
-        uart_puts("  device id: ");
-        uart_puts(&data);
-        uart_puts(".\n\n\r");
+        uart_puts("  device id: ",0);
+        uart_puts(&data, 1);
+        uart_puts(".\n\n\r",0);
         
         vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(1000));
     }

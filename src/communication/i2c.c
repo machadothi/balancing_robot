@@ -265,7 +265,11 @@ writeByte(I2C_Control *dev, uint8_t regAddr, uint8_t data) {
 
 I2C_Fails
 readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data) {
-    i2c_transfer(dev->device, dev->addr, &regAddr, 1, data, 1);
+    taskENTER_CRITICAL();
+    uint8_t d = 0;
+    i2c_transfer(dev->device, dev->addr, &regAddr, 1, &d, 1);
+    *data = d;
+    taskEXIT_CRITICAL();
     return I2C_Ok;
 }
 
@@ -306,26 +310,33 @@ i2c_read_v1(uint32_t i2c, int addr, uint8_t *res, size_t n)
 	i2c_send_start(i2c);
 	i2c_enable_ack(i2c);
 
-	/* Wait for the end of the start condition, master mode selected, and BUSY bit set */
-	while ( !( (I2C_SR1(i2c) & I2C_SR1_SB)
-		&& (I2C_SR2(i2c) & I2C_SR2_MSL)
-		&& (I2C_SR2(i2c) & I2C_SR2_BUSY) ));
+    while (!(I2C_SR1(i2c) & I2C_SR1_SB));
 
 	i2c_send_7bit_address(i2c, addr, I2C_READ);
 
 	/* Waiting for address is transferred. */
 	while (!(I2C_SR1(i2c) & I2C_SR1_ADDR));
+
+    /* program ACK = 0 for reading a single byte */
+    if (n == 1)
+        i2c_disable_ack(i2c);
+
 	/* Clearing ADDR condition sequence. */
+    (void)(I2C_SR1(i2c));
 	(void)I2C_SR2(i2c);
 
+    /* program ACK = 0 for reading a two byte */
+    if (n == 2) {
+        i2c_disable_ack(i2c);
+        while (!(I2C_SR1(i2c) & I2C_SR1_BTF));
+    }
+    i2c_send_stop(i2c);
+
+    while (!(I2C_SR1(i2c) & I2C_SR1_RxNE));
+
 	for (size_t i = 0; i < n; ++i) {
-		if (i == n - 1) {
-			i2c_disable_ack(i2c);
-		}
-		// while (!(I2C_SR1(i2c) & I2C_SR1_RxNE));
-		res[i] = i2c_get_data(i2c);
+		*res = i2c_get_data(i2c);
 	}
-	i2c_send_stop(i2c);
 
 	return;
 }
