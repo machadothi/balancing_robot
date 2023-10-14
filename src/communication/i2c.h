@@ -19,21 +19,9 @@ typedef enum {
     I2C_Busy_Timeout
 } I2C_Fails;
 
-enum I2C_RW {
-    Read = 1,
-    Write = 0
-};
-
-typedef enum {
-    SF_1,
-    SF_2,
-    SF_BOTH
-} Status_Flag;
-
 typedef struct {
     uint32_t    device;        // I2C device
     uint8_t addr;             // Device address
-    uint32_t    timeout;    // Ticks
 } I2C_Control;
 
 /**
@@ -44,72 +32,7 @@ typedef struct {
  * @param address device address
  * @param ticks timeout in ticks
  */
-void i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address, 
-    uint32_t ticks);
-
-/**
- * @brief Return I2C busy status
- * 
- * @param i2c I2C base address
- * @return true if device is busy
- * @return false if device is not busy
- */
-bool i2c_is_busy(uint32_t i2c);
-
-void i2c_reset(uint32_t i2c);
-
-/**
- * @brief Return the ACK Fail register status
- * 
- * @param i2c I2C base address
- * @return true 
- * @return false 
- */
-bool i2c_slv_ack_fail(uint32_t i2c);
-
-/**
- * @brief Clears I2C Status Registers 1 and 2
- * 
- * @param i2c I2C base address
- * @param flag register to be cleared (1, 2 or both)
- */
-void i2c_clear_status_flags(uint32_t i2c, Status_Flag flag);
-
-/**
- * @brief Returns if slave device address was found.
- * 
- * @param i2c I2C base address
- * @return true 
- * @return false 
- */
-bool i2c_slave_found(uint32_t i2c);
-
-/**
- * @brief Return if the Start bit was successfully set.
- * 
- * @param i2c I2C base address
- * @return true 
- * @return false 
- */
-bool i2c_start_bit(uint32_t i2c);
-
-/**
- * @brief Start I2C Read/Write Transaction with indicated 7-bit device address
- * 
- * @param dev I2C base address
- * @param rw Read or Write specifier
- * @return I2C_Fails 
- */
-I2C_Fails i2c_start_addr(I2C_Control *dev, enum I2C_RW rw);
-
-/**
- * @brief Return if the write process is finished.
- * 
- * @param i2c I2C base address
- * @return true 
- * @return false 
- */
-bool i2c_byte_transfer_finished(uint32_t i2c);
+void i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address);
 
 /** Read a single bit from an 8-bit device register.
  * @param devAddr I2C slave device address
@@ -120,7 +43,7 @@ bool i2c_byte_transfer_finished(uint32_t i2c);
  * leave off to use default class value in I2Cdev::readTimeout)
  * @return I2C_Fails
  */
-I2C_Fails readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
+I2C_Fails i2c_read_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
   uint8_t *data);
 
 /** Read single byte from an 8-bit device register.
@@ -131,7 +54,7 @@ I2C_Fails readBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum,
  *  to use default class value in I2Cdev::readTimeout)
  * @return I2C_Fails
  */
-I2C_Fails readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
+I2C_Fails i2c_read_byte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
 
 /** Read multiple bytes from an 8-bit device register.
  * @param devAddr I2C slave device address
@@ -142,18 +65,8 @@ I2C_Fails readByte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
  *  to use default class value in I2Cdev::readTimeout)
  * @return I2C_Fails
  */
-I2C_Fails readBytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data, 
+I2C_Fails i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data, 
   uint8_t length);
-
-/**
- * @brief Write one byte of data, then initiate a repeated start for a
- * read to follow.
- * 
- * @param dev struct containing the I2C base address
- * @param byte data to be written
- * @return I2C_Fails 
- */
-I2C_Fails i2c_write_restart(I2C_Control *dev,uint8_t byte);
 
 /** write a single bit in an 8-bit device register.
  * @param devAddr I2C slave device address
@@ -162,7 +75,7 @@ I2C_Fails i2c_write_restart(I2C_Control *dev,uint8_t byte);
  * @param value New bit value to write
  * @return I2C_Fails
  */
-I2C_Fails writeBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
+I2C_Fails i2c_write_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
                         uint8_t data);
 
 /** Write multiple bits in an 8-bit device register.
@@ -173,7 +86,7 @@ I2C_Fails writeBit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum,
  * @param data Right-aligned value to write
  * @return I2C_Fails
  */
-I2C_Fails writeBits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, 
+I2C_Fails i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, 
                 uint8_t length, uint8_t data);
 
 /** Write single byte to an 8-bit device register.
@@ -182,7 +95,7 @@ I2C_Fails writeBits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart,
  * @param data New byte value to write
  * @return I2C_Fails
  */
-I2C_Fails writeByte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
+I2C_Fails i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
 
 /**
  * Run a write/read transaction to a given 7bit i2c address
@@ -194,12 +107,28 @@ I2C_Fails writeByte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
  * @param w buffer of data to write
  * @param wn length of w
  * @param r destination buffer to read into
- * @param rn number of bytes to read (r should be at least this long)
+ * @param rn number of bytes to read
  */
 void i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn);
 
-void i2c_read_v1(uint32_t i2c, int addr, uint8_t *res, size_t n);
+/**
+ * @brief Reads a given number of bytes from I2C bus
+ * 
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param res destination buffer to read into
+ * @param n number of bytes to read
+ */
+void i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n);
 
-void i2c_write_v1(uint32_t i2c, int addr, const uint8_t *data, size_t n);
+/**
+ * @brief writes data into I2C bus.
+ * 
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param data content to write
+ * @param n number of bytes to write 
+ */
+void i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n);
 
 #endif // I2C_H
