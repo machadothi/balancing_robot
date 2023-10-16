@@ -97,38 +97,4 @@ I2C_Fails i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart,
  */
 I2C_Fails i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
 
-/**
- * Run a write/read transaction to a given 7bit i2c address
- * If both write & read are provided, the read will use repeated start.
- * Both write and read are optional
- * There are likely still issues with repeated start/stop condtions!
- * @param i2c peripheral of choice, eg I2C1
- * @param addr 7 bit i2c device address
- * @param w buffer of data to write
- * @param wn length of w
- * @param r destination buffer to read into
- * @param rn number of bytes to read
- */
-void i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn);
-
-/**
- * @brief Reads a given number of bytes from I2C bus
- * 
- * @param i2c peripheral of choice, eg I2C1
- * @param addr 7 bit i2c device address
- * @param res destination buffer to read into
- * @param n number of bytes to read
- */
-void i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n);
-
-/**
- * @brief writes data into I2C bus.
- * 
- * @param i2c peripheral of choice, eg I2C1
- * @param addr 7 bit i2c device address
- * @param data content to write
- * @param n number of bytes to write 
- */
-void i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n);
-
 #endif // I2C_H

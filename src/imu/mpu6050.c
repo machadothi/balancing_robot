@@ -1,14 +1,24 @@
 #include "mpu6050.h"
-#include "../communication/i2c.h"
+#include "communication/i2c.h"
 
 #define NO_OPT __attribute__((optimize("O0")))
 
 static I2C_Control i2c;            // I2C Control struct
 
+IMU *get_mpu6050_imu(void) {
+    static IMU mpu6050_imu = {
+        .init = initialize,
+        .pitch = initialize,
+        .roll = initialize,
+        .yaw = initialize,
+        .id = getDeviceID
+    };
+    return &mpu6050_imu;
+}
+
 void NO_OPT initialize(void) {
     i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS);
 
-    // imu_reset();
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
     setFullScaleGyroRange(MPU6050_GYRO_FS_250);
     setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
@@ -39,7 +49,7 @@ void setDeviceID(uint8_t id) {
 // -----------------------------------------------------------------------------
 
 void NO_OPT
-imu_reset(void) {
+reset(void) {
     i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
 }
 

@@ -20,7 +20,48 @@
 
 #define NO_OPT __attribute__((optimize("O0")))
 
+/* Private functions */
+/**
+ * Run a write/read transaction to a given 7bit i2c address
+ * If both write & read are provided, the read will use repeated start.
+ * Both write and read are optional
+ * There are likely still issues with repeated start/stop condtions!
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param w buffer of data to write
+ * @param wn length of w
+ * @param r destination buffer to read into
+ * @param rn number of bytes to read
+ */
+static void i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, 
+  size_t wn, uint8_t *r, size_t rn);
+
+/**
+ * @brief Reads a given number of bytes from I2C bus. The STM32F1 has different
+ * conditions for reading when n = 1, n = 2 and n > 2.
+ * 
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param res destination buffer to read into
+ * @param n number of bytes to read
+ */
+static void i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n);
+
+/**
+ * @brief writes data into I2C bus.
+ * 
+ * @param i2c peripheral of choice, eg I2C1
+ * @param addr 7 bit i2c device address
+ * @param data content to write
+ * @param n number of bytes to write 
+ */
+static void i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n);
+
 // -----------------------------------------------------------------------------
+
+/* Public functions */
+
+// TODO: Add parameters verification and error handling with I2C_Fails codes.
 
 void NO_OPT
 i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address) {
@@ -113,7 +154,7 @@ i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data,
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+static void NO_OPT
 i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n)
 {
     while ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
@@ -121,7 +162,8 @@ i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n)
 
     i2c_send_start(i2c);
 
-    /* Wait for the end of the start condition, master mode selected, and BUSY bit set */
+    /* Wait for the end of the start condition, master mode selected, 
+        and BUSY bit set */
     while ( !( (I2C_SR1(i2c) & I2C_SR1_SB)
         && (I2C_SR2(i2c) & I2C_SR2_MSL)
         && (I2C_SR2(i2c) & I2C_SR2_BUSY) ));
@@ -142,7 +184,7 @@ i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n)
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+static void NO_OPT
 i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n)
 {
     i2c_send_start(i2c);
@@ -173,16 +215,22 @@ i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n)
     while (!(I2C_SR1(i2c) & I2C_SR1_RxNE));
 
     for (size_t i = 0; i < n; ++i) {
-        *res = i2c_get_data(i2c);
-    }
+		if ((I2C_SR1(i2c) & I2C_SR1_BTF) && n > 2) {
+			i2c_disable_ack(i2c);
+            res[i++] = i2c_get_data(i2c);
+            i2c_send_stop(i2c);
+		}
+		res[i] = i2c_get_data(i2c);
+	}
 
     return;
 }
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
-i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, size_t wn, uint8_t *r, size_t rn) {
+static void NO_OPT
+i2c_transfer(uint32_t i2c, uint8_t addr, const uint8_t *w, size_t wn, 
+  uint8_t *r, size_t rn) {
     if (wn) {
         i2c_write(i2c, addr, w, wn);
     }

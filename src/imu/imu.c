@@ -1,7 +1,7 @@
 #include "imu.h"
 
 void imu_init(IMU *imu) {
-    // Call the init function pointed by the passed IMU structure
+    // Call the init function pointed by the passed IMU structure    
     imu->init();
 }
 
@@ -18,4 +18,8 @@ float imu_roll(IMU *imu) {
 float imu_yaw(IMU *imu) {
     // Call the read_yaw function pointed by the passed IMU structure
     return imu->yaw();
+}
+
+uint8_t imu_id(IMU *imu) {
+    return imu->id();
 }

@@ -4,6 +4,10 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "imu.h"
+
+IMU *get_mpu6050_imu(void);
+
 /** Power on and prepare for general usage.
  * This will activate the device and take it out of sleep mode (which must be done
  * after start-up). This function also sets both the accelerometer and the gyroscope
@@ -14,7 +18,11 @@
 
 void initialize(void);
 
-void imu_reset(void);
+/**
+ * @brief Set the reset bit.
+ * 
+ */
+void reset(void);
 
 /** Verify the I2C connection.
  * Make sure the device is connected and responds as expected.

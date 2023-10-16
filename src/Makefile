@@ -12,8 +12,10 @@ SRCFILES += rtos/queue.c
 SRCFILES += rtos/tasks.c
 SRCFILES += rtos/opencm3.c
 SRCFILES += communication/i2c.c
-# SRCFILES += imu/imu.c
+SRCFILES += imu/imu.c
 SRCFILES += imu/mpu6050.c
+
+CFLAGS += -I./
 
 LDSCRIPT	= stm32f103c8t6.ld
 

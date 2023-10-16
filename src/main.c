@@ -105,8 +105,11 @@ uart_puts(const char *s, size_t n) {
 static void
 demo_task(void *args __attribute__((unused))) {
 
+    IMU *imu = get_mpu6050_imu();
+
     // IMU - needs to be initialized after the scheduler.
-    initialize();
+    // initialize();
+    imu_init(imu);
 
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
@@ -114,7 +117,7 @@ demo_task(void *args __attribute__((unused))) {
         uart_puts("Now this is a message..\n\r",0);
         uart_puts("  sent via FreeRTOS queues.\n\n\r",0);
 
-        uint8_t data = getDeviceID();
+        uint8_t data = imu_id(imu);
 
         uart_puts("  device id: ",0);
         uart_puts(&data, 1);
