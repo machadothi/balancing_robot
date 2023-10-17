@@ -6,18 +6,23 @@
 
 typedef struct {
     void (*init)(void);
-    float (*pitch)(void);
-    float (*roll)(void);
-    float (*yaw)(void);
     uint8_t (*id)(void);
-    uint16_t(*acc_x)(void);
+    int16_t(*acc_x)(void);
+    int16_t(*acc_y)(void);
+    int16_t(*acc_z)(void);
+    int16_t(*gyro_x)(void);
+    int16_t(*gyro_y)(void);
+    int16_t(*gyro_z)(void);
 } IMU;
 
 void imu_init(IMU *imu);
-float imu_pitch(IMU *imu);
-float imu_roll(IMU *imu);
-float imu_yaw(IMU *imu);
 uint8_t imu_id(IMU *imu);
-uint16_t imu_acc_x(IMU *imu);
+int16_t imu_acc_x(IMU *imu);
+int16_t imu_acc_y(IMU *imu);
+int16_t imu_acc_z(IMU *imu);
+
+int16_t imu_gyro_x(IMU *imu);
+int16_t imu_gyro_y(IMU *imu);
+int16_t imu_gyro_z(IMU *imu);
 
 #endif // IMU_H_

@@ -112,7 +112,42 @@ void setSleepEnabled(bool enabled);
  * @see getMotion6()
  * @see MPU6050_RA_ACCEL_XOUT_H
  */
-int16_t getAccelerationX();
+int16_t getAccelerationX(void);
+
+/** Get Y-axis accelerometer reading.
+ * @return Y-axis acceleration measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_ACCEL_YOUT_H
+ */
+int16_t getAccelerationY(void);
+
+/** Get Z-axis accelerometer reading.
+ * @return Z-axis acceleration measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_ACCEL_ZOUT_H
+ */
+int16_t getAccelerationZ(void);
+
+/** Get X-axis gyroscope reading.
+ * @return X-axis rotation measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_GYRO_XOUT_H
+ */
+int16_t getRotationX(void);
+
+/** Get Y-axis gyroscope reading.
+ * @return Y-axis rotation measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_GYRO_YOUT_H
+ */
+int16_t getRotationY(void);
+
+/** Get Z-axis gyroscope reading.
+ * @return Z-axis rotation measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_GYRO_ZOUT_H
+ */
+int16_t getRotationZ(void);
 
 
 #define MPU6050_ADDRESS_AD0_LOW     0x68 // address pin low (GND), default for InvenSense evaluation board

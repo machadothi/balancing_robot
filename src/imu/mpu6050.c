@@ -8,11 +8,13 @@ static I2C_Control i2c;            // I2C Control struct
 IMU *get_mpu6050_imu(void) {
     static IMU mpu6050_imu = {
         .init = initialize,
-        .pitch = initialize,
-        .roll = initialize,
-        .yaw = initialize,
         .id = getDeviceID,
-        .acc_x = getAccelerationX
+        .acc_x = getAccelerationX,
+        .acc_y = getAccelerationY,
+        .acc_z = getAccelerationZ,
+        .gyro_x = getRotationX,
+        .gyro_y = getRotationY,
+        .gyro_z = getRotationZ
     };
     return &mpu6050_imu;
 }
@@ -86,8 +88,48 @@ setSleepEnabled(bool enabled) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getAccelerationX() {
+int16_t getAccelerationX(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_XOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getAccelerationY(void) {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_YOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getAccelerationZ(void) {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_ZOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getRotationX(void) {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_XOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getRotationY(void) {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_YOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getRotationZ(void) {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_ZOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
 }

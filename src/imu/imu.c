@@ -5,25 +5,46 @@ void imu_init(IMU *imu) {
     imu->init();
 }
 
-float imu_pitch(IMU *imu) {
-    // Call the read_pitch function pointed by the passed IMU structure
-    return imu->pitch();
-}
-
-float imu_roll(IMU *imu) {
-    // Call the read_roll function pointed by the passed IMU structure
-    return imu->roll();
-}
-
-float imu_yaw(IMU *imu) {
-    // Call the read_yaw function pointed by the passed IMU structure
-    return imu->yaw();
-}
+// -----------------------------------------------------------------------------
 
 uint8_t imu_id(IMU *imu) {
     return imu->id();
 }
 
-uint16_t imu_acc_x(IMU *imu) {
+// -----------------------------------------------------------------------------
+
+int16_t imu_acc_x(IMU *imu) {
     return imu->acc_x();
 }
+
+// -----------------------------------------------------------------------------
+
+int16_t imu_acc_y(IMU *imu) {
+    return imu->acc_y();
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t imu_acc_z(IMU *imu) {
+    return imu->acc_z();
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t imu_gyro_x(IMU *imu) {
+    return imu->gyro_x();
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t imu_gyro_y(IMU *imu) {
+    return imu->gyro_y();
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t imu_gyro_z(IMU *imu) {
+    return imu->gyro_z();
+}
+
+// -----------------------------------------------------------------------------

@@ -216,13 +216,13 @@ i2c_read(uint32_t i2c, int addr, uint8_t *res, size_t n)
 
     for (size_t i = 0; i < n; ++i) {
         while (!(I2C_SR1(i2c) & I2C_SR1_RxNE));
-        
-		if ((I2C_SR1(i2c) & I2C_SR1_BTF) && n > 2) { // TODO: change the condition to a specific byte count.
-			i2c_disable_ack(i2c);
+
+        if ((I2C_SR1(i2c) & I2C_SR1_BTF) && n > 2) { // TODO: change the condition to a specific byte count.
+            i2c_disable_ack(i2c);
             res[i++] = i2c_get_data(i2c);
             i2c_send_stop(i2c);
-		}
-		res[i] = i2c_get_data(i2c);
+        }
+        res[i] = i2c_get_data(i2c);
 	}
 
     return;
