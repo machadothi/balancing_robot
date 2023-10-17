@@ -23,3 +23,7 @@ float imu_yaw(IMU *imu) {
 uint8_t imu_id(IMU *imu) {
     return imu->id();
 }
+
+uint16_t imu_acc_x(IMU *imu) {
+    return imu->acc_x();
+}

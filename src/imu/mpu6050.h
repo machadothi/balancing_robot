@@ -107,6 +107,13 @@ void setFullScaleAccelRange(uint8_t range);
  */
 void setSleepEnabled(bool enabled);
 
+/** Get X-axis accelerometer reading.
+ * @return X-axis acceleration measurement in 16-bit 2's complement format
+ * @see getMotion6()
+ * @see MPU6050_RA_ACCEL_XOUT_H
+ */
+int16_t getAccelerationX();
+
 
 #define MPU6050_ADDRESS_AD0_LOW     0x68 // address pin low (GND), default for InvenSense evaluation board
 #define MPU6050_ADDRESS_AD0_HIGH    0x69 // address pin high (VCC)

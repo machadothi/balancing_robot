@@ -11,7 +11,8 @@ IMU *get_mpu6050_imu(void) {
         .pitch = initialize,
         .roll = initialize,
         .yaw = initialize,
-        .id = getDeviceID
+        .id = getDeviceID,
+        .acc_x = getAccelerationX
     };
     return &mpu6050_imu;
 }
@@ -28,7 +29,7 @@ void NO_OPT initialize(void) {
 // -----------------------------------------------------------------------------
 
 bool testConnection(void) {
-    return getDeviceID() == 0x34;
+    return getDeviceID() == MPU6050_DEFAULT_ADDRESS;
 }
 
 // -----------------------------------------------------------------------------
@@ -81,4 +82,12 @@ setFullScaleAccelRange(uint8_t range) {
 void NO_OPT
 setSleepEnabled(bool enabled) {
     i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, enabled);
+}
+
+// -----------------------------------------------------------------------------
+
+int16_t getAccelerationX() {
+    uint8_t buffer[2];
+    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_XOUT_H), buffer, 2);
+    return (((int16_t)buffer[0]) << 8) | buffer[1];
 }

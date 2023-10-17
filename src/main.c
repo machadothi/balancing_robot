@@ -1,3 +1,5 @@
+#include <stdlib.h>
+
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
@@ -84,15 +86,11 @@ uart_task(void *args __attribute__((unused))) {
  * Queue a string of characters to be TX
  *********************************************************************/
 static void
-uart_puts(const char *s, size_t n) {
-    if (n ==1 )
-        xQueueSend(uart_txq,s,portMAX_DELAY);
+uart_puts(const char *s) {
 
-    else {
-        for ( ; *s; ++s ) {
-            // blocks when queue is full
-            xQueueSend(uart_txq,s,portMAX_DELAY); 
-        }
+    for ( ; *s; ++s ) {
+        // blocks when queue is full
+        xQueueSend(uart_txq,s,portMAX_DELAY); 
     }
 }
 
@@ -114,16 +112,24 @@ demo_task(void *args __attribute__((unused))) {
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
-        uart_puts("Now this is a message..\n\r",0);
-        uart_puts("  sent via FreeRTOS queues.\n\n\r",0);
-
         uint8_t data = imu_id(imu);
 
-        uart_puts("  device id: ",0);
-        uart_puts(&data, 1);
-        uart_puts(".\n\n\r",0);
-        
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(1000));
+        char buffer[7];  // Large enough for a 2-byte int and '\0'
+
+        itoa(data, buffer, 16); // 10 for base 10 (decimal) representation
+
+        uart_puts("  device id: 0x");
+        uart_puts(buffer);
+        uart_puts(".\n\n\r");
+
+        uint16_t acc_x = imu_acc_x(imu);
+        itoa(acc_x, buffer, 10); // 10 for base 10 (decimal) representation
+
+        uart_puts("  acc_x: ");
+        uart_puts(buffer);
+        uart_puts(".\n\n\r");
+
+        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(500));
     }
 }
 
@@ -150,7 +156,7 @@ main(void) {
 
     xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(demo_task,"DEMO",100,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(demo_task,"DEMO",150,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();
     for (;;);
