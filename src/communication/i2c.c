@@ -81,7 +81,7 @@ i2c_setup_peripheral(void) {
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+I2C_Fails NO_OPT
 i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address) {
 
     dev->device = i2c;
@@ -95,6 +95,12 @@ i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address) {
     i2c_set_dutycycle(dev->device,I2C_CCR_DUTY_DIV2);
     i2c_set_ccr(dev->device,180);        // 100 kHz <= 180 * 1 /36M
     i2c_peripheral_enable(dev->device);
+
+    if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
+        return I2C_Busy_Timeout;
+    }
+
+    return I2C_Ok;
 }
 
 // -----------------------------------------------------------------------------

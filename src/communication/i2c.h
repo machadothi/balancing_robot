@@ -37,8 +37,9 @@ void i2c_setup_peripheral(void);
  * @param i2c I2C base address
  * @param address device address
  * @param ticks timeout in ticks
+ * @return I2C_Fails
  */
-void i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address);
+I2C_Fails i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address);
 
 /** Read a single bit from an 8-bit device register.
  * @param devAddr I2C slave device address

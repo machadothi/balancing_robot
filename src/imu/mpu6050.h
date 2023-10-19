@@ -16,7 +16,7 @@ IMU *get_mpu6050_imu(void);
  * the default internal clock source.
  */
 
-void initialize(void);
+IMU_Fails initialize(void);
 
 /**
  * @brief Set the up reset pin object. It was added a ON/OFF pin to the VCC pin

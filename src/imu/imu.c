@@ -1,8 +1,8 @@
 #include "imu.h"
 
-void imu_init(IMU *imu) {
+IMU_Fails imu_init(IMU *imu) {
     // Call the init function pointed by the passed IMU structure    
-    imu->init();
+    return imu->init();
 }
 
 // -----------------------------------------------------------------------------

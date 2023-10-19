@@ -4,8 +4,15 @@
 
 #include <stdint.h>
 
+typedef enum {
+    IMU_Ok = 0,
+    IMU_Configure,
+    IMU_Read_Timeout,
+    IMU_Busy_Timeout
+} IMU_Fails;
+
 typedef struct {
-    void (*init)(void);
+    IMU_Fails (*init)(void);
     uint8_t (*id)(void);
     int16_t(*acc_x)(void);
     int16_t(*acc_y)(void);
@@ -15,7 +22,7 @@ typedef struct {
     int16_t(*gyro_z)(void);
 } IMU;
 
-void imu_init(IMU *imu);
+IMU_Fails imu_init(IMU *imu);
 uint8_t imu_id(IMU *imu);
 int16_t imu_acc_x(IMU *imu);
 int16_t imu_acc_y(IMU *imu);

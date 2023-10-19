@@ -25,7 +25,7 @@ IMU *get_mpu6050_imu(void) {
     return &mpu6050_imu;
 }
 
-void NO_OPT
+IMU_Fails NO_OPT
 initialize(void) {
     i2c_setup_peripheral();
 
@@ -33,12 +33,16 @@ initialize(void) {
 
     hardReset();
 
-    i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS);
+    if (i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS)) {
+        return IMU_Configure;
+    }
 
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
     setFullScaleGyroRange(MPU6050_GYRO_FS_250);
     setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
     setSleepEnabled(false);
+
+    return IMU_Ok;
 }
 
 // -----------------------------------------------------------------------------

@@ -12,6 +12,7 @@ SRCFILES += rtos/queue.c
 SRCFILES += rtos/tasks.c
 SRCFILES += rtos/opencm3.c
 SRCFILES += communication/i2c.c
+SRCFILES += communication/uart.c
 SRCFILES += imu/imu.c
 SRCFILES += imu/mpu6050.c
 

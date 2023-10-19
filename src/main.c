@@ -8,7 +8,9 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
 
+#include "communication/uart.h"
 #include "imu/mpu6050.h"
+
 
 extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
                                         char * pcTaskName );
@@ -36,35 +38,6 @@ led(void *args) {
     }
 }
 
-static QueueHandle_t uart_txq;        // TX queue for UART
-
-/*********************************************************************
- * Configure and initialize USART2:
- *********************************************************************/
-static void
-uart_setup(void) {
-
-    rcc_periph_clock_enable(RCC_GPIOA);
-    rcc_periph_clock_enable(RCC_USART2);
-
-    // UART TX on PA9 (GPIO_USART2_TX)
-    gpio_set_mode(GPIOA,
-        GPIO_MODE_OUTPUT_50_MHZ,
-        GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
-        GPIO_USART2_TX);
-
-    usart_set_baudrate(USART2,38400);
-    usart_set_databits(USART2,8);
-    usart_set_stopbits(USART2,USART_STOPBITS_1);
-    usart_set_mode(USART2,USART_MODE_TX);
-    usart_set_parity(USART2,USART_PARITY_NONE);
-    usart_set_flow_control(USART2,USART_FLOWCONTROL_NONE);
-    usart_enable(USART2);
-
-    // Create a queue for data to transmit from UART
-    uart_txq = xQueueCreate(256,sizeof(char));
-}
-
 /*********************************************************************
  * USART Task: 
  *********************************************************************/
@@ -81,19 +54,6 @@ uart_task(void *args __attribute__((unused))) {
         }
     }
 }
-
-/*********************************************************************
- * Queue a string of characters to be TX
- *********************************************************************/
-static void
-uart_puts(const char *s) {
-
-    for ( ; *s; ++s ) {
-        // blocks when queue is full
-        xQueueSend(uart_txq,s,portMAX_DELAY); 
-    }
-}
-
 
 /*********************************************************************
  * Demo Task:
@@ -179,8 +139,7 @@ main(void) {
     rcc_periph_clock_enable(RCC_GPIOC);
     gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
 
-    // UART
-    uart_setup();
+    uart_peripheral_setup();
 
     xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
