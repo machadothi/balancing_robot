@@ -22,7 +22,7 @@
 #include "i2c.h"
 
 #define NO_OPT __attribute__((optimize("O0")))
-#define systicks	xTaskGetTickCount
+#define systicks    xTaskGetTickCount
 
 /* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
 /**
@@ -67,9 +67,9 @@ static I2C_Fails i2c_write(I2C_Control *dev, const uint8_t *data, size_t n);
 static inline TickType_t
 diff_ticks(TickType_t early,TickType_t later) {
 
-	if ( later >= early )
-		return later - early;
-	return ~(TickType_t)0 - early + 1 + later;
+    if ( later >= early )
+        return later - early;
+    return ~(TickType_t)0 - early + 1 + later;
 }
 
 // -----------------------------------------------------------------------------
@@ -80,8 +80,8 @@ diff_ticks(TickType_t early,TickType_t later) {
 
 void NO_OPT
 i2c_setup_peripheral(void) {
-    rcc_periph_clock_enable(RCC_GPIOB);	// I2C
-    rcc_periph_clock_enable(RCC_I2C1);	// I2C
+    rcc_periph_clock_enable(RCC_GPIOB);    // I2C
+    rcc_periph_clock_enable(RCC_I2C1);    // I2C
     gpio_set_mode(GPIOB,
         GPIO_MODE_OUTPUT_50_MHZ,
         GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
@@ -191,6 +191,8 @@ i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data,
 }
 
 // -----------------------------------------------------------------------------
+/* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
+// -----------------------------------------------------------------------------
 
 static I2C_Fails NO_OPT
 i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
@@ -199,7 +201,7 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
 
     while ((I2C_SR2(dev->device) & I2C_SR2_BUSY)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout )
-			return I2C_Busy_Timeout;
+            return I2C_Busy_Timeout;
     }
 
     i2c_send_start(dev->device);
@@ -215,7 +217,7 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout )
-			return I2C_Addr_Timeout;
+            return I2C_Addr_Timeout;
     }
 
     /* Clearing ADDR condition sequence. */
@@ -225,7 +227,7 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
         i2c_send_data(dev->device, data[i]);
         while (!(I2C_SR1(dev->device) & (I2C_SR1_BTF))) {
             if ( diff_ticks(t0,systicks()) > dev->timeout )
-			    return I2C_Write_Timeout;
+                return I2C_Write_Timeout;
         }
     }
 
@@ -249,7 +251,7 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout )
-			return I2C_Addr_Timeout;
+            return I2C_Addr_Timeout;
     }
 
     /* program ACK = 0 for reading a single byte */
@@ -264,7 +266,7 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
     if (n == 2) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout )
-			    return I2C_Read_Timeout;
+                return I2C_Read_Timeout;
         }
         i2c_disable_ack(dev->device);
     }
@@ -274,7 +276,7 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
     for (size_t i = 0; i < n; ++i) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout )
-			    return I2C_Read_Timeout;
+                return I2C_Read_Timeout;
         }
 
         if ((I2C_SR1(dev->device) & I2C_SR1_BTF) && n > 2) { // TODO: change the condition to a specific byte count.
@@ -283,7 +285,7 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
             i2c_send_stop(dev->device);
         }
         res[i] = i2c_get_data(dev->device);
-	}
+    }
 
     return I2C_Ok;
 }

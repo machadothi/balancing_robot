@@ -91,7 +91,7 @@ void setDeviceID(uint8_t id);
  * @see MPU6050_PWR1_CLKSEL_BIT
  * @see MPU6050_PWR1_CLKSEL_LENGTH
  */
-void setClockSource(uint8_t source);
+IMU_Fails setClockSource(uint8_t source);
 
 /** Set full-scale gyroscope range.
  * @param range New full-scale gyroscope range value
@@ -101,13 +101,13 @@ void setClockSource(uint8_t source);
  * @see MPU6050_GCONFIG_FS_SEL_BIT
  * @see MPU6050_GCONFIG_FS_SEL_LENGTH
  */
-void setFullScaleGyroRange(uint8_t range);
+IMU_Fails setFullScaleGyroRange(uint8_t range);
 
 /** Set full-scale accelerometer range.
  * @param range New full-scale accelerometer range setting
  * @see getFullScaleAccelRange()
  */
-void setFullScaleAccelRange(uint8_t range);
+IMU_Fails setFullScaleAccelRange(uint8_t range);
 
 /** Set sleep mode status.
  * @param enabled New sleep mode enabled status
@@ -115,7 +115,7 @@ void setFullScaleAccelRange(uint8_t range);
  * @see MPU6050_RA_PWR_MGMT_1
  * @see MPU6050_PWR1_SLEEP_BIT
  */
-void setSleepEnabled(bool enabled);
+IMU_Fails setSleepEnabled(bool enabled);
 
 /** Get X-axis accelerometer reading.
  * @return X-axis acceleration measurement in 16-bit 2's complement format

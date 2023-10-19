@@ -30,19 +30,22 @@ IMU *get_mpu6050_imu(void) {
 IMU_Fails NO_OPT
 initialize(void) {
     i2c_setup_peripheral();
-
     setup_reset_pin();
-
     hardReset();
+    i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 100);
 
-    if (i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000)) {
-        return IMU_COMM_BUS_Timeout;
+    if(setClockSource(MPU6050_CLOCK_PLL_XGYRO)) {
+        return IMU_COMM_BUS_ERROR;
     }
-
-    setClockSource(MPU6050_CLOCK_PLL_XGYRO);
-    setFullScaleGyroRange(MPU6050_GYRO_FS_250);
-    setFullScaleAccelRange(MPU6050_ACCEL_FS_2);
-    setSleepEnabled(false);
+    if(setFullScaleGyroRange(MPU6050_GYRO_FS_250)){
+        return IMU_COMM_BUS_ERROR;
+    }
+    if(setFullScaleAccelRange(MPU6050_ACCEL_FS_2)){
+        return IMU_COMM_BUS_ERROR;
+    }
+    if(setSleepEnabled(false)){
+        return IMU_COMM_BUS_ERROR;
+    }
 
     return IMU_Ok;
 }
@@ -52,11 +55,11 @@ initialize(void) {
 void
 setup_reset_pin(void) {
     /* Enable GPIOA clock. */
-	rcc_periph_clock_enable(RCC_GPIOA);
+    rcc_periph_clock_enable(RCC_GPIOA);
 
-	/* Set GPIO10 (in GPIO port A) to 'output push-pull'. */
-	gpio_set_mode(GPIOA,GPIO_MODE_OUTPUT_2_MHZ,
-		      GPIO_CNF_OUTPUT_PUSHPULL,GPIO10);
+    /* Set GPIO10 (in GPIO port A) to 'output push-pull'. */
+    gpio_set_mode(GPIOA,GPIO_MODE_OUTPUT_2_MHZ,
+              GPIO_CNF_OUTPUT_PUSHPULL,GPIO10);
 }
 
 // -----------------------------------------------------------------------------
@@ -99,32 +102,51 @@ softReset(void) {
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+IMU_Fails NO_OPT
 setClockSource(uint8_t source) {
 
-    i2c_write_bits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, MPU6050_PWR1_CLKSEL_LENGTH, source);
+    if(i2c_write_bits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, 
+      MPU6050_PWR1_CLKSEL_LENGTH, source)) {
+        return IMU_COMM_BUS_ERROR;
+      }
 
+    return IMU_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+IMU_Fails NO_OPT
 setFullScaleGyroRange(uint8_t range) {
-    i2c_write_bits(&i2c, MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, MPU6050_GCONFIG_FS_SEL_LENGTH, range);
+    if(i2c_write_bits(&i2c, MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, 
+      MPU6050_GCONFIG_FS_SEL_LENGTH, range)) {
+        return IMU_COMM_BUS_ERROR;
+      }
+
+    return IMU_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+IMU_Fails NO_OPT
 setFullScaleAccelRange(uint8_t range) {
-    i2c_write_bits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, MPU6050_ACONFIG_AFS_SEL_LENGTH, range);
+    if(i2c_write_bits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, 
+      MPU6050_ACONFIG_AFS_SEL_LENGTH, range)) {
+        return IMU_COMM_BUS_ERROR;
+      }
+
+    return IMU_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
+IMU_Fails NO_OPT
 setSleepEnabled(bool enabled) {
-    i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, enabled);
+    if(i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, 
+      enabled)) {
+        return IMU_COMM_BUS_ERROR;
+      }
+
+    return IMU_Ok;
 }
 
 // -----------------------------------------------------------------------------

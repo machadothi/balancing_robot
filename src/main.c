@@ -48,9 +48,11 @@ demo_task(void *args __attribute__((unused))) {
 
     IMU *imu = get_mpu6050_imu();
 
-    // IMU - needs to be initialized after the scheduler.
-    // initialize();
-    imu_init(imu);
+    // TODO: Log error message
+    while(imu_init(imu)) {
+        vTaskDelay(pdMS_TO_TICKS(100));
+        uart_puts("Fail to init IMU\n\n\r");
+    }
 
     char buffer[7];  // Large enough for a 2-byte int and '\0'
 

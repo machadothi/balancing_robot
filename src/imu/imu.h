@@ -6,7 +6,7 @@
 
 typedef enum {
     IMU_Ok = 0,
-    IMU_COMM_BUS_Timeout,
+    IMU_COMM_BUS_ERROR,
     IMU_Read_Timeout,
     IMU_Busy_Timeout
 } IMU_Fails;
