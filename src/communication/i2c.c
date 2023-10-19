@@ -13,6 +13,9 @@
  *    8. Requires rcc_periph_clock_enable(RCC_AFIO);
  *    9. 100 kHz
  */
+#include <libopencm3/stm32/rcc.h>
+#include <libopencm3/stm32/gpio.h>
+
 #include "FreeRTOS.h"
 #include "task.h"
 
@@ -20,7 +23,7 @@
 
 #define NO_OPT __attribute__((optimize("O0")))
 
-/* Private functions */
+/* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
 /**
  * Run a write/read transaction to a given 7bit i2c address
  * If both write & read are provided, the read will use repeated start.
@@ -59,9 +62,24 @@ static void i2c_write(uint32_t i2c, int addr, const uint8_t *data, size_t n);
 
 // -----------------------------------------------------------------------------
 
-/* Public functions */
+/* ---------------------------- PUBLIC FUNCTIONS -----------------------------*/
 
 // TODO: Add parameters verification and error handling with I2C_Fails codes.
+
+void NO_OPT
+i2c_setup_peripheral(void) {
+    rcc_periph_clock_enable(RCC_GPIOB);	// I2C
+    rcc_periph_clock_enable(RCC_I2C1);	// I2C
+    gpio_set_mode(GPIOB,
+        GPIO_MODE_OUTPUT_50_MHZ,
+        GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
+        GPIO6|GPIO7);            // I2C
+
+    gpio_set(GPIOB,GPIO6|GPIO7);        // Idle high
+
+}
+
+// -----------------------------------------------------------------------------
 
 void NO_OPT
 i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address) {
@@ -126,7 +144,7 @@ i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, uint8_t leng
 I2C_Fails NO_OPT
 i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data) {
     
-    uint8_t content[2] = {regAddr, data};
+    const uint8_t content[2] = {regAddr, data};
 
     i2c_transfer(dev->device, dev->addr, &content, 2, &data, 0);
     return I2C_Ok;

@@ -168,6 +168,8 @@ demo_task(void *args __attribute__((unused))) {
     }
 }
 
+// -----------------------------------------------------------------------------
+
 int
 main(void) {
 
@@ -176,15 +178,6 @@ main(void) {
     // LED GPIO
     rcc_periph_clock_enable(RCC_GPIOC);
     gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
-
-    // I2c
-    rcc_periph_clock_enable(RCC_GPIOB);	// I2C
-    rcc_periph_clock_enable(RCC_I2C1);	// I2C
-    gpio_set_mode(GPIOB,
-        GPIO_MODE_OUTPUT_50_MHZ,
-        GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
-        GPIO6|GPIO7);            // I2C
-    gpio_set(GPIOB,GPIO6|GPIO7);        // Idle high
 
     // UART
     uart_setup();

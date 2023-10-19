@@ -25,6 +25,12 @@ typedef struct {
 } I2C_Control;
 
 /**
+ * @brief Setup i2c peripheral.
+ * 
+ */
+void i2c_setup_peripheral(void);
+
+/**
  * @brief Configure I2C device for 100 kHz, 7-bit addresses
  * 
  * @param dev struct to store the I2C base address and device address

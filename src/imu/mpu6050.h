@@ -19,10 +19,20 @@ IMU *get_mpu6050_imu(void);
 void initialize(void);
 
 /**
- * @brief Set the reset bit.
- * 
+ * @brief Set the up reset pin object. It was added a ON/OFF pin to the VCC pin
+ * of the MPU6050 to make a hard reset.
  */
-void reset(void);
+void setup_reset_pin(void);
+
+/**
+ * @brief Set the reset bit.
+ */
+void hardReset(void);
+
+/**
+ * @brief Set the reset bit.
+ */
+void softReset(void);
 
 /** Verify the I2C connection.
  * Make sure the device is connected and responds as expected.

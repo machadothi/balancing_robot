@@ -1,3 +1,9 @@
+#include <libopencm3/stm32/rcc.h>
+#include <libopencm3/stm32/gpio.h>
+
+#include "FreeRTOS.h"
+#include "task.h"
+
 #include "mpu6050.h"
 #include "communication/i2c.h"
 
@@ -19,7 +25,14 @@ IMU *get_mpu6050_imu(void) {
     return &mpu6050_imu;
 }
 
-void NO_OPT initialize(void) {
+void NO_OPT
+initialize(void) {
+    i2c_setup_peripheral();
+
+    setup_reset_pin();
+
+    hardReset();
+
     i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS);
 
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
@@ -30,7 +43,29 @@ void NO_OPT initialize(void) {
 
 // -----------------------------------------------------------------------------
 
-bool testConnection(void) {
+void
+setup_reset_pin(void) {
+    /* Enable GPIOA clock. */
+	rcc_periph_clock_enable(RCC_GPIOA);
+
+	/* Set GPIO10 (in GPIO port A) to 'output push-pull'. */
+	gpio_set_mode(GPIOA,GPIO_MODE_OUTPUT_2_MHZ,
+		      GPIO_CNF_OUTPUT_PUSHPULL,GPIO10);
+}
+
+// -----------------------------------------------------------------------------
+
+void
+hardReset(void) {
+    gpio_clear(GPIOA,GPIO10);
+    vTaskDelay(pdMS_TO_TICKS(2));
+    gpio_set(GPIOA,GPIO10); // enable ON
+}
+
+// -----------------------------------------------------------------------------
+
+bool
+testConnection(void) {
     return getDeviceID() == MPU6050_DEFAULT_ADDRESS;
 }
 
@@ -52,7 +87,7 @@ void setDeviceID(uint8_t id) {
 // -----------------------------------------------------------------------------
 
 void NO_OPT
-reset(void) {
+softReset(void) {
     i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
 }
 
