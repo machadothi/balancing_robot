@@ -4,7 +4,11 @@
 
 #include "communication/uart.h"
 
+// -----------------------------------------------------------------------------
+
 QueueHandle_t uart_txq;
+
+// -----------------------------------------------------------------------------
 
 void
 uart_peripheral_setup(void) {
@@ -30,11 +34,29 @@ uart_peripheral_setup(void) {
     uart_txq = xQueueCreate(256,sizeof(char));
 }
 
+// -----------------------------------------------------------------------------
+
 void
 uart_puts(const char *s) {
 
     for ( ; *s; ++s ) {
         // blocks when queue is full
         xQueueSend(uart_txq,s,portMAX_DELAY); 
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+void
+uart_task(void *args __attribute__((unused))) {
+    char ch;
+
+    for (;;) {
+        // Receive char to be TX
+        if ( xQueueReceive(uart_txq,&ch,500) == pdPASS ) {
+            while ( !usart_get_flag(USART2,USART_SR_TXE) )
+                taskYIELD();    // Yield until ready
+            usart_send(USART2,ch);
+        }
     }
 }

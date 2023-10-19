@@ -39,23 +39,6 @@ led(void *args) {
 }
 
 /*********************************************************************
- * USART Task: 
- *********************************************************************/
-static void
-uart_task(void *args __attribute__((unused))) {
-    char ch;
-
-    for (;;) {
-        // Receive char to be TX
-        if ( xQueueReceive(uart_txq,&ch,500) == pdPASS ) {
-            while ( !usart_get_flag(USART2,USART_SR_TXE) )
-                taskYIELD();    // Yield until ready
-            usart_send(USART2,ch);
-        }
-    }
-}
-
-/*********************************************************************
  * Demo Task:
  *    Simply queues up two line messages to be TX, one second
  *    apart.

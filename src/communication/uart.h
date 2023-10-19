@@ -16,4 +16,6 @@ void uart_peripheral_setup(void);
 
 void uart_puts(const char *s);
 
+void uart_task(void *args __attribute__((unused)));
+
 #endif // UART_H_
