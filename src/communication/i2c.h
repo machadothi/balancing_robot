@@ -13,7 +13,6 @@
 typedef enum {
     I2C_Ok = 0,
     I2C_Addr_Timeout,
-    I2C_Addr_NAK,
     I2C_Write_Timeout,
     I2C_Read_Timeout,
     I2C_Busy_Timeout
@@ -22,6 +21,7 @@ typedef enum {
 typedef struct {
     uint32_t    device;        // I2C device
     uint8_t addr;             // Device address
+    uint32_t timeout;
 } I2C_Control;
 
 /**
@@ -39,7 +39,8 @@ void i2c_setup_peripheral(void);
  * @param ticks timeout in ticks
  * @return I2C_Fails
  */
-I2C_Fails i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address);
+I2C_Fails i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
+  uint32_t  timeout);
 
 /** Read a single bit from an 8-bit device register.
  * @param devAddr I2C slave device address

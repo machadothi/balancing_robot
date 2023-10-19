@@ -25,6 +25,8 @@ IMU *get_mpu6050_imu(void) {
     return &mpu6050_imu;
 }
 
+// -----------------------------------------------------------------------------
+
 IMU_Fails NO_OPT
 initialize(void) {
     i2c_setup_peripheral();
@@ -33,8 +35,8 @@ initialize(void) {
 
     hardReset();
 
-    if (i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS)) {
-        return IMU_Configure;
+    if (i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000)) {
+        return IMU_COMM_BUS_Timeout;
     }
 
     setClockSource(MPU6050_CLOCK_PLL_XGYRO);
