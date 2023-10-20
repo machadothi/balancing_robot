@@ -10,6 +10,7 @@
 
 #include "communication/uart.h"
 #include "imu/mpu6050.h"
+#include "log/log.h"
 
 
 extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
@@ -53,6 +54,11 @@ demo_task(void *args __attribute__((unused))) {
         vTaskDelay(pdMS_TO_TICKS(100));
         uart_puts("Fail to init IMU\n\n\r");
     }
+
+    LogDriver_t logDriver;
+    logDriver.send = uart_puts;
+
+    log_message(UART_BUS, "Starting IMU demo task", &logDriver);
 
     char buffer[7];  // Large enough for a 2-byte int and '\0'
 
