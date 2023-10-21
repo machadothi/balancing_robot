@@ -6,7 +6,7 @@
 
 #include "imu.h"
 
-IMU *get_mpu6050_imu(void);
+IMU_t *get_mpu6050_imu(void);
 
 /** Power on and prepare for general usage.
  * This will activate the device and take it out of sleep mode (which must be done
@@ -16,7 +16,7 @@ IMU *get_mpu6050_imu(void);
  * the default internal clock source.
  */
 
-IMU_Fails initialize(void);
+IMU_Fails_t initialize(void);
 
 /**
  * @brief Set the up reset pin object. It was added a ON/OFF pin to the VCC pin
@@ -27,19 +27,19 @@ void setup_reset_pin(void);
 /**
  * @brief Set the reset bit.
  */
-void hardReset(void);
+void hard_reset(void);
 
 /**
  * @brief Set the reset bit.
  */
-void softReset(void);
+void soft_reset(void);
 
 /** Verify the I2C connection.
  * Make sure the device is connected and responds as expected.
  * @return True if connection is valid, false otherwise
  */
 
-bool testConnection(void);
+bool test_connection(void);
 
 /** Get Device ID.
  * This register is used to verify the identity of the device (0b110100, 0x34).
@@ -48,7 +48,7 @@ bool testConnection(void);
  * @see MPU6050_WHO_AM_I_BIT
  * @see MPU6050_WHO_AM_I_LENGTH
  */
-uint8_t getDeviceID(void);
+uint8_t get_device_id(void);
 
 /** Set Device ID.
  * Write a new ID into the WHO_AM_I register (no idea why this should ever be
@@ -59,7 +59,7 @@ uint8_t getDeviceID(void);
  * @see MPU6050_WHO_AM_I_BIT
  * @see MPU6050_WHO_AM_I_LENGTH
  */
-void setDeviceID(uint8_t id);
+void set_device_id(uint8_t id);
 
 /** Set clock source setting.
  * An internal 8MHz oscillator, gyroscope based clock, or external sources can
@@ -91,7 +91,7 @@ void setDeviceID(uint8_t id);
  * @see MPU6050_PWR1_CLKSEL_BIT
  * @see MPU6050_PWR1_CLKSEL_LENGTH
  */
-IMU_Fails setClockSource(uint8_t source);
+IMU_Fails_t set_clock_source(uint8_t source);
 
 /** Set full-scale gyroscope range.
  * @param range New full-scale gyroscope range value
@@ -101,13 +101,13 @@ IMU_Fails setClockSource(uint8_t source);
  * @see MPU6050_GCONFIG_FS_SEL_BIT
  * @see MPU6050_GCONFIG_FS_SEL_LENGTH
  */
-IMU_Fails setFullScaleGyroRange(uint8_t range);
+IMU_Fails_t set_full_scale_gyro_range(uint8_t range);
 
 /** Set full-scale accelerometer range.
  * @param range New full-scale accelerometer range setting
  * @see getFullScaleAccelRange()
  */
-IMU_Fails setFullScaleAccelRange(uint8_t range);
+IMU_Fails_t set_full_scale_accel_range(uint8_t range);
 
 /** Set sleep mode status.
  * @param enabled New sleep mode enabled status
@@ -115,49 +115,49 @@ IMU_Fails setFullScaleAccelRange(uint8_t range);
  * @see MPU6050_RA_PWR_MGMT_1
  * @see MPU6050_PWR1_SLEEP_BIT
  */
-IMU_Fails setSleepEnabled(bool enabled);
+IMU_Fails_t set_sleep_enabled(bool enabled);
 
 /** Get X-axis accelerometer reading.
  * @return X-axis acceleration measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_ACCEL_XOUT_H
  */
-int16_t getAccelerationX(void);
+int16_t get_acceleration_x(void);
 
 /** Get Y-axis accelerometer reading.
  * @return Y-axis acceleration measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_ACCEL_YOUT_H
  */
-int16_t getAccelerationY(void);
+int16_t get_acceleration_y(void);
 
 /** Get Z-axis accelerometer reading.
  * @return Z-axis acceleration measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_ACCEL_ZOUT_H
  */
-int16_t getAccelerationZ(void);
+int16_t get_acceleration_z(void);
 
 /** Get X-axis gyroscope reading.
  * @return X-axis rotation measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_GYRO_XOUT_H
  */
-int16_t getRotationX(void);
+int16_t get_rotation_x(void);
 
 /** Get Y-axis gyroscope reading.
  * @return Y-axis rotation measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_GYRO_YOUT_H
  */
-int16_t getRotationY(void);
+int16_t get_rotation_y(void);
 
 /** Get Z-axis gyroscope reading.
  * @return Z-axis rotation measurement in 16-bit 2's complement format
  * @see getMotion6()
  * @see MPU6050_RA_GYRO_ZOUT_H
  */
-int16_t getRotationZ(void);
+int16_t get_rotation_z(void);
 
 
 #define MPU6050_ADDRESS_AD0_LOW     0x68 // address pin low (GND), default for InvenSense evaluation board

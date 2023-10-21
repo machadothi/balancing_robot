@@ -47,7 +47,7 @@ led(void *args) {
 static void
 demo_task(void *args __attribute__((unused))) {
 
-    IMU *imu = get_mpu6050_imu();
+    IMU_t *imu = get_mpu6050_imu();
 
     // TODO: Log error message
     while(imu_init(imu)) {

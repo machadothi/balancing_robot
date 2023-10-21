@@ -20,11 +20,39 @@
 #include "task.h"
 
 #include "i2c.h"
+#include "log/log.h"
 
 #define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
 
+// -----------------------------------------------------------------------------
 /* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
+// -----------------------------------------------------------------------------
+
+/**
+ * @brief Converts I2C_Fails_t enum to string.
+ * 
+ * @param fail I2C_Fails_t enum value
+ * @return const char* String representation of the I2C_Fails_t
+ */
+static const char* i2c_fail_to_string(I2C_Fails_t fail) {
+    switch (fail) {
+        case I2C_Ok:
+            return "I2C_Ok";
+        case I2C_Addr_Timeout:
+            return "I2C_Addr_Timeout";
+        case I2C_Write_Timeout:
+            return "I2C_Write_Timeout";
+        case I2C_Read_Timeout:
+            return "I2C_Read_Timeout";
+        case I2C_Busy_Timeout:
+            return "I2C_Busy_Timeout";
+        default:
+            return "UNKNOWN_ERROR";
+    }
+}
+
+
 /**
  * Run a write/read transaction to a given 7bit i2c address
  * If both write & read are provided, the read will use repeated start.
@@ -37,7 +65,7 @@
  * @param r destination buffer to read into
  * @param rn number of bytes to read
  */
-static I2C_Fails i2c_transfer(I2C_Control *dev, const uint8_t *w, size_t wn,
+static I2C_Fails_t i2c_transfer(I2C_Control_t *dev, const uint8_t *w, size_t wn,
   uint8_t *r, size_t rn);
 
 /**
@@ -49,7 +77,7 @@ static I2C_Fails i2c_transfer(I2C_Control *dev, const uint8_t *w, size_t wn,
  * @param res destination buffer to read into
  * @param n number of bytes to read
  */
-static I2C_Fails i2c_read(I2C_Control *dev, uint8_t *res, size_t n);
+static I2C_Fails_t i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n);
 
 /**
  * @brief writes data into I2C bus.
@@ -59,7 +87,7 @@ static I2C_Fails i2c_read(I2C_Control *dev, uint8_t *res, size_t n);
  * @param data content to write
  * @param n number of bytes to write 
  */
-static I2C_Fails i2c_write(I2C_Control *dev, const uint8_t *data, size_t n);
+static I2C_Fails_t i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n);
 
 /**
  * @brief Compute the difference in ticks.
@@ -76,7 +104,7 @@ diff_ticks(TickType_t early,TickType_t later) {
 
 /* ---------------------------- PUBLIC FUNCTIONS -----------------------------*/
 
-// TODO: Add parameters verification and error handling with I2C_Fails codes.
+// TODO: Add parameters verification and error handling with I2C_Fails_t codes.
 
 void NO_OPT
 i2c_setup_peripheral(void) {
@@ -93,13 +121,18 @@ i2c_setup_peripheral(void) {
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails NO_OPT
-i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address, 
+I2C_Fails_t NO_OPT
+i2c_configure(I2C_Control_t *dev,uint32_t i2c, uint8_t address, 
   uint32_t  timeout) {
 
     dev->device = i2c;
     dev->addr = address;
     dev->timeout = timeout;
+
+    log_message(INFO,I2C_BUS, "Setting up I2C.");
+    log_message_with_int(DEBUG, I2C_BUS, "Device: ", dev->device);
+    log_message_with_int(DEBUG, I2C_BUS, "Address: ", dev->addr);
+    log_message_with_int(DEBUG, I2C_BUS, "Timeout: ", dev->timeout);
 
     i2c_peripheral_disable(dev->device);
     i2c_clear_stop(dev->device);
@@ -111,6 +144,8 @@ i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
     i2c_peripheral_enable(dev->device);
 
     if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to configure I2C. Err: ", 
+          i2c_fail_to_string(I2C_Busy_Timeout));
         return I2C_Busy_Timeout;
     }
 
@@ -119,28 +154,47 @@ i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails NO_OPT
-i2c_read_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
-    uint8_t b;
-    i2c_read_byte(dev, regAddr, &b);
+I2C_Fails_t NO_OPT
+i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
+    uint8_t b = 0;
+
+    I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
+    if(status) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+          i2c_fail_to_string(status));
+    }
+
     *data = b & (1 << bitNum);
     return I2C_Ok;
 }
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails NO_OPT
-i2c_write_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data) {
+I2C_Fails_t NO_OPT
+i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data) {
     uint8_t b = 0;
-    i2c_read_byte(dev, regAddr, &b);
+
+    I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
+    if(status) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+          i2c_fail_to_string(status));
+    }
+
     b = (data != 0) ? (b | (1 << bitNum)) : (b & ~(1 << bitNum));
-    return i2c_write_byte(dev, regAddr, b);
+
+    status = i2c_write_byte(dev, regAddr, b);
+    if(status) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. Err: ", 
+          i2c_fail_to_string(status));
+    }
+
+    return status;
 }
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails NO_OPT
-i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, uint8_t length, 
+I2C_Fails_t NO_OPT
+i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitStart, uint8_t length, 
   uint8_t data) {
     //      010 value to write
     // 76543210 bit numbers
@@ -150,19 +204,31 @@ i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, uint8_t leng
     // 10100011 original & ~mask
     // 10101011 masked | value
     uint8_t b = 0;
-    i2c_read_byte(dev, regAddr, &b);
+
+    I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
+    if(status) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+          i2c_fail_to_string(status));
+    }
+
     uint8_t mask = ((1 << length) - 1) << (bitStart - length + 1);
     data <<= (bitStart - length + 1); // shift data into correct position
     data &= mask; // zero all non-important bits in data
     b &= ~(mask); // zero all important bits in existing byte
     b |= data; // combine data with existing byte
-    return i2c_write_byte(dev, regAddr, b);
+
+    status = i2c_write_byte(dev, regAddr, b);
+    if(status) {
+        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. Err: ", 
+          i2c_fail_to_string(status));
+    }
+    return status;
 }
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails NO_OPT
-i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data) {
+I2C_Fails_t NO_OPT
+i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
     
     const uint8_t content[2] = {regAddr, data};
 
@@ -172,8 +238,8 @@ i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data) {
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails
-i2c_read_byte(I2C_Control *dev, uint8_t regAddr, uint8_t *data) {
+I2C_Fails_t
+i2c_read_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data) {
 
     i2c_transfer(dev, &regAddr, 1, data, 1);
 
@@ -182,8 +248,8 @@ i2c_read_byte(I2C_Control *dev, uint8_t regAddr, uint8_t *data) {
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails
-i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data, 
+I2C_Fails_t
+i2c_read_bytes(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data, 
   uint8_t length) {
     
     i2c_transfer(dev, &regAddr, 1, data, length);
@@ -194,14 +260,16 @@ i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data,
 /* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
 // -----------------------------------------------------------------------------
 
-static I2C_Fails NO_OPT
-i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
+static I2C_Fails_t NO_OPT
+i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 {
     TickType_t t0 = systicks();
 
     while ((I2C_SR2(dev->device) & I2C_SR2_BUSY)) {
-        if ( diff_ticks(t0,systicks()) > dev->timeout )
+        if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+            log_message(ERROR, I2C_BUS,"I2C BUSY TIMEOUT!");
             return I2C_Busy_Timeout;
+        }
     }
 
     i2c_send_start(dev->device);
@@ -216,8 +284,10 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
 
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if ( diff_ticks(t0,systicks()) > dev->timeout )
+        if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+            log_message(ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
+        }
     }
 
     /* Clearing ADDR condition sequence. */
@@ -226,8 +296,10 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
     for (size_t i = 0; i < n; i++) {
         i2c_send_data(dev->device, data[i]);
         while (!(I2C_SR1(dev->device) & (I2C_SR1_BTF))) {
-            if ( diff_ticks(t0,systicks()) > dev->timeout )
+            if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+                log_message(ERROR, I2C_BUS,"I2C WRITE TIMEOUT!");
                 return I2C_Write_Timeout;
+            }
         }
     }
 
@@ -236,8 +308,8 @@ i2c_write(I2C_Control *dev, const uint8_t *data, size_t n)
 
 // -----------------------------------------------------------------------------
 
-static I2C_Fails NO_OPT
-i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
+static I2C_Fails_t NO_OPT
+i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
 {
     TickType_t t0 = systicks();
 
@@ -250,8 +322,10 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
 
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if ( diff_ticks(t0,systicks()) > dev->timeout )
+        if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+            log_message(ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
+        }
     }
 
     /* program ACK = 0 for reading a single byte */
@@ -265,8 +339,10 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
     /* program ACK = 0 for a two byte reading */
     if (n == 2) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
-            if ( diff_ticks(t0,systicks()) > dev->timeout )
+            if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+                log_message(ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
+            }
         }
         i2c_disable_ack(dev->device);
     }
@@ -275,11 +351,14 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
 
     for (size_t i = 0; i < n; ++i) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
-            if ( diff_ticks(t0,systicks()) > dev->timeout )
+            if ( diff_ticks(t0,systicks()) > dev->timeout ) {
+                log_message(ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
+            }
         }
 
-        if ((I2C_SR1(dev->device) & I2C_SR1_BTF) && n > 2) { // TODO: change the condition to a specific byte count.
+         // TODO: change the condition to a specific byte count.
+        if ((I2C_SR1(dev->device) & I2C_SR1_BTF) && n > 2) {
             i2c_disable_ack(dev->device);
             res[i++] = i2c_get_data(dev->device);
             i2c_send_stop(dev->device);
@@ -292,25 +371,39 @@ i2c_read(I2C_Control *dev, uint8_t *res, size_t n)
 
 // -----------------------------------------------------------------------------
 
-static I2C_Fails NO_OPT
-i2c_transfer(I2C_Control *dev, const uint8_t *w, size_t wn, 
+static I2C_Fails_t NO_OPT
+i2c_transfer(I2C_Control_t *dev, const uint8_t *w, size_t wn, 
   uint8_t *r, size_t rn) {
-    I2C_Fails error_code = 0;
+    I2C_Fails_t status = 0;
+
+    log_message_with_int(DEBUG, I2C_BUS, "I2C device address: ", (int)dev->device);
+    log_message_with_int(DEBUG, I2C_BUS, "Slave address: ", (int)dev->addr);
+    log_message_with_int(DEBUG, I2C_BUS, "Timeout value: ", (int)dev->timeout);
+    log_message_with_int(DEBUG, I2C_BUS, "Value of wn: ", (int)wn);
+    log_message_with_int(DEBUG, I2C_BUS, "Value of rn: ", (int)rn);
+
 
     if (wn) {
-        error_code = i2c_write(dev, w, wn);
-        if (error_code) {
-            return error_code;
+        status = i2c_write(dev, w, wn);
+        if (status) {
+            log_message_with_error(ERROR,I2C_BUS,"Failed to write transfer I2C. Err: ", 
+              i2c_fail_to_string(status));
+            return status;
         }
     }
+
     if (rn) {
-        error_code = i2c_read(dev, r, rn);
-        if (error_code) {
-            return error_code;
+        status = i2c_read(dev, r, rn);
+        if (status) {
+            log_message_with_error(ERROR,I2C_BUS,"Failed to read transfer I2C. Err: ", 
+              i2c_fail_to_string(status));
+            return status;
         }
     } else {
         i2c_send_stop(dev->device);
     }
+
+    log_message(INFO, I2C_BUS,"End of transmission");
 
     return I2C_Ok;
 }

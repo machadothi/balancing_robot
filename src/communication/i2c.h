@@ -16,13 +16,13 @@ typedef enum {
     I2C_Write_Timeout,
     I2C_Read_Timeout,
     I2C_Busy_Timeout
-} I2C_Fails;
+} I2C_Fails_t;
 
 typedef struct {
     uint32_t    device;        // I2C device
     uint8_t addr;             // Device address
     uint32_t timeout;
-} I2C_Control;
+} I2C_Control_t;
 
 /**
  * @brief Setup i2c peripheral.
@@ -37,9 +37,9 @@ void i2c_setup_peripheral(void);
  * @param i2c I2C base address
  * @param address device address
  * @param ticks timeout in ticks
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
+I2C_Fails_t i2c_configure(I2C_Control_t *dev,uint32_t i2c, uint8_t address,
   uint32_t  timeout);
 
 /** Read a single bit from an 8-bit device register.
@@ -49,9 +49,9 @@ I2C_Fails i2c_configure(I2C_Control *dev,uint32_t i2c, uint8_t address,
  * @param data Container for single bit value
  * @param timeout Optional read timeout in milliseconds (0 to disable, 
  * leave off to use default class value in I2Cdev::readTimeout)
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_read_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
+I2C_Fails_t i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, 
   uint8_t *data);
 
 /** Read single byte from an 8-bit device register.
@@ -60,9 +60,9 @@ I2C_Fails i2c_read_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum,
  * @param data Container for byte value read from device
  * @param timeout Optional read timeout in milliseconds (0 to disable, leave off
  *  to use default class value in I2Cdev::readTimeout)
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_read_byte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
+I2C_Fails_t i2c_read_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data);
 
 /** Read multiple bytes from an 8-bit device register.
  * @param devAddr I2C slave device address
@@ -71,9 +71,9 @@ I2C_Fails i2c_read_byte(I2C_Control *dev, uint8_t regAddr, uint8_t *data);
  * @param data Buffer to store read data in
  * @param timeout Optional read timeout in milliseconds (0 to disable, leave off
  *  to use default class value in I2Cdev::readTimeout)
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data, 
+I2C_Fails_t i2c_read_bytes(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data, 
   uint8_t length);
 
 /** write a single bit in an 8-bit device register.
@@ -81,9 +81,9 @@ I2C_Fails i2c_read_bytes(I2C_Control *dev, uint8_t regAddr, uint8_t *data,
  * @param regAddr Register regAddr to write to
  * @param bitNum Bit position to write (0-7)
  * @param value New bit value to write
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_write_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum, 
+I2C_Fails_t i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, 
                         uint8_t data);
 
 /** Write multiple bits in an 8-bit device register.
@@ -92,17 +92,17 @@ I2C_Fails i2c_write_bit(I2C_Control *dev, uint8_t regAddr, uint8_t bitNum,
  * @param bitStart First bit position to write (0-7)
  * @param length Number of bits to write (not more than 8)
  * @param data Right-aligned value to write
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_write_bits(I2C_Control *dev, uint8_t regAddr, uint8_t bitStart, 
+I2C_Fails_t i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitStart, 
                 uint8_t length, uint8_t data);
 
 /** Write single byte to an 8-bit device register.
  * @param devAddr I2C slave device address
  * @param regAddr Register address to write to
  * @param data New byte value to write
- * @return I2C_Fails
+ * @return I2C_Fails_t
  */
-I2C_Fails i2c_write_byte(I2C_Control *dev, uint8_t regAddr, uint8_t data);
+I2C_Fails_t i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data);
 
 #endif // I2C_H

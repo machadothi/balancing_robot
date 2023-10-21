@@ -3,6 +3,7 @@
 #include <libopencm3/stm32/usart.h>
 
 #include "communication/uart.h"
+#include "log/log.h"
 
 // -----------------------------------------------------------------------------
 
@@ -12,7 +13,8 @@ QueueHandle_t uart_txq;
 
 void
 uart_peripheral_setup(void) {
-
+    log_message(INFO,UART_BUS,"Initializing UART");
+    
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_USART2);
 

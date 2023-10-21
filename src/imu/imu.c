@@ -1,49 +1,49 @@
 #include "imu.h"
 
-IMU_Fails imu_init(IMU *imu) {
-    // Call the init function pointed by the passed IMU structure    
+IMU_Fails_t imu_init(IMU_t *imu) {
+    // Call the init function pointed by the passed IMU_t structure    
     return imu->init();
 }
 
 // -----------------------------------------------------------------------------
 
-uint8_t imu_id(IMU *imu) {
+uint8_t imu_id(IMU_t *imu) {
     return imu->id();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_acc_x(IMU *imu) {
+int16_t imu_acc_x(IMU_t *imu) {
     return imu->acc_x();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_acc_y(IMU *imu) {
+int16_t imu_acc_y(IMU_t *imu) {
     return imu->acc_y();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_acc_z(IMU *imu) {
+int16_t imu_acc_z(IMU_t *imu) {
     return imu->acc_z();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_gyro_x(IMU *imu) {
+int16_t imu_gyro_x(IMU_t *imu) {
     return imu->gyro_x();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_gyro_y(IMU *imu) {
+int16_t imu_gyro_y(IMU_t *imu) {
     return imu->gyro_y();
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t imu_gyro_z(IMU *imu) {
+int16_t imu_gyro_z(IMU_t *imu) {
     return imu->gyro_z();
 }
 

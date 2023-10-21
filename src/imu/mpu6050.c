@@ -6,45 +6,87 @@
 
 #include "mpu6050.h"
 #include "communication/i2c.h"
+#include "log/log.h"
 
 #define NO_OPT __attribute__((optimize("O0")))
 
-static I2C_Control i2c;            // I2C Control struct
+static I2C_Control_t i2c;            // I2C Control struct
 
-IMU *get_mpu6050_imu(void) {
-    static IMU mpu6050_imu = {
+IMU_t *get_mpu6050_imu(void) {
+    static IMU_t mpu6050_imu = {
         .init = initialize,
-        .id = getDeviceID,
-        .acc_x = getAccelerationX,
-        .acc_y = getAccelerationY,
-        .acc_z = getAccelerationZ,
-        .gyro_x = getRotationX,
-        .gyro_y = getRotationY,
-        .gyro_z = getRotationZ
+        .id = get_device_id,
+        .acc_x = get_acceleration_x,
+        .acc_y = get_acceleration_y,
+        .acc_z = get_acceleration_z,
+        .gyro_x = get_rotation_x,
+        .gyro_y = get_rotation_y,
+        .gyro_z = get_rotation_z
     };
     return &mpu6050_imu;
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails NO_OPT
+static const char* getIMUErrorText(IMU_Fails_t error) {
+    switch(error) {
+        case IMU_Ok:
+            return "IMU_Ok";
+        case IMU_Config_Error:
+            return "IMU_Config_Error";
+        case IMU_COMM_BUS_ERROR:
+            return "IMU_COMM_BUS_ERROR";
+        case IMU_Read_Timeout:
+            return "IMU_Read_Timeout";
+        case IMU_Busy_Timeout:
+            return "IMU_Busy_Timeout";
+        default:
+            return "Unknown error";
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+IMU_Fails_t NO_OPT
 initialize(void) {
+    log_message(INFO, MPU6050, "Setting up MPU6050.");
+
     i2c_setup_peripheral();
     setup_reset_pin();
-    hardReset();
+    hard_reset();
     i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 100);
 
-    if(setClockSource(MPU6050_CLOCK_PLL_XGYRO)) {
-        return IMU_COMM_BUS_ERROR;
+    log_message(DEBUG, I2C_BUS,"Setting clock source!");
+    IMU_Fails_t status = set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
+    if(status) {
+        log_message_with_error(ERROR, MPU6050, "Fail to set clock source. Error: ",
+          getIMUErrorText(status));
+        
+        return IMU_Config_Error;
     }
-    if(setFullScaleGyroRange(MPU6050_GYRO_FS_250)){
-        return IMU_COMM_BUS_ERROR;
+
+    log_message(DEBUG, I2C_BUS,"Setting gyro scale range!");
+    status = set_full_scale_gyro_range(MPU6050_GYRO_FS_250);
+    if(status){
+        log_message_with_error(ERROR, MPU6050, "Fail to set scale gyro range. Err: ", 
+          getIMUErrorText(status));
+        return IMU_Config_Error;
     }
-    if(setFullScaleAccelRange(MPU6050_ACCEL_FS_2)){
-        return IMU_COMM_BUS_ERROR;
+
+    log_message(DEBUG, I2C_BUS,"Setting accelerometer scale range!");
+    status = set_full_scale_accel_range(MPU6050_ACCEL_FS_2);
+    if(status){
+        log_message_with_error(ERROR, MPU6050, "Fail to set scale accel range. Err: ", 
+          getIMUErrorText(status));
+        return IMU_Config_Error;
     }
-    if(setSleepEnabled(false)){
-        return IMU_COMM_BUS_ERROR;
+
+    log_message(DEBUG, I2C_BUS,"Disabling sleep enable!");
+    status = set_sleep_enabled(false);
+    if(status){
+        log_message_with_error(ERROR, MPU6050, "Fail to set sleep enable. Err: ", 
+          getIMUErrorText(status));
+        return IMU_Config_Error;
     }
 
     return IMU_Ok;
@@ -54,6 +96,7 @@ initialize(void) {
 
 void
 setup_reset_pin(void) {
+    log_message(INFO, MPU6050, "Setting up reset pin.");
     /* Enable GPIOA clock. */
     rcc_periph_clock_enable(RCC_GPIOA);
 
@@ -65,7 +108,9 @@ setup_reset_pin(void) {
 // -----------------------------------------------------------------------------
 
 void
-hardReset(void) {
+hard_reset(void) {
+    log_message(INFO, MPU6050, "Hard reseting.");
+
     gpio_clear(GPIOA,GPIO10);
     vTaskDelay(pdMS_TO_TICKS(2));
     gpio_set(GPIOA,GPIO10); // enable ON
@@ -74,36 +119,37 @@ hardReset(void) {
 // -----------------------------------------------------------------------------
 
 bool
-testConnection(void) {
-    return getDeviceID() == MPU6050_DEFAULT_ADDRESS;
+test_connection(void) {
+    return get_device_id() == MPU6050_DEFAULT_ADDRESS;
 }
 
 // -----------------------------------------------------------------------------
 
 uint8_t NO_OPT
-getDeviceID(void) {
+get_device_id(void) {
     uint8_t buffer = 0;
     i2c_read_byte(&i2c, MPU6050_RA_WHO_AM_I, &buffer);
+
     return buffer;
 }
 
 // -----------------------------------------------------------------------------
 
-void setDeviceID(uint8_t id) {
+void set_device_id(uint8_t id) {
     i2c_write_bits(&i2c, MPU6050_RA_WHO_AM_I, MPU6050_WHO_AM_I_BIT, MPU6050_WHO_AM_I_LENGTH, id);
 }
 
 // -----------------------------------------------------------------------------
 
 void NO_OPT
-softReset(void) {
+soft_reset(void) {
     i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails NO_OPT
-setClockSource(uint8_t source) {
+IMU_Fails_t NO_OPT
+set_clock_source(uint8_t source) {
 
     if(i2c_write_bits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, 
       MPU6050_PWR1_CLKSEL_LENGTH, source)) {
@@ -115,8 +161,8 @@ setClockSource(uint8_t source) {
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails NO_OPT
-setFullScaleGyroRange(uint8_t range) {
+IMU_Fails_t NO_OPT
+set_full_scale_gyro_range(uint8_t range) {
     if(i2c_write_bits(&i2c, MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, 
       MPU6050_GCONFIG_FS_SEL_LENGTH, range)) {
         return IMU_COMM_BUS_ERROR;
@@ -127,8 +173,8 @@ setFullScaleGyroRange(uint8_t range) {
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails NO_OPT
-setFullScaleAccelRange(uint8_t range) {
+IMU_Fails_t NO_OPT
+set_full_scale_accel_range(uint8_t range) {
     if(i2c_write_bits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, 
       MPU6050_ACONFIG_AFS_SEL_LENGTH, range)) {
         return IMU_COMM_BUS_ERROR;
@@ -139,8 +185,8 @@ setFullScaleAccelRange(uint8_t range) {
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails NO_OPT
-setSleepEnabled(bool enabled) {
+IMU_Fails_t NO_OPT
+set_sleep_enabled(bool enabled) {
     if(i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, 
       enabled)) {
         return IMU_COMM_BUS_ERROR;
@@ -151,7 +197,7 @@ setSleepEnabled(bool enabled) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getAccelerationX(void) {
+int16_t get_acceleration_x(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_XOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
@@ -159,7 +205,7 @@ int16_t getAccelerationX(void) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getAccelerationY(void) {
+int16_t get_acceleration_y(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_YOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
@@ -167,7 +213,7 @@ int16_t getAccelerationY(void) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getAccelerationZ(void) {
+int16_t get_acceleration_z(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_ZOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
@@ -175,7 +221,7 @@ int16_t getAccelerationZ(void) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getRotationX(void) {
+int16_t get_rotation_x(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_XOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
@@ -183,7 +229,7 @@ int16_t getRotationX(void) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getRotationY(void) {
+int16_t get_rotation_y(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_YOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
@@ -191,7 +237,7 @@ int16_t getRotationY(void) {
 
 // -----------------------------------------------------------------------------
 
-int16_t getRotationZ(void) {
+int16_t get_rotation_z(void) {
     uint8_t buffer[2];
     i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_ZOUT_H), buffer, 2);
     return (((int16_t)buffer[0]) << 8) | buffer[1];
