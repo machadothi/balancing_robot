@@ -1,44 +1,86 @@
 #include <stdlib.h>
+#include <stdio.h>
 
+#include "FreeRTOS.h"
+#include "task.h"
 #include "log.h"
 
+// -----------------------------------------------------------------------------
+/* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
+// -----------------------------------------------------------------------------
+
+static LogDriver_t *driver_ = NULL;
+
+static const char* get_timestamp(void);
+static const char* level_to_string(LogLevel_t level);
 static const char* module_to_string(LogModule_t module);
 
-void log_message(LogModule_t module, const char *message, LogDriver_t *driver) {
-    if (driver == NULL || message == NULL) {
+// -----------------------------------------------------------------------------
+/* ---------------------------- PUBLIC FUNCTIONS -----------------------------*/
+// -----------------------------------------------------------------------------
+
+void log_init(LogDriver_t *driver) {
+    driver_ = driver;
+}
+
+// -----------------------------------------------------------------------------
+
+void log_message(LogLevel_t log, LogModule_t module, const char *message) {
+    if (driver_ == NULL || message == NULL) {
         return;
     }
 
-    switch (module) {
-        case UART_BUS:
-            // Add specific logging behavior for MODULE_A if needed
-            break;
-        case MPU6050:
-            // Add specific logging behavior for MODULE_B if needed
-            break;
-        case I2C_BUS:
-            // Add specific logging behavior for MODULE_C if needed
-            break;
-        // Add more cases as needed for additional modules
-        default:
-            break;
+    if (log >= driver_->log_level) {
+        char log_message[256];
+        sprintf(log_message, "[T: %s|%s][%s] %s\n\r", get_timestamp(), 
+          module_to_string(module), level_to_string(log), message);
+        
+        driver_->send(log_message);
     }
-    driver->send(module_to_string(module));
-    driver->send(message);
-    driver->send("\n\r");
 }
+
+// -----------------------------------------------------------------------------
+/* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
+// -----------------------------------------------------------------------------
 
 static const char* module_to_string(LogModule_t module) {
     switch (module) {
         case UART_BUS:
-            return "[UART]: ";
+            return "UART MODULE";
         case MPU6050:
-            return "[IMU]: ";
+            return "IMU MODULE";
         case I2C_BUS:
-            return "[I2C]: ";
+            return "I2C MODULE";
         // Add more cases as needed for additional interfaces
         default:
             return "Unknown";
     }
 }
 
+// -----------------------------------------------------------------------------
+
+static const char* level_to_string(LogLevel_t level) {
+    switch (level) {
+        case DEBUG:
+            return "DEBUG";
+        case INFO:
+            return "INFO";
+        case WARN:
+            return "WARN";
+        case ERROR:
+            return "ERROR";
+        case FATAL:
+            return "FATAL";
+        default:
+            return "Unknown";
+    }
+}
+
+// -----------------------------------------------------------------------------
+
+static const char* get_timestamp() {
+    TickType_t ticks = xTaskGetTickCount();
+    static char timestamp[20];
+    sprintf(timestamp, "%lu", ticks);
+    return timestamp;
+}

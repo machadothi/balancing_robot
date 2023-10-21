@@ -56,9 +56,11 @@ demo_task(void *args __attribute__((unused))) {
     }
 
     LogDriver_t logDriver;
+    logDriver.log_level = DEBUG;
     logDriver.send = uart_puts;
-
-    log_message(UART_BUS, "Starting IMU demo task", &logDriver);
+    
+    log_init(&logDriver);
+    log_message(DEBUG, UART_BUS, "Starting IMU demo task");
 
     char buffer[7];  // Large enough for a 2-byte int and '\0'
 
@@ -115,7 +117,7 @@ demo_task(void *args __attribute__((unused))) {
         uart_puts(buffer);
         uart_puts(".\n\n\r");
 
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(200));
+        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(1000));
     }
 }
 
@@ -134,7 +136,7 @@ main(void) {
 
     xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(demo_task,"DEMO",150,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(demo_task,"DEMO",300,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();
     for (;;);
