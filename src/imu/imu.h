@@ -23,6 +23,8 @@ typedef struct {
     int16_t(*gyro_z)(void);
 } IMU_t;
 
+void imu_demo_task(void *args __attribute__((unused)));
+
 IMU_Fails_t imu_init(IMU_t *imu);
 uint8_t imu_id(IMU_t *imu);
 int16_t imu_acc_x(IMU_t *imu);

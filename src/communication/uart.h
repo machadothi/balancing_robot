@@ -2,6 +2,7 @@
 #define UART_H_
 
 #include <FreeRTOS.h>
+#include <task.h>
 #include <queue.h>
 
 typedef enum {

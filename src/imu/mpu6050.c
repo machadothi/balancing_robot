@@ -54,10 +54,17 @@ initialize(void) {
     i2c_setup_peripheral();
     setup_reset_pin();
     hard_reset();
-    i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 100);
+    
+    IMU_Fails_t status = i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000);
+    if(status) {
+        log_message_with_error(ERROR, MPU6050, "Fail to setup I2C",
+          getIMUErrorText(IMU_COMM_BUS_ERROR));
+        
+        return IMU_COMM_BUS_ERROR;
+    }
 
     log_message(DEBUG, I2C_BUS,"Setting clock source!");
-    IMU_Fails_t status = set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
+    status = set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
     if(status) {
         log_message_with_error(ERROR, MPU6050, "Fail to set clock source. Error: ",
           getIMUErrorText(status));
@@ -112,7 +119,7 @@ hard_reset(void) {
     log_message(INFO, MPU6050, "Hard reseting.");
 
     gpio_clear(GPIOA,GPIO10);
-    vTaskDelay(pdMS_TO_TICKS(2));
+    vTaskDelay(pdMS_TO_TICKS(500));
     gpio_set(GPIOA,GPIO10); // enable ON
 }
 

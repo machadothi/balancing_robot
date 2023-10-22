@@ -144,7 +144,7 @@ i2c_configure(I2C_Control_t *dev,uint32_t i2c, uint8_t address,
     i2c_peripheral_enable(dev->device);
 
     if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to configure I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to configure I2C. ", 
           i2c_fail_to_string(I2C_Busy_Timeout));
         return I2C_Busy_Timeout;
     }
@@ -160,7 +160,7 @@ i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data)
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
     if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
           i2c_fail_to_string(status));
     }
 
@@ -176,7 +176,7 @@ i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data)
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
     if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
           i2c_fail_to_string(status));
     }
 
@@ -184,7 +184,7 @@ i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data)
 
     status = i2c_write_byte(dev, regAddr, b);
     if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. ", 
           i2c_fail_to_string(status));
     }
 
@@ -207,7 +207,7 @@ i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitStart, uint8_t le
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
     if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
           i2c_fail_to_string(status));
     }
 
@@ -219,7 +219,7 @@ i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitStart, uint8_t le
 
     status = i2c_write_byte(dev, regAddr, b);
     if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. Err: ", 
+        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. ", 
           i2c_fail_to_string(status));
     }
     return status;
