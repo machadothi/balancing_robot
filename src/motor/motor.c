@@ -4,12 +4,44 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/timer.h>
+#include <libopencm3/stm32/exti.h>
 #include <libopencm3/cm3/nvic.h>
 
 #include "motor.h"
 
 static void pwm_init(void);
 static void pwm_set_duty_cycle(uint32_t pin, uint8_t duty_cycle);
+
+static uint8_t motor_a_encoder = 0;
+static uint8_t motor_b_encoder = 0;
+
+void exti9_5_isr(void) {
+    if(exti_get_flag_status(EXTI5)) {
+        exti_reset_request(EXTI5);
+        motor_a_encoder++;
+    } else if (exti_get_flag_status(EXTI6)) {
+        exti_reset_request(EXTI6);
+        motor_b_encoder++;
+    }
+}
+
+static void setup_input_io(void) {
+    rcc_periph_clock_enable(RCC_AFIO);
+
+    gpio_set_mode(GPIOA,
+        GPIO_MODE_INPUT,
+        GPIO_CNF_INPUT_FLOAT,
+        MOTOR1 | MOTOR2);
+    
+    exti_select_source(EXTI5 | EXTI6, GPIOA);
+    exti_set_trigger(EXTI5 | EXTI6, EXTI_TRIGGER_RISING);
+    exti_enable_request(EXTI5 | EXTI6);
+    nvic_enable_irq(NVIC_EXTI9_5_IRQ);
+}
+
+// void exti0_isr(void) {
+//     exti_reset_request(EXTI0);
+// }
 
 void motor_init(void) {
     // outputs
@@ -20,12 +52,8 @@ void motor_init(void) {
     //   TB6612_AIN2);
     
     // inputs
-    // gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, MOTOR1 | MOTOR2);
-    // exti_select_source(EXTI5 | EXTI6, GPIOA);
-    // exti_set_trigger(EXTI5 | EXTI6, EXTI_TRIGGER_RISING);
-    // exti_enable_request(EXTI5 | EXTI6);
-    // nvic_enable_irq(NVIC_EXTI5_IRQ);
-    // nvic_enable_irq(NVIC_EXTI6_IRQ);
+    setup_input_io();
+
 
     pwm_init();
 }
