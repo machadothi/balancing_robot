@@ -11,6 +11,7 @@
 #include "communication/uart.h"
 #include "imu/mpu6050.h"
 #include "log/log.h"
+#include "motor/motor.h"
 
 
 extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
@@ -68,7 +69,8 @@ main(void) {
 
     xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(imu_demo_task,"DEMO",300,NULL,configMAX_PRIORITIES-1,NULL);
+    // xTaskCreate(imu_demo_task,"IMU",300,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();
     for (;;);

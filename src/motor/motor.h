@@ -21,4 +21,6 @@ void motor2_set_direction(bool direction);
 void motor1_set_speed(uint8_t speed);
 void motor2_set_speed(uint8_t speed);
 
+void motor_demo_task(void *args __attribute__((unused)));
+
 #endif // __MOTOR_H__

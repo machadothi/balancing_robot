@@ -16,6 +16,7 @@ SRCFILES += communication/uart.c
 SRCFILES += imu/imu.c
 SRCFILES += imu/mpu6050.c
 SRCFILES += log/log.c
+SRCFILES += motor/motor.c
 
 CFLAGS += -I./
 
