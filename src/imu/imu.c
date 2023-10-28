@@ -62,11 +62,7 @@ int16_t imu_gyro_z(IMU_t *imu) {
  *********************************************************************/
 void
 imu_demo_task(void *args __attribute__((unused))) {
-    LogDriver_t logDriver;
-    logDriver.log_level = DEBUG;
-    logDriver.send = uart_puts;
-    
-    log_init(&logDriver);
+
     log_message(DEBUG, UART_BUS, "Starting IMU demo task");
 
     IMU_t *imu = get_mpu6050_imu();

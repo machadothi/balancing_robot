@@ -13,6 +13,8 @@
 #include "log/log.h"
 #include "motor/motor.h"
 
+#define NO_OPT __attribute__((optimize("O0")))
+
 
 extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
                                         char * pcTaskName );
@@ -28,7 +30,7 @@ vApplicationStackOverflowHook( TaskHandle_t xTask,
 /*********************************************************************
  * Blink LED:
  *********************************************************************/
-static void setup_led() {
+static void setup_led(void ) {
     // LED GPIO BluePill
     rcc_periph_clock_enable(RCC_GPIOC);
     gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
@@ -40,6 +42,7 @@ static void setup_led() {
     gpio_set_mode(GPIOB,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO14); // Red
 }
 
+static void
 led(void *args) {
     (void)args;
 
@@ -57,7 +60,7 @@ led(void *args) {
 
 // -----------------------------------------------------------------------------
 
-int
+int NO_OPT
 main(void) {
 
     rcc_clock_setup_in_hse_8mhz_out_72mhz();    // Use this for "blue pill"
@@ -67,9 +70,15 @@ main(void) {
 
     uart_peripheral_setup();
 
-    xTaskCreate(led,"LED",30,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(uart_task,"UART",50,NULL,configMAX_PRIORITIES-1,NULL);
-    // xTaskCreate(imu_demo_task,"IMU",300,NULL,configMAX_PRIORITIES-1,NULL);
+    static LogDriver_t logDriver;
+    logDriver.log_level = OFF;
+    logDriver.send = uart_puts;
+    
+    log_init(&logDriver);
+
+    xTaskCreate(led,"LED",50,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(uart_task,"UART",150,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(imu_demo_task,"IMU",400,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();

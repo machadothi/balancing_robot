@@ -39,21 +39,23 @@ static void setup_input_io(void) {
     nvic_enable_irq(NVIC_EXTI9_5_IRQ);
 }
 
+static void setup_output_io(void) {
+    rcc_periph_clock_enable(RCC_GPIOB);
+    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, 
+      TB6612_STBY | TB6612_AIN1 | TB6612_BIN1 | TB6612_BIN2);
+
+    rcc_periph_clock_enable(RCC_GPIOA);
+    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, 
+      TB6612_AIN2);
+}
+
 // void exti0_isr(void) {
 //     exti_reset_request(EXTI0);
 // }
 
 void motor_init(void) {
-    // outputs
-    // gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, 
-    //   TB6612_STBY | TB6612_AIN1 | TB6612_BIN1 | TB6612_BIN2);
-
-    // gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, 
-    //   TB6612_AIN2);
-    
-    // inputs
+    setup_output_io();
     setup_input_io();
-
 
     pwm_init();
 }
@@ -145,7 +147,6 @@ void
 motor_demo_task(void *args __attribute__((unused))) {
     motor_init();
 
-    static const int ms[4] = { 20000, 15000, 5000, 1000 };
     static int i = 0;
     for (;;) {
         pwm_set_duty_cycle(TB6612_PWMA, 10); // 20%

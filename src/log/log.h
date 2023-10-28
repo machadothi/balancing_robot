@@ -13,7 +13,8 @@ typedef enum {
     INFO,
     WARN,
     ERROR,
-    FATAL
+    FATAL,
+    OFF
 } LogLevel_t;
 
 typedef struct {
