@@ -19,6 +19,7 @@ SRCFILES += log/log.c
 SRCFILES += motor/motor.c
 
 CFLAGS += -I./
+LDLIBS		+= -lm
 
 LDSCRIPT	= stm32f103c8t6.ld
 

@@ -57,16 +57,18 @@ void motor_init(void) {
     setup_output_io();
     setup_input_io();
 
+    gpio_set(GPIOB,TB6612_STBY); // standby off
+
     pwm_init();
 }
 
 void motor1_set_direction(bool direction) {
     if (direction) {
         gpio_set(GPIOB, TB6612_AIN1);
-        gpio_clear(GPIOB, TB6612_AIN2);
+        gpio_clear(GPIOA, TB6612_AIN2);
     } else {
         gpio_clear(GPIOB, TB6612_AIN1);
-        gpio_set(GPIOB, TB6612_AIN2);
+        gpio_set(GPIOA, TB6612_AIN2);
     }
 }
 
@@ -108,10 +110,10 @@ pwm_init(void) {
         TIM_CR1_CMS_EDGE, 
         TIM_CR1_DIR_UP);
     
-    timer_set_prescaler(TIM3, 36000000*2/150/50-1); // 500Hz
+    timer_set_prescaler(TIM3, 36000000*2/500/1000-1); // 500Hz
     timer_enable_preload(TIM3);
     timer_continuous_mode(TIM3);
-    timer_set_period(TIM3, 50-1);
+    timer_set_period(TIM3, 1000-1);
 
     timer_disable_oc_output(TIM3, TIM_OC3);
     timer_set_oc_mode(TIM3, TIM_OC3, TIM_OCM_PWM1);
@@ -147,14 +149,13 @@ void
 motor_demo_task(void *args __attribute__((unused))) {
     motor_init();
 
-    static int i = 0;
-    for (;;) {
-        pwm_set_duty_cycle(TB6612_PWMA, 10); // 20%
-        pwm_set_duty_cycle(TB6612_PWMB, 30); // 60%
-        i++;
-        if (i > 3)
-            i = 0;
+    motor1_set_direction(true);
+    motor2_set_direction(true);
 
+    pwm_set_duty_cycle(TB6612_PWMA, 50); // 20%
+    pwm_set_duty_cycle(TB6612_PWMB, 50); // 60%
+
+    for (;;) {
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 }
