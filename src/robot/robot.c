@@ -9,7 +9,11 @@
 #include "imu/imu.h"
 #include "log/log.h"
 
+// -----------------------------------------------------------------------------
+
 #define RAD_TO_DEGREE 180.0 / 3.14
+
+// -----------------------------------------------------------------------------
 
 static float
 calc_angle(IMU_Data_t *imu_data_) {
@@ -18,12 +22,14 @@ calc_angle(IMU_Data_t *imu_data_) {
     return atan(imu_data_->acc_y/fabs(imu_data_->acc_z)) * RAD_TO_DEGREE;
 }
 
+// -----------------------------------------------------------------------------
+
 static void
 kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
 
     // previosly calculated standard deviations
-    float std_gyro = 0.1;
-    float std_acc = 0.2;
+    const float std_gyro = 0.1;
+    const float std_acc = 0.2;
 
     // predict the current state of the system
     *k_state = *k_state + (gyro_x * SAMPLE_RATE_S);
@@ -41,6 +47,8 @@ kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
     // update uncertainty
     *k_uncert = (1 - k) * *k_uncert;
 }
+
+// -----------------------------------------------------------------------------
 
 void
 robot_task(void *args __attribute__((unused))) {
