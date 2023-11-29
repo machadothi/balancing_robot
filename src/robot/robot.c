@@ -20,13 +20,13 @@ static float calc_angle(IMU_Data_t *imu_data_) {
 static void *kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
 
     // predict the current state of the system
-    *k_state = *k_state + (gyro_x * 0.1);
+    *k_state = *k_state + (gyro_x * 0.01);
 
     // calculate the uncertainty of the prediction
-    *k_uncert = *k_uncert + (pow(0.1,2) * pow(4,2)); // 4 = std deviation of gyro
+    *k_uncert = *k_uncert + (pow(0.01,2) * pow(2,2)); // 4 = std deviation of gyro
 
     // calculate Kalman's Gain
-    float dummy = *k_uncert + (pow(0.1,2) * pow(3,2)); // 3 = std deviation of acc
+    float dummy = *k_uncert + (pow(0.01,2) * pow(4,2)); // 3 = std deviation of acc
     float k = *k_uncert/dummy;
 
     // update the predicted state with Kalman's Gain
