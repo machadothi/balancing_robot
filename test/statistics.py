@@ -14,7 +14,7 @@ if __name__ == "__main__":
     ay_list = []
     gx_list = []
 
-    num_of_samples = 200
+    num_of_samples = 1000
     # Read and print lines from the serial port in an infinite loop
     for i in range(num_of_samples):
         line = ser.readline()
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     print(f"Standard deviation of 'acceleromter' values: {ay_std_dev}")
     print(f"Standard deviation of 'gyro x' values: {gx_std_dev}")
 
-    x = np.linspace(0, 0.1, num_of_samples)
+    x = np.linspace(0, 0.01*num_of_samples, num_of_samples)
 
     print(f"Size of x: {len(x)}")
     print(f"Size of ay_list: {len(ay_list)}")
@@ -50,9 +50,21 @@ if __name__ == "__main__":
 
     plt.plot(x, ay_list, label='accelerometer values')
     plt.plot(x, gx_list, label='kalmans filter values')
-    plt.xlabel('Time (0.1s intervals)')
-    plt.ylabel('Values')
-    plt.title('Accelerometer and Kalman Filter Values over Time')
+
+    max_ay_value = max(ay_list)
+    plt.axhline(y=max_ay_value, color='r', linestyle='--', label='Max Accelerometer Value')
+    min_ay_value = min(ay_list)
+    plt.axhline(y=min_ay_value, color='r', linestyle='--')
+
+    max_gx_value = max(gx_list)
+    plt.axhline(y=max_gx_value, color='g', linestyle='--', label='Max Kalman`s filter Value')
+    min_gx_value = min(gx_list)
+    plt.axhline(y=min_gx_value, color='g', linestyle='--')
+
+    plt.xlabel('Time (s)')
+    plt.ylabel('Degree (º)')
+    plt.title('Accelerometer and Kalman Filter Values over Time 10 ms sample rate')
+    plt.grid()
     plt.legend()
     plt.show()
 

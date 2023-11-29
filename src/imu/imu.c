@@ -122,6 +122,6 @@ imu_task(void *args __attribute__((unused))) {
 
         send_imu_data(&imu_data);
 
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(100));
+        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(10));
     }
 }

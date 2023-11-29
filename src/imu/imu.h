@@ -9,6 +9,9 @@
 
 extern QueueHandle_t imu_content;
 
+const uint8_t SAMPLE_RATE_MS = 10;
+const uint8_t SAMPLE_RATE_S = SAMPLE_RATE_MS/1000;
+
 typedef enum {
     IMU_Ok = 0,
     IMU_Config_Error,
