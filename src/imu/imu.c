@@ -108,7 +108,7 @@ imu_task(void *args __attribute__((unused))) {
 
     while(status) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        uart_puts("Fail to init IMU\n\n\r");
+        log_message(ERROR, IMU_TASK, "Fail to init IMU!");
     }
 
     char buffer[100];

@@ -5,6 +5,7 @@ typedef enum {
     UART_BUS,
     MPU6050,
     I2C_BUS,
+    IMU_TASK,
     // Add more modules as needed
 } LogModule_t;
 
