@@ -12,6 +12,7 @@
 #include "imu/mpu6050.h"
 #include "log/log.h"
 #include "motor/motor.h"
+#include "robot/robot.h"
 
 #define NO_OPT __attribute__((optimize("O0")))
 
@@ -78,7 +79,8 @@ main(void) {
 
     xTaskCreate(led,"LED",50,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",150,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(imu_demo_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(imu_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(robot_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();

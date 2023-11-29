@@ -17,6 +17,7 @@ SRCFILES += imu/imu.c
 SRCFILES += imu/mpu6050.c
 SRCFILES += log/log.c
 SRCFILES += motor/motor.c
+SRCFILES += robot/robot.c
 
 CFLAGS += -I./
 LDLIBS		+= -lm

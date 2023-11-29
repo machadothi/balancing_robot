@@ -2,7 +2,12 @@
 #ifndef IMU_H_
 #define IMU_H_
 
+#include <FreeRTOS.h>
+#include <queue.h>
+
 #include <stdint.h>
+
+extern QueueHandle_t imu_content;
 
 typedef enum {
     IMU_Ok = 0,
@@ -23,7 +28,16 @@ typedef struct {
     int16_t(*gyro_z)(void);
 } IMU_t;
 
-void imu_demo_task(void *args __attribute__((unused)));
+typedef struct {
+    float acc_x;
+    float acc_y;
+    float acc_z;
+    float gyro_x;
+    float gyro_y;
+    float gyro_z;
+} IMU_Data_t;
+
+void imu_task(void *args __attribute__((unused)));
 
 IMU_Fails_t imu_init(IMU_t *imu);
 uint8_t imu_id(IMU_t *imu);

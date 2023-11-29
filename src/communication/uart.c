@@ -24,7 +24,7 @@ uart_peripheral_setup(void) {
         GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
         GPIO_USART2_TX);
 
-    usart_set_baudrate(USART2,38400);
+    usart_set_baudrate(USART2,115200);
     usart_set_databits(USART2,8);
     usart_set_stopbits(USART2,USART_STOPBITS_1);
     usart_set_mode(USART2,USART_MODE_TX);
@@ -43,7 +43,7 @@ uart_puts(const char *s) {
 
     for ( ; *s; ++s ) {
         // blocks when queue is full
-        xQueueSend(uart_txq,s,portMAX_DELAY); 
+        xQueueSend(uart_txq, s, portMAX_DELAY); 
     }
 }
 

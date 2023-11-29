@@ -8,33 +8,25 @@
 #include "log/log.h"
 #include "imu.h"
 
-#define MPU_RESOLUTION_SCALE 16384.0 // TODO: MOVE TO MPU IMPLEMENTATION
-#define RAD_TO_DEGREE 180.0 / 3.14
+// -----------------------------------------------------------------------------
 
-IMU_Fails_t imu_init(IMU_t *imu) {
-    // Call the init function pointed by the passed IMU_t structure    
-    return imu->init();
-}
+QueueHandle_t imu_content;
 
-typedef struct {
-    float acc_x;
-    float acc_y;
-    float acc_z;
-    float gyro_x;
-    float gyro_y;
-    float gyro_z;
-} IMU_Data_t;
+// -----------------------------------------------------------------------------
 
 typedef struct {
     float x;
     float y;
 } Angle_t;
 
-static IMU_t *imu;
-static IMU_Data_t imu_data;
-static Angle_t angles;
+static IMU_t *imu_;
 
+// -----------------------------------------------------------------------------
 
+IMU_Fails_t imu_init(IMU_t *imu) {
+    imu_content = xQueueCreate(256,sizeof(IMU_Data_t));
+    return imu->init();
+}
 
 // -----------------------------------------------------------------------------
 
@@ -80,60 +72,55 @@ int16_t imu_gyro_z(IMU_t *imu) {
 
 // -----------------------------------------------------------------------------
 
-static void calc_angle() {
-    // Since the rotation around X-axes is always zero due to construction reason
-    // the equation simplifies to:
-    angles.y = atan(imu_data.acc_y/fabs(imu_data.acc_z)) * RAD_TO_DEGREE;
+static void read_imu(IMU_t *imu, IMU_Data_t *imu_data_) {
+    imu_data_->acc_x = imu_acc_x(imu) / ACC_SENS_SCALE_FACTOR;
+    imu_data_->acc_y = imu_acc_y(imu) / ACC_SENS_SCALE_FACTOR;
+    imu_data_->acc_z = imu_acc_z(imu) / ACC_SENS_SCALE_FACTOR;
+    imu_data_->gyro_x = (imu_gyro_x(imu) / GYRO_SENS_SCALE_FACTOR) + GYRO_CONST_ERROR_MEAS;
+    imu_data_->gyro_y = imu_gyro_y(imu) / GYRO_SENS_SCALE_FACTOR;
+    imu_data_->gyro_z = imu_gyro_z(imu) / GYRO_SENS_SCALE_FACTOR;
 }
 
 // -----------------------------------------------------------------------------
 
-static void read_imu(IMU_t *imu) {
-    imu_data.acc_x = imu_acc_x(imu) / MPU_RESOLUTION_SCALE;
-    imu_data.acc_y = imu_acc_y(imu) / MPU_RESOLUTION_SCALE;
-    imu_data.acc_z = imu_acc_z(imu) / MPU_RESOLUTION_SCALE;
-    imu_data.gyro_x = imu_gyro_x(imu) / MPU_RESOLUTION_SCALE;
-    imu_data.gyro_y = imu_gyro_y(imu) / MPU_RESOLUTION_SCALE;
-    imu_data.gyro_z = imu_gyro_z(imu) / MPU_RESOLUTION_SCALE;
+static void
+send_imu_data(const IMU_Data_t *data) {
+    xQueueSend(imu_content, data, portMAX_DELAY);
 }
 
 // -----------------------------------------------------------------------------
 
 /*********************************************************************
- * Demo Task:
- *    Simply queues up two line messages to be TX, one second
- *    apart.
+ * Reads data from the IMU and populate its QUEUE
  *********************************************************************/
 void
-imu_demo_task(void *args __attribute__((unused))) {
+imu_task(void *args __attribute__((unused))) {
 
     log_message(DEBUG, UART_BUS, "Starting IMU demo task");
 
-    imu = get_mpu6050_imu();
+    imu_ = get_mpu6050_imu();
+    
+    static IMU_Data_t imu_data;
+    static Angle_t imu_angles;
 
     // TODO: Log error message
-    IMU_Fails_t status = imu_init(imu);
+    IMU_Fails_t status = imu_init(imu_);
 
     while(status) {
         vTaskDelay(pdMS_TO_TICKS(1000));
         uart_puts("Fail to init IMU\n\n\r");
     }
 
-
     char buffer[100];
 
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
-        uint8_t id = imu_id(imu);
+        uint8_t id = imu_id(imu_);
 
-        read_imu(imu);
-        calc_angle();
+        read_imu(imu_, &imu_data);
 
-        sprintf(buffer, "id: 0x%x | deg: %.2f | ax: %.2f | ay: %.2f | az: %.2f | gx: %.2f"
-          " | gy: %.2f | gz: %.2f\n\r", id, angles.y, imu_data.acc_x, imu_data.acc_y, \
-          imu_data.acc_z, imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z);
-        uart_puts(buffer);
+        send_imu_data(&imu_data);
 
         vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(100));
     }
