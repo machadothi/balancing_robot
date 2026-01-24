@@ -65,7 +65,7 @@ int main(void) {
 
     /* Configure logging */
     static LogDriver_t log_driver = {
-        .log_level = LOG_DEBUG,
+        .log_level = LOG_INFO,
         .send = uart_puts
     };
     log_init(&log_driver);
