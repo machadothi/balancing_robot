@@ -1,73 +1,120 @@
-#ifndef LOG_H_
-#define LOG_H_
+/**
+ * @file log.h
+ * @brief Logging system for embedded applications
+ * 
+ * Provides structured logging with multiple severity levels and
+ * module tagging. Output is configurable via driver abstraction.
+ * 
+ * Usage:
+ * @code
+ * LogDriver_t driver = {
+ *     .log_level = INFO,
+ *     .send = uart_puts
+ * };
+ * log_init(&driver);
+ * log_message(INFO, IMU_TASK, "Sensor initialized");
+ * @endcode
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
 
-typedef enum {
-    UART_BUS,
-    MPU6050,
-    I2C_BUS,
-    IMU_TASK,
-    // Add more modules as needed
-} LogModule_t;
+#ifndef LOG_H
+#define LOG_H
 
-typedef enum {
-    DEBUG,
-    INFO,
-    WARN,
-    ERROR,
-    FATAL,
-    OFF
-} LogLevel_t;
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-typedef struct {
-    LogLevel_t log_level;
-    void (*send)(const char *message);
-} LogDriver_t;
+/* ==========================================================================
+ * Type Definitions
+ * ========================================================================== */
 
 /**
- * @brief Configures the log module with the minimum log level and its callback
- * function inside the driver struct.
+ * @brief Log module identifiers
  * 
- * @param log 
- * @param driver 
+ * Add new modules here as needed for your application.
+ */
+typedef enum {
+    UART_BUS,       /**< UART communication module */
+    I2C_BUS,        /**< I2C communication module */
+    IMU_TASK,       /**< IMU data acquisition task */
+    MPU6050,        /**< MPU6050 sensor driver */
+    ROBOT_TASK,     /**< Robot control task */
+    MOTOR_TASK,     /**< Motor control module */
+    /* Add more modules as needed */
+} LogModule_t;
+
+/**
+ * @brief Log severity levels
+ * 
+ * Messages are only output if their level >= configured minimum level.
+ */
+typedef enum {
+    LOG_DEBUG,      /**< Detailed debug information */
+    LOG_INFO,       /**< General information */
+    LOG_WARN,       /**< Warning conditions */
+    LOG_ERROR,      /**< Error conditions */
+    LOG_FATAL,      /**< Fatal errors */
+    LOG_OFF         /**< Disable all logging */
+} LogLevel_t;
+
+/* Legacy level names for backward compatibility */
+#define DEBUG   LOG_DEBUG
+#define INFO    LOG_INFO
+#define WARN    LOG_WARN
+#define ERROR   LOG_ERROR
+#define FATAL   LOG_FATAL
+#define OFF     LOG_OFF
+
+/**
+ * @brief Log driver configuration
+ */
+typedef struct {
+    LogLevel_t log_level;               /**< Minimum level to output */
+    void (*send)(const char *message);  /**< Output function */
+} LogDriver_t;
+
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
+
+/**
+ * @brief Initialize the logging system
+ * @param driver Pointer to configured log driver
  */
 void log_init(LogDriver_t *driver);
 
 /**
- * @brief Logs a message with a specific log level and module. 
- * The message is only logged if the log level is greater than or equal 
- * to the configured log level.
- * 
- * @param log log level 
- * @param module module sending the message
- * @param message content
+ * @brief Log a message
+ * @param level Severity level
+ * @param module Source module
+ * @param message Message text
  */
-void log_message(LogLevel_t log, LogModule_t module, const char *message);
+void log_message(LogLevel_t level, LogModule_t module, const char *message);
 
 /**
- * @brief Logs a message with a specific log level, module, and error message. 
- * The message is only logged if the log level is greater than or equal 
- * to the configured log level. The error message is appended to the log message.
- * 
- * @param log log level 
- * @param module module sending the message
- * @param message content
- * @param error error message
+ * @brief Log a message with error detail
+ * @param level Severity level
+ * @param module Source module
+ * @param message Message text
+ * @param error Error description
  */
-void log_message_with_error(LogLevel_t log, LogModule_t module, 
-  const char *message, const char *error);
+void log_message_with_error(LogLevel_t level, LogModule_t module, 
+    const char *message, const char *error);
 
 /**
- * @brief Logs a message with a specific log level, module, and integer value. 
- * The message is only logged if the log level is greater than or equal 
- * to the configured log level. The integer value is appended to the log message.
- * 
- * @param log log level 
- * @param module module sending the message
- * @param message content
- * @param value integer value
+ * @brief Log a message with integer value
+ * @param level Severity level
+ * @param module Source module
+ * @param message Message text
+ * @param value Integer value to append
  */
-void log_message_with_int(LogLevel_t log, LogModule_t module, 
-  const char *message, int value);
+void log_message_with_int(LogLevel_t level, LogModule_t module, 
+    const char *message, int value);
 
+#ifdef __cplusplus
+}
+#endif
 
-#endif /* LOG_H_ */
+#endif /* LOG_H */

@@ -232,7 +232,7 @@ i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
     
     const uint8_t content[2] = {regAddr, data};
 
-    i2c_transfer(dev, &content, 2, &data, 0);
+    i2c_transfer(dev, content, 2, &data, 0);
     return I2C_Ok;
 }
 

@@ -1,97 +1,86 @@
-#include <stdlib.h>
+/**
+ * @file main.c
+ * @brief Self-Balancing Robot - Main Application Entry
+ * 
+ * This project implements a two-wheeled self-balancing robot using:
+ * - STM32F103C8T6 (Blue Pill) microcontroller
+ * - MPU6050 IMU for tilt sensing
+ * - FreeRTOS for task management
+ * - Kalman and Complementary filters for sensor fusion
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
 
 #include <FreeRTOS.h>
 #include <task.h>
-// #include <queue.h>
 
 #include <libopencm3/stm32/rcc.h>
-#include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
 
+#include "config.h"
 #include "communication/uart.h"
 #include "imu/mpu6050.h"
+#include "led/led.h"
 #include "log/log.h"
-#include "motor/motor.h"
 #include "robot/robot.h"
 
-#define NO_OPT __attribute__((optimize("O0")))
+/* ==========================================================================
+ * FreeRTOS Hooks
+ * ========================================================================== */
 
-
-extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
-                                        char * pcTaskName );
-
-void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
+void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void)xTask;
     (void)pcTaskName;
-    for(;;);
-}
-
-/*********************************************************************
- * Blink LED:
- *********************************************************************/
-static void setup_led(void ) {
-    // LED GPIO BluePill
-    rcc_periph_clock_enable(RCC_GPIOC);
-    gpio_set_mode(GPIOC,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13);
-
-    // GPIOB Pins LED RGB
-    rcc_periph_clock_enable(RCC_GPIOB);
-    gpio_set_mode(GPIOB,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO12); // green
-    gpio_set_mode(GPIOB,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO13); // Blue
-    gpio_set_mode(GPIOB,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO14); // Red
-}
-
-static void led(void *args) {
-    (void)args;
-    // log_message(DEBUG, UART_BUS, "Starting LED task");
     for (;;) {
-        TickType_t LastWakeTime = xTaskGetTickCount();
-
-        gpio_toggle(GPIOC,GPIO13);
-
-        gpio_set(GPIOB,GPIO12);
-        gpio_set(GPIOB,GPIO13);
-        gpio_toggle(GPIOB,GPIO14);
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(250));
+        /* Halt on stack overflow */
     }
 }
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Main Entry Point
+ * ========================================================================== */
 
-int NO_OPT
-main(void) {
+int main(void) {
+    /* Configure system clock: 72MHz from 8MHz HSE crystal */
+    rcc_clock_setup_pll(&rcc_hse_configs[RCC_CLOCK_HSE8_72MHZ]);
 
-    rcc_clock_setup_in_hse_8mhz_out_72mhz();    // Use this for "blue pill"
-
-    // LED GPIO
-    setup_led();
-
+    /* Initialize hardware */
+    led_init();
     uart_peripheral_setup();
 
-    // Simple test - direct UART output
-    const char *test = "UART OK\r\n";
-    for (const char *p = test; *p; p++) {
+    /* Send startup banner (blocking, before tasks start) */
+    const char *banner = "\r\n=== Balancing Robot v1.0 ===\r\n";
+    for (const char *p = banner; *p; p++) {
         usart_send_blocking(USART2, *p);
     }
 
-    static LogDriver_t logDriver;
-    logDriver.log_level = OFF;
-    logDriver.send = uart_puts;
-    
-    log_init(&logDriver);
+    /* Configure logging */
+    static LogDriver_t log_driver = {
+        .log_level = LOG_INFO,
+        .send = uart_puts
+    };
+    log_init(&log_driver);
 
+    /* Initialize IMU queue before creating tasks */
     imu_queue_init();
 
-    xTaskCreate(led,"LED",50,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(uart_task,"UART",150,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(imu_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(robot_task,"ROBOT",1200,NULL,configMAX_PRIORITIES-1,NULL);
-    // xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
+    /* Create FreeRTOS tasks */
+    xTaskCreate(led_task, TASK_NAME_LED, TASK_STACK_LED, 
+        NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(uart_task, TASK_NAME_UART, TASK_STACK_UART, 
+        NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(imu_task, TASK_NAME_IMU, TASK_STACK_IMU, 
+        NULL, configMAX_PRIORITIES - 1, NULL);
+    xTaskCreate(robot_task, TASK_NAME_ROBOT, TASK_STACK_ROBOT, 
+        NULL, configMAX_PRIORITIES - 1, NULL);
     
+    /* Start scheduler - this should never return */
     vTaskStartScheduler();
-    for (;;);
+    
+    for (;;) {
+        /* Should never reach here */
+    }
 
     return 0;
 }
-
-// End

@@ -1,16 +1,56 @@
-#ifndef MPU6050_IMU_H_
-#define MPU6050_IMU_H_
+/**
+ * @file mpu6050.h
+ * @brief MPU6050 6-axis IMU driver
+ * 
+ * Driver for the InvenSense MPU6050 3-axis accelerometer and 3-axis gyroscope.
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
+
+#ifndef MPU6050_H
+#define MPU6050_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <stdbool.h>
 #include <stdint.h>
 
-#include "imu.h"
+#include "config.h"
+#include "imu/imu.h"
 
-#define ACC_SENS_SCALE_FACTOR 16384.0f
-#define GYRO_SENS_SCALE_FACTOR 131.0f
-#define GYRO_CONST_ERROR_MEAS -0.45f  // Calibrate this: set to negative of gyro reading when stationary
+/* ==========================================================================
+ * Sensor Configuration
+ * ========================================================================== */
 
-IMU_t *get_mpu6050_imu(void);
+/** Accelerometer sensitivity for ±2g range (LSB/g) */
+#define ACC_SENS_SCALE_FACTOR   16384.0f
+
+/** Gyroscope sensitivity for ±250°/s range (LSB/(°/s)) */
+#define GYRO_SENS_SCALE_FACTOR  131.0f
+
+/** 
+ * Gyroscope calibration offset (°/s)
+ * Set to negative of gyro reading when stationary
+ */
+#ifndef GYRO_CALIBRATION_OFFSET
+#define GYRO_CALIBRATION_OFFSET -0.45f
+#endif
+
+/* Legacy define for backward compatibility */
+#define GYRO_CONST_ERROR_MEAS   GYRO_CALIBRATION_OFFSET
+
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
+
+/**
+ * @brief Get MPU6050 driver interface
+ * @return Pointer to IMU driver structure
+ */
+IMU_Driver_t *get_mpu6050_imu(void);
 
 /** Power on and prepare for general usage.
  * This will activate the device and take it out of sleep mode (which must be done
@@ -518,4 +558,8 @@ int16_t get_rotation_z(void);
 #define MPU6050_DMP_MEMORY_BANK_SIZE    256
 #define MPU6050_DMP_MEMORY_CHUNK_SIZE   16
 
-#endif // MPU6050_IMU_H_
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* MPU6050_H */

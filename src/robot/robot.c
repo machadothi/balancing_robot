@@ -1,3 +1,13 @@
+/**
+ * @file robot.c
+ * @brief Robot control task implementation
+ * 
+ * Implements the main control loop for the self-balancing robot.
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
+
 #include <stdio.h>
 #include <math.h>
 
@@ -5,76 +15,73 @@
 #include <task.h>
 #include <queue.h>
 
-#include "robot.h"
+#include "config.h"
+#include "robot/robot.h"
 #include "imu/imu.h"
+#include "filter/filter.h"
 #include "communication/uart.h"
 #include "log/log.h"
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Constants
+ * ========================================================================== */
 
-#define RAD_TO_DEGREE (180.0f / 3.14159f)
+#define RAD_TO_DEG  (180.0f / 3.14159265f)
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Private Functions
+ * ========================================================================== */
 
-static float calc_angle(IMU_Data_t *imu_data_) {
-    // IMU is mounted with X-axis vertical (ax ≈ -1g when level)
-    // Use atan2 for proper quadrant handling and avoid division by zero
-    return atan2f(imu_data_->acc_y, -imu_data_->acc_x) * RAD_TO_DEGREE;
+/**
+ * @brief Calculate tilt angle from accelerometer data
+ * 
+ * Uses atan2 for proper quadrant handling.
+ * IMU is mounted with X-axis vertical (ax ≈ -1g when level).
+ * 
+ * @param data Pointer to IMU data structure
+ * @return Tilt angle in degrees
+ */
+static float calc_angle_from_accel(const IMU_Data_t *data) {
+    return atan2f(data->acc_y, -data->acc_x) * RAD_TO_DEG;
 }
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
 
-static void kalman_filter(float *k_state, float *k_uncert, float gyro_rate, float acc_angle) {
+void robot_task(void *args) {
+    (void)args;
     
-    // Process noise - how much we trust the gyro integration
-    // Higher value = more responsive to changes, but noisier
-    const float Q_angle = 0.1f;  // Process noise variance for angle
+    IMU_Data_t imu_data;
+    char buffer[DEBUG_BUFFER_SIZE];
     
-    // Measurement noise - how much we trust the accelerometer
-    // Higher value = trust accelerometer less, smoother output  
-    const float R_measure = 0.5f;  // Measurement noise variance
+    /* Initialize filters */
+    KalmanFilter_t kalman;
+    ComplementaryFilter_t complementary;
     
-    // Predict step: integrate gyro rate to get angle
-    *k_state = *k_state + (gyro_rate * SAMPLE_RATE_S);
-    
-    // Update uncertainty (increases with time)
-    *k_uncert = *k_uncert + Q_angle;
-    
-    // Update step: correct with accelerometer measurement
-    // Calculate Kalman gain
-    float K = *k_uncert / (*k_uncert + R_measure);
-    
-    // Update estimate with measurement
-    *k_state = *k_state + K * (acc_angle - *k_state);
-    
-    // Update uncertainty (decreases after measurement)
-    *k_uncert = (1.0f - K) * *k_uncert;
-}
-
-// -----------------------------------------------------------------------------
-
-void robot_task(void *args __attribute__((unused))) {
-
-    IMU_Data_t d;
-    static float acc_y_degree = 0;
-    static float gyro_x_degree = 0;
-    char buffer[100];
-    float kalman_angle = 0;
-    float kalman_uncertainty = 1.0f;  // Start with high uncertainty
+    kalman_init(&kalman);
+    complementary_init(&complementary);
 
     for (;;) {
-        // Receive char to be TX
-        if ( xQueueReceive(imu_content,&d,500) == pdPASS ) {
+        if (xQueueReceive(imu_content, &imu_data, 500) == pdPASS) {
+            /* Calculate angle from accelerometer */
+            float acc_angle = calc_angle_from_accel(&imu_data);
+            
+            /* Update both filters */
+            float kalman_angle = kalman_update(&kalman, imu_data.gyro_x, 
+                acc_angle, IMU_SAMPLE_RATE_S);
+            float comp_angle = complementary_update(&complementary, imu_data.gyro_x, 
+                acc_angle, IMU_SAMPLE_RATE_S);
 
-            acc_y_degree = calc_angle(&d);
-            kalman_filter(&kalman_angle, &kalman_uncertainty, d.gyro_x, acc_y_degree);
+            /* Output debug data */
+            snprintf(buffer, sizeof(buffer), 
+                "ax: %.2f | ay: %.2f | az: %.2f | gx: %.2f"
+                " | gy: %.2f | gz: %.2f | acc_deg: %.2f | kalman: %.2f | comp: %.2f",
+                imu_data.acc_x, imu_data.acc_y, imu_data.acc_z, 
+                imu_data.gyro_x, imu_data.gyro_y, imu_data.gyro_z, 
+                acc_angle, kalman_angle, comp_angle);
 
-            gyro_x_degree += d.gyro_x * 0.1;
-            sprintf(buffer, "ax: %.2f | ay: %.2f | az: %.2f | gx: %.2f"
-                " | gy: %.2f | gz: %.2f | acc_deg: %.2f | gyro_deg: %.2f\n\r",d.acc_x, d.acc_y, \
-                d.acc_z, d.gyro_x, d.gyro_y, d.gyro_z, acc_y_degree, kalman_angle);
-
-            uart_puts(buffer);
+            log_message(LOG_DEBUG, ROBOT_TASK, buffer);
         } else {
             taskYIELD();
         }

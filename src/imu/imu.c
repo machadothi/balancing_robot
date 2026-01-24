@@ -1,140 +1,123 @@
+/**
+ * @file imu.c
+ * @brief Generic IMU interface implementation
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
+
 #include <math.h>
 #include <stdio.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include "config.h"
 #include "communication/uart.h"
 #include "imu/mpu6050.h"
 #include "log/log.h"
-#include "imu.h"
+#include "imu/imu.h"
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Private Variables
+ * ========================================================================== */
 
 QueueHandle_t imu_content;
 
-// -----------------------------------------------------------------------------
+static IMU_Driver_t *imu_driver;
 
-typedef struct {
-    float x;
-    float y;
-} Angle_t;
-
-static IMU_t *imu_;
-
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
 
 void imu_queue_init(void) {
-    imu_content = xQueueCreate(256, sizeof(IMU_Data_t));
+    imu_content = xQueueCreate(IMU_QUEUE_SIZE, sizeof(IMU_Data_t));
 }
 
-// -----------------------------------------------------------------------------
-
-IMU_Fails_t imu_init(IMU_t *imu) {
+IMU_Status_t imu_init(IMU_Driver_t *imu) {
     return imu->init();
 }
 
-// -----------------------------------------------------------------------------
-
-uint8_t imu_id(IMU_t *imu) {
+uint8_t imu_id(IMU_Driver_t *imu) {
     return imu->id();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_acc_x(IMU_t *imu) {
+int16_t imu_acc_x(IMU_Driver_t *imu) {
     return imu->acc_x();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_acc_y(IMU_t *imu) {
+int16_t imu_acc_y(IMU_Driver_t *imu) {
     return imu->acc_y();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_acc_z(IMU_t *imu) {
+int16_t imu_acc_z(IMU_Driver_t *imu) {
     return imu->acc_z();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_gyro_x(IMU_t *imu) {
+int16_t imu_gyro_x(IMU_Driver_t *imu) {
     return imu->gyro_x();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_gyro_y(IMU_t *imu) {
+int16_t imu_gyro_y(IMU_Driver_t *imu) {
     return imu->gyro_y();
 }
 
-// -----------------------------------------------------------------------------
-
-int16_t imu_gyro_z(IMU_t *imu) {
+int16_t imu_gyro_z(IMU_Driver_t *imu) {
     return imu->gyro_z();
 }
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Private Functions
+ * ========================================================================== */
 
-static void read_imu(IMU_t *imu, IMU_Data_t *imu_data_) {
-    imu_data_->acc_x = imu_acc_x(imu) / ACC_SENS_SCALE_FACTOR;
-    imu_data_->acc_y = imu_acc_y(imu) / ACC_SENS_SCALE_FACTOR;
-    imu_data_->acc_z = imu_acc_z(imu) / ACC_SENS_SCALE_FACTOR;
-    imu_data_->gyro_x = (imu_gyro_x(imu) / GYRO_SENS_SCALE_FACTOR) + GYRO_CONST_ERROR_MEAS;
-    imu_data_->gyro_y = imu_gyro_y(imu) / GYRO_SENS_SCALE_FACTOR;
-    imu_data_->gyro_z = imu_gyro_z(imu) / GYRO_SENS_SCALE_FACTOR;
+/**
+ * @brief Read and convert IMU data to physical units
+ */
+static void read_imu_data(IMU_Driver_t *imu, IMU_Data_t *data) {
+    data->acc_x = imu_acc_x(imu) / ACC_SENS_SCALE_FACTOR;
+    data->acc_y = imu_acc_y(imu) / ACC_SENS_SCALE_FACTOR;
+    data->acc_z = imu_acc_z(imu) / ACC_SENS_SCALE_FACTOR;
+    data->gyro_x = (imu_gyro_x(imu) / GYRO_SENS_SCALE_FACTOR) + GYRO_CALIBRATION_OFFSET;
+    data->gyro_y = imu_gyro_y(imu) / GYRO_SENS_SCALE_FACTOR;
+    data->gyro_z = imu_gyro_z(imu) / GYRO_SENS_SCALE_FACTOR;
 }
 
-// -----------------------------------------------------------------------------
-
+/**
+ * @brief Send IMU data to queue
+ */
 static void send_imu_data(const IMU_Data_t *data) {
     xQueueSend(imu_content, data, portMAX_DELAY);
 }
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Task Implementation
+ * ========================================================================== */
 
-/*********************************************************************
- * Reads data from the IMU and populate its QUEUE
- *********************************************************************/
-void imu_task(void *args __attribute__((unused))) {
-
-    log_message(DEBUG, UART_BUS, "Starting IMU demo task");
-
-    imu_ = get_mpu6050_imu();
+void imu_task(void *args) {
+    (void)args;
     
-    static IMU_Data_t imu_data;
-    static Angle_t imu_angles;
+    log_message(LOG_DEBUG, IMU_TASK, "Starting IMU task");
 
-    // TODO: Log error message
-    IMU_Fails_t status = imu_init(imu_);
+    imu_driver = get_mpu6050_imu();
+    
+    IMU_Data_t imu_data;
+    IMU_Status_t status = imu_init(imu_driver);
 
-    while(status) {
+    /* Wait for successful initialization */
+    while (status != IMU_OK) {
         vTaskDelay(pdMS_TO_TICKS(1000));
-        log_message(ERROR, IMU_TASK, "Fail to init IMU!");
+        log_message(LOG_ERROR, IMU_TASK, "Failed to init IMU, retrying...");
+        status = imu_init(imu_driver);
     }
-
-    char buffer[120];
+    
+    log_message(LOG_INFO, IMU_TASK, "IMU initialized successfully");
 
     for (;;) {
-        TickType_t LastWakeTime = xTaskGetTickCount();
+        TickType_t last_wake_time = xTaskGetTickCount();
 
-        uint8_t id = imu_id(imu_);
-        
-        // Read raw values for debugging
-        // int16_t raw_ax = imu_acc_x(imu_);
-        // int16_t raw_ay = imu_acc_y(imu_);
-        // int16_t raw_az = imu_acc_z(imu_);
-
-        read_imu(imu_, &imu_data);
-
-        // sprintf(buffer, "ax: %.2f | ay: %.2f | az: %.2f\n\r", 
-        //     imu_data.acc_x, imu_data.acc_y, imu_data.acc_z);
-        // uart_puts(buffer);
-
+        read_imu_data(imu_driver, &imu_data);
         send_imu_data(&imu_data);
 
-        vTaskDelayUntil(&LastWakeTime, pdMS_TO_TICKS(SAMPLE_RATE_MS));
+        vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(IMU_SAMPLE_RATE_MS));
     }
 }

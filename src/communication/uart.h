@@ -1,37 +1,67 @@
-#ifndef UART_H_
-#define UART_H_
+/**
+ * @file uart.h
+ * @brief UART communication driver for STM32F103
+ * 
+ * Provides asynchronous UART transmission using FreeRTOS queues.
+ * Uses USART2 on PA2 (TX) and PA3 (RX).
+ * 
+ * @author Thiago Cunha
+ * @date 2024
+ */
+
+#ifndef UART_H
+#define UART_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <FreeRTOS.h>
-#include <task.h>
 #include <queue.h>
 
-typedef enum {
-    I2C_Ok = 0,
-    I2C_Write,
-    I2C_Read
-} UART_Fails;
+/* ==========================================================================
+ * Public Variables
+ * ========================================================================== */
 
+/** UART transmit queue handle */
 extern QueueHandle_t uart_txq;
 
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
+
 /**
- * @brief setup the STM32F1 UART peripheral
+ * @brief Initialize UART peripheral
  * 
+ * Configures USART2 with the following settings:
+ * - Baud rate: defined in config.h (default 921600)
+ * - 8 data bits, no parity, 1 stop bit
+ * - TX only mode
  */
 void uart_peripheral_setup(void);
 
 /**
- * @brief Puts a string into the UART queue
+ * @brief Send a null-terminated string via UART
  * 
- * @param s string content must be ended with '\0'
+ * Non-blocking function that queues the string for transmission.
+ * The string is copied character by character to the TX queue.
+ * 
+ * @param s Pointer to null-terminated string
  */
 void uart_puts(const char *s);
 
 /**
- * @brief tasks waits for content being place into the queue and sends it thru
- * UART peripheral.
+ * @brief UART transmit task
  * 
- * @param __attribute__ 
+ * FreeRTOS task that handles asynchronous UART transmission.
+ * Waits for data in the TX queue and transmits it.
+ * 
+ * @param args Task arguments (unused)
  */
-void uart_task(void *args __attribute__((unused)));
+void uart_task(void *args);
 
-#endif // UART_H_
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* UART_H */
