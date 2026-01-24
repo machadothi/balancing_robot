@@ -32,6 +32,24 @@
 
 #define RAD_TO_DEG  (180.0f / 3.14159265f)
 
+/** PID control loop period in milliseconds */
+#define PID_PERIOD_MS       10
+
+/** PID dt in seconds */
+#define PID_DT              (PID_PERIOD_MS / 1000.0f)
+
+/** Setpoint angle for balance (degrees from vertical) */
+#define BALANCE_SETPOINT    0.0f
+
+/** Maximum allowed tilt before disabling motors (degrees) */
+#define MAX_TILT_ANGLE      45.0f
+
+/** Minimum motor PWM to overcome static friction */
+#define MOTOR_DEADBAND      20
+
+/** Maximum motor PWM output */
+#define MOTOR_MAX_PWM       255
+
 /* ==========================================================================
  * Private Variables
  * ========================================================================== */
@@ -48,11 +66,30 @@ static AT_RobotState_t robot_state = {
     .velocity = 0.0f,
     .target_velocity = 0.0f,
     .turn_rate = 0.0f,
-    .kp = 10.0f,
+    .kp = 25.0f,
     .ki = 0.5f,
-    .kd = 1.0f,
+    .kd = 0.8f,
     .motors_enabled = false,
+    .pid_enabled = true,  /* PID enabled by default */
     .is_balanced = false,
+};
+
+/* ==========================================================================
+ * PID Controller State
+ * ========================================================================== */
+
+typedef struct {
+    float integral;         /**< Accumulated integral term */
+    float prev_error;       /**< Previous error for derivative */
+    float integral_limit;   /**< Anti-windup limit */
+    float output;           /**< Last PID output */
+} PID_State_t;
+
+static PID_State_t pid = {
+    .integral = 0.0f,
+    .prev_error = 0.0f,
+    .integral_limit = 100.0f,  /* Limit integral windup */
+    .output = 0.0f,
 };
 
 /* ==========================================================================
@@ -87,6 +124,91 @@ static void speed_to_pwm(float speed, uint8_t *pwm, bool *forward) {
         *forward = false;
         *pwm = (uint8_t)(-speed * 2.55f);
     }
+}
+
+/**
+ * @brief Reset PID controller state
+ * 
+ * Clears integral accumulator and previous error.
+ * Call when enabling motors or after a fall.
+ */
+static void pid_reset(void) {
+    pid.integral = 0.0f;
+    pid.prev_error = 0.0f;
+    pid.output = 0.0f;
+}
+
+/**
+ * @brief Calculate PID output for balance control
+ * 
+ * @param angle     Current tilt angle (degrees, 0 = vertical)
+ * @param dt        Time delta in seconds
+ * @return          Motor control output (-255 to 255)
+ */
+static float pid_compute(float angle, float dt) {
+    /* Error = setpoint - current angle */
+    float error = BALANCE_SETPOINT - angle;
+    
+    /* Proportional term */
+    float p_term = robot_state.kp * error;
+    
+    /* Integral term with anti-windup */
+    pid.integral += error * dt;
+    if (pid.integral > pid.integral_limit) {
+        pid.integral = pid.integral_limit;
+    } else if (pid.integral < -pid.integral_limit) {
+        pid.integral = -pid.integral_limit;
+    }
+    float i_term = robot_state.ki * pid.integral;
+    
+    /* Derivative term (on error) */
+    float derivative = (error - pid.prev_error) / dt;
+    float d_term = robot_state.kd * derivative;
+    pid.prev_error = error;
+    
+    /* Sum all terms */
+    pid.output = p_term + i_term + d_term;
+    
+    /* Clamp output to motor range */
+    if (pid.output > MOTOR_MAX_PWM) {
+        pid.output = MOTOR_MAX_PWM;
+    } else if (pid.output < -MOTOR_MAX_PWM) {
+        pid.output = -MOTOR_MAX_PWM;
+    }
+    
+    return pid.output;
+}
+
+/**
+ * @brief Apply motor control with deadband and differential steering
+ * 
+ * @param output    PID output (-255 to 255)
+ */
+static void apply_motor_control(float output) {
+    /* Add turn rate for differential steering */
+    float left_output = output + robot_state.turn_rate;
+    float right_output = output - robot_state.turn_rate;
+    
+    /* Determine direction and magnitude */
+    bool left_forward = (left_output >= 0.0f);
+    bool right_forward = (right_output >= 0.0f);
+    
+    uint8_t left_pwm = (uint8_t)fabsf(left_output);
+    uint8_t right_pwm = (uint8_t)fabsf(right_output);
+    
+    /* Apply deadband compensation */
+    if (left_pwm > 0 && left_pwm < MOTOR_DEADBAND) {
+        left_pwm = MOTOR_DEADBAND;
+    }
+    if (right_pwm > 0 && right_pwm < MOTOR_DEADBAND) {
+        right_pwm = MOTOR_DEADBAND;
+    }
+    
+    /* Set motor direction and speed */
+    motor1_set_direction(left_forward);
+    motor2_set_direction(right_forward);
+    motor1_set_speed(left_pwm);
+    motor2_set_speed(right_pwm);
 }
 
 /**
@@ -145,8 +267,7 @@ static bool at_set_handler(const char *param, float value, float value2) {
  * Handles EXECUTE commands from AT interface.
  */
 static bool at_exec_handler(const char *cmd) {
-    if (strcmp(cmd, "ENABLE") == 0) {
-        robot_state.motors_enabled = true;
+    if (strcmp(cmd, "ENABLE") == 0) {        pid_reset();  /* Clear PID state before enabling */        robot_state.motors_enabled = true;
         motor_standby(false);  /* Exit standby */
         return true;
     }
@@ -155,6 +276,28 @@ static bool at_exec_handler(const char *cmd) {
         motor_standby(true);  /* Enter standby */
         return true;
     }
+#if AT_CMD_PID_TOGGLE
+    else if (strcmp(cmd, "PID") == 0) {
+        /* Toggle PID controller */
+        robot_state.pid_enabled = !robot_state.pid_enabled;
+        if (!robot_state.pid_enabled) {
+            pid_reset();
+        }
+        return true;
+    }
+    else if (strcmp(cmd, "PIDON") == 0) {
+        robot_state.pid_enabled = true;
+        return true;
+    }
+    else if (strcmp(cmd, "PIDOFF") == 0) {
+        robot_state.pid_enabled = false;
+        pid_reset();
+        /* Stop motors when disabling PID */
+        motor1_set_speed(0);
+        motor2_set_speed(0);
+        return true;
+    }
+#endif /* AT_CMD_PID_TOGGLE */
     else if (strcmp(cmd, "STOP") == 0) {
         robot_state.motors_enabled = false;
         robot_state.target_velocity = 0.0f;
@@ -228,10 +371,28 @@ void robot_task(void *args) {
                 acc_angle, IMU_SAMPLE_RATE_S);
             
             /* Store filtered angle (use complementary for now) */
-            robot_state.angle = comp_angle;
+            /* Normalize angle: 0 = vertical, positive = tilting forward */
+            float tilt_angle = comp_angle - 90.0f;
+            robot_state.angle = tilt_angle;
             
             /* Check if balanced (within ~5 degrees of vertical) */
-            robot_state.is_balanced = (fabsf(comp_angle - 90.0f) < 5.0f);
+            robot_state.is_balanced = (fabsf(tilt_angle) < 5.0f);
+
+            /* PID balance control */
+            if (robot_state.motors_enabled && robot_state.pid_enabled) {
+                /* Safety: disable if tilted too far */
+                if (fabsf(tilt_angle) > MAX_TILT_ANGLE) {
+                    robot_state.motors_enabled = false;
+                    motor1_set_speed(0);
+                    motor2_set_speed(0);
+                    motor_standby(true);
+                    pid_reset();
+                } else {
+                    /* Compute PID and apply to motors */
+                    float output = pid_compute(tilt_angle, IMU_SAMPLE_RATE_S);
+                    apply_motor_control(output);
+                }
+            }
 
             /* Suppress unused variable warnings */
             (void)kalman_angle;

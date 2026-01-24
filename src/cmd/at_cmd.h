@@ -127,6 +127,7 @@ typedef struct {
     
     /* Status */
     bool  motors_enabled;   /**< Motors enabled flag */
+    bool  pid_enabled;      /**< PID controller enabled flag */
     bool  is_balanced;      /**< Robot is balanced */
 } AT_RobotState_t;
 

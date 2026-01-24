@@ -152,6 +152,7 @@ extern "C" {
 #define AT_CMD_HELP_ENABLED     0       /**< Enable AT+HELP command (~400 bytes) */
 #define AT_CMD_ALL_QUERY        0       /**< Enable AT+ALL? bulk query (~200 bytes) */
 #define AT_CMD_SAVE_LOAD        1       /**< Enable AT+SAVE/LOAD/DEFAULT commands */
+#define AT_CMD_PID_TOGGLE       1       /**< Enable AT+PIDON/PIDOFF/PID commands */
 
 /* Filter features */
 #define KALMAN_FILTER_ENABLED   1       /**< Enable Kalman filter (~300 bytes) */
