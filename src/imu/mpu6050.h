@@ -6,9 +6,9 @@
 
 #include "imu.h"
 
-#define ACC_SENS_SCALE_FACTOR 16384.0
-#define GYRO_SENS_SCALE_FACTOR 131.0
-#define GYRO_CONST_ERROR_MEAS 5.5
+#define ACC_SENS_SCALE_FACTOR 16384.0f
+#define GYRO_SENS_SCALE_FACTOR 131.0f
+#define GYRO_CONST_ERROR_MEAS -0.45f  // Calibrate this: set to negative of gyro reading when stationary
 
 IMU_t *get_mpu6050_imu(void);
 

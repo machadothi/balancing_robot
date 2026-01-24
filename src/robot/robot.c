@@ -12,40 +12,43 @@
 
 // -----------------------------------------------------------------------------
 
-#define RAD_TO_DEGREE 180.0 / 3.14
+#define RAD_TO_DEGREE (180.0f / 3.14159f)
 
 // -----------------------------------------------------------------------------
 
-static float
-calc_angle(IMU_Data_t *imu_data_) {
-    // Since the rotation around X-axes is always zero due to construction reason
-    // the equation simplifies to:
-    return atan(imu_data_->acc_y/fabs(imu_data_->acc_z)) * RAD_TO_DEGREE;
+static float calc_angle(IMU_Data_t *imu_data_) {
+    // IMU is mounted with X-axis vertical (ax ≈ -1g when level)
+    // Use atan2 for proper quadrant handling and avoid division by zero
+    return atan2f(imu_data_->acc_y, -imu_data_->acc_x) * RAD_TO_DEGREE;
 }
 
 // -----------------------------------------------------------------------------
 
-static void kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
-
-    // previosly calculated standard deviations
-    const float std_gyro = 0.1;
-    const float std_acc = 0.2;
-
-    // predict the current state of the system
-    *k_state = *k_state + (gyro_x * SAMPLE_RATE_S);
-
-    // calculate the uncertainty of the prediction
-    *k_uncert = *k_uncert + (pow(SAMPLE_RATE_S,2) * pow(std_gyro,2));
-
-    // calculate Kalman's Gain
-    float dummy = *k_uncert + (pow(SAMPLE_RATE_S,2) * pow(std_acc,2));
-    float k = *k_uncert/dummy;
-
-    // update the predicted state with Kalman's Gain
-    *k_state = *k_state + k*(acc_angle - *k_state);
-
-    // update uncertainty
-    *k_uncert = (1 - k) * *k_uncert;
+static void kalman_filter(float *k_state, float *k_uncert, float gyro_rate, float acc_angle) {
+    
+    // Process noise - how much we trust the gyro integration
+    // Higher value = more responsive to changes, but noisier
+    const float Q_angle = 0.1f;  // Process noise variance for angle
+    
+    // Measurement noise - how much we trust the accelerometer
+    // Higher value = trust accelerometer less, smoother output  
+    const float R_measure = 0.5f;  // Measurement noise variance
+    
+    // Predict step: integrate gyro rate to get angle
+    *k_state = *k_state + (gyro_rate * SAMPLE_RATE_S);
+    
+    // Update uncertainty (increases with time)
+    *k_uncert = *k_uncert + Q_angle;
+    
+    // Update step: correct with accelerometer measurement
+    // Calculate Kalman gain
+    float K = *k_uncert / (*k_uncert + R_measure);
+    
+    // Update estimate with measurement
+    *k_state = *k_state + K * (acc_angle - *k_state);
+    
+    // Update uncertainty (decreases after measurement)
+    *k_uncert = (1.0f - K) * *k_uncert;
 }
 
 // -----------------------------------------------------------------------------
@@ -57,7 +60,7 @@ void robot_task(void *args __attribute__((unused))) {
     static float gyro_x_degree = 0;
     char buffer[100];
     float kalman_angle = 0;
-    float kalman_uncertainty = 0;
+    float kalman_uncertainty = 1.0f;  // Start with high uncertainty
 
     for (;;) {
         // Receive char to be TX
