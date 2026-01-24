@@ -128,8 +128,7 @@ pwm_init(void) {
     timer_enable_counter(TIM3);
 }
 
-static void
-pwm_set_duty_cycle(uint32_t pin, uint8_t duty_cycle) {
+static void pwm_set_duty_cycle(uint32_t pin, uint8_t duty_cycle) {
     switch (pin)
     {
         case TB6612_PWMA:
@@ -145,8 +144,7 @@ pwm_set_duty_cycle(uint32_t pin, uint8_t duty_cycle) {
     }
 }
 
-void
-motor_demo_task(void *args __attribute__((unused))) {
+void motor_demo_task(void *args __attribute__((unused))) {
     motor_init();
 
     motor1_set_direction(true);

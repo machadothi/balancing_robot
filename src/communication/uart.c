@@ -11,20 +11,18 @@ QueueHandle_t uart_txq;
 
 // -----------------------------------------------------------------------------
 
-void
-uart_peripheral_setup(void) {
-    log_message(INFO,UART_BUS,"Initializing UART");
-    
+void uart_peripheral_setup(void) {
+
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_USART2);
 
-    // UART TX on PA9 (GPIO_USART2_TX)
+    // UART TX on PA2 (GPIO_USART2_TX)
     gpio_set_mode(GPIOA,
         GPIO_MODE_OUTPUT_50_MHZ,
         GPIO_CNF_OUTPUT_ALTFN_PUSHPULL,
         GPIO_USART2_TX);
 
-    usart_set_baudrate(USART2,115200);
+    usart_set_baudrate(USART2,921600);
     usart_set_databits(USART2,8);
     usart_set_stopbits(USART2,USART_STOPBITS_1);
     usart_set_mode(USART2,USART_MODE_TX);
@@ -34,12 +32,13 @@ uart_peripheral_setup(void) {
 
     // Create a queue for data to transmit from UART
     uart_txq = xQueueCreate(256,sizeof(char));
+
+    log_message(INFO,UART_BUS,"Initialized UART");
 }
 
 // -----------------------------------------------------------------------------
 
-void
-uart_puts(const char *s) {
+void uart_puts(const char *s) {
 
     for ( ; *s; ++s ) {
         // blocks when queue is full
@@ -49,8 +48,7 @@ uart_puts(const char *s) {
 
 // -----------------------------------------------------------------------------
 
-void
-uart_task(void *args __attribute__((unused))) {
+void uart_task(void *args __attribute__((unused))) {
     char ch;
 
     for (;;) {

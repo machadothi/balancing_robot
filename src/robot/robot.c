@@ -7,6 +7,7 @@
 
 #include "robot.h"
 #include "imu/imu.h"
+#include "communication/uart.h"
 #include "log/log.h"
 
 // -----------------------------------------------------------------------------
@@ -24,8 +25,7 @@ calc_angle(IMU_Data_t *imu_data_) {
 
 // -----------------------------------------------------------------------------
 
-static void
-kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
+static void kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
 
     // previosly calculated standard deviations
     const float std_gyro = 0.1;
@@ -50,8 +50,7 @@ kalman_filter(float *k_state, float *k_uncert, float gyro_x, float acc_angle) {
 
 // -----------------------------------------------------------------------------
 
-void
-robot_task(void *args __attribute__((unused))) {
+void robot_task(void *args __attribute__((unused))) {
 
     IMU_Data_t d;
     static float acc_y_degree = 0;

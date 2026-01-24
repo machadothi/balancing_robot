@@ -21,6 +21,7 @@ SRCFILES += robot/robot.c
 
 CFLAGS += -I./
 LDLIBS		+= -lm
+LDLIBS		+= -specs=nano.specs -u _printf_float
 
 LDSCRIPT	= stm32f103c8t6.ld
 

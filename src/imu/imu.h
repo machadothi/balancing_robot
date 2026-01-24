@@ -9,8 +9,8 @@
 
 extern QueueHandle_t imu_content;
 
-const uint8_t SAMPLE_RATE_MS = 10;
-const uint8_t SAMPLE_RATE_S = SAMPLE_RATE_MS/1000;
+#define SAMPLE_RATE_MS  10
+#define SAMPLE_RATE_S   (SAMPLE_RATE_MS / 1000.0f)
 
 typedef enum {
     IMU_Ok = 0,
@@ -43,6 +43,7 @@ typedef struct {
 void imu_task(void *args __attribute__((unused)));
 
 IMU_Fails_t imu_init(IMU_t *imu);
+void imu_queue_init(void);
 uint8_t imu_id(IMU_t *imu);
 int16_t imu_acc_x(IMU_t *imu);
 int16_t imu_acc_y(IMU_t *imu);

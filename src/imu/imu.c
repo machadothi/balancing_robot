@@ -1,4 +1,5 @@
 #include <math.h>
+#include <stdio.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -23,8 +24,13 @@ static IMU_t *imu_;
 
 // -----------------------------------------------------------------------------
 
+void imu_queue_init(void) {
+    imu_content = xQueueCreate(256, sizeof(IMU_Data_t));
+}
+
+// -----------------------------------------------------------------------------
+
 IMU_Fails_t imu_init(IMU_t *imu) {
-    imu_content = xQueueCreate(256,sizeof(IMU_Data_t));
     return imu->init();
 }
 
@@ -83,8 +89,7 @@ static void read_imu(IMU_t *imu, IMU_Data_t *imu_data_) {
 
 // -----------------------------------------------------------------------------
 
-static void
-send_imu_data(const IMU_Data_t *data) {
+static void send_imu_data(const IMU_Data_t *data) {
     xQueueSend(imu_content, data, portMAX_DELAY);
 }
 
@@ -93,8 +98,7 @@ send_imu_data(const IMU_Data_t *data) {
 /*********************************************************************
  * Reads data from the IMU and populate its QUEUE
  *********************************************************************/
-void
-imu_task(void *args __attribute__((unused))) {
+void imu_task(void *args __attribute__((unused))) {
 
     log_message(DEBUG, UART_BUS, "Starting IMU demo task");
 
@@ -111,14 +115,23 @@ imu_task(void *args __attribute__((unused))) {
         log_message(ERROR, IMU_TASK, "Fail to init IMU!");
     }
 
-    char buffer[100];
+    char buffer[120];
 
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
         uint8_t id = imu_id(imu_);
+        
+        // Read raw values for debugging
+        // int16_t raw_ax = imu_acc_x(imu_);
+        // int16_t raw_ay = imu_acc_y(imu_);
+        // int16_t raw_az = imu_acc_z(imu_);
 
         read_imu(imu_, &imu_data);
+
+        // sprintf(buffer, "ax: %.2f | ay: %.2f | az: %.2f\n\r", 
+        //     imu_data.acc_x, imu_data.acc_y, imu_data.acc_z);
+        // uart_puts(buffer);
 
         send_imu_data(&imu_data);
 

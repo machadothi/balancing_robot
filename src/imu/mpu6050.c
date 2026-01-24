@@ -101,8 +101,7 @@ initialize(void) {
 
 // -----------------------------------------------------------------------------
 
-void
-setup_reset_pin(void) {
+void setup_reset_pin(void) {
     log_message(INFO, MPU6050, "Setting up reset pin.");
     /* Enable GPIOA clock. */
     rcc_periph_clock_enable(RCC_GPIOA);
@@ -114,8 +113,7 @@ setup_reset_pin(void) {
 
 // -----------------------------------------------------------------------------
 
-void
-hard_reset(void) {
+void hard_reset(void) {
     log_message(INFO, MPU6050, "Hard reseting.");
 
     gpio_clear(GPIOA,GPIO10);

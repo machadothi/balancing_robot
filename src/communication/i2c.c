@@ -403,7 +403,7 @@ i2c_transfer(I2C_Control_t *dev, const uint8_t *w, size_t wn,
         i2c_send_stop(dev->device);
     }
 
-    log_message(INFO, I2C_BUS,"End of transmission");
+    log_message(DEBUG, I2C_BUS,"End of transmission");
 
     return I2C_Ok;
 }

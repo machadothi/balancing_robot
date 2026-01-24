@@ -20,9 +20,7 @@
 extern void vApplicationStackOverflowHook( TaskHandle_t xTask,
                                         char * pcTaskName );
 
-void
-vApplicationStackOverflowHook( TaskHandle_t xTask,
-                                        char * pcTaskName ) {
+void vApplicationStackOverflowHook( TaskHandle_t xTask, char * pcTaskName ) {
     (void)xTask;
     (void)pcTaskName;
     for(;;);
@@ -43,10 +41,9 @@ static void setup_led(void ) {
     gpio_set_mode(GPIOB,GPIO_MODE_OUTPUT_2_MHZ,GPIO_CNF_OUTPUT_PUSHPULL,GPIO14); // Red
 }
 
-static void
-led(void *args) {
+static void led(void *args) {
     (void)args;
-
+    // log_message(DEBUG, UART_BUS, "Starting LED task");
     for (;;) {
         TickType_t LastWakeTime = xTaskGetTickCount();
 
@@ -71,17 +68,25 @@ main(void) {
 
     uart_peripheral_setup();
 
+    // Simple test - direct UART output
+    const char *test = "UART OK\r\n";
+    for (const char *p = test; *p; p++) {
+        usart_send_blocking(USART2, *p);
+    }
+
     static LogDriver_t logDriver;
     logDriver.log_level = OFF;
     logDriver.send = uart_puts;
     
     log_init(&logDriver);
 
+    imu_queue_init();
+
     xTaskCreate(led,"LED",50,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(uart_task,"UART",150,NULL,configMAX_PRIORITIES-1,NULL);
     xTaskCreate(imu_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(robot_task,"IMU",800,NULL,configMAX_PRIORITIES-1,NULL);
-    xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
+    xTaskCreate(robot_task,"ROBOT",1200,NULL,configMAX_PRIORITIES-1,NULL);
+    // xTaskCreate(motor_demo_task,"MOTOR",300,NULL,configMAX_PRIORITIES-1,NULL);
     
     vTaskStartScheduler();
     for (;;);
