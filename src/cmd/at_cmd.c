@@ -84,7 +84,9 @@ static void at_handle_test(void);
 static void at_handle_query(const AT_Command_t *cmd);
 static void at_handle_set(const AT_Command_t *cmd);
 static void at_handle_execute(const AT_Command_t *cmd);
+#if AT_CMD_HELP_ENABLED
 static void at_show_help(void);
+#endif
 static void str_to_upper(char *s);
 
 /* ==========================================================================
@@ -367,6 +369,7 @@ static void at_handle_query(const AT_Command_t *cmd) {
             (int)robot_state->speed_right, abs(float_to_int(robot_state->speed_right, 10) % 10));
 #endif
     }
+#if AT_CMD_ALL_QUERY
     else if (strcmp(cmd->cmd, "ALL") == 0) {
         /* Return all sensor data in CSV format */
 #if LOG_ENABLED
@@ -385,6 +388,7 @@ static void at_handle_query(const AT_Command_t *cmd) {
             (int)robot_state->angle, abs(float_to_int(robot_state->angle, 100) % 100));
 #endif
     }
+#endif /* AT_CMD_ALL_QUERY */
     else {
         at_cmd_respond_error(AT_ERROR_UNKNOWN_CMD);
     }
@@ -548,9 +552,11 @@ static void at_handle_execute(const AT_Command_t *cmd) {
             at_cmd_respond_error(AT_ERROR);
         }
     }
+#if AT_CMD_HELP_ENABLED
     else if (strcmp(cmd->cmd, "HELP") == 0) {
         at_show_help();
     }
+#endif
     else {
         at_cmd_respond_error(AT_ERROR_UNKNOWN_CMD);
     }
@@ -559,13 +565,16 @@ static void at_handle_execute(const AT_Command_t *cmd) {
 /**
  * @brief Show help message
  */
+#if AT_CMD_HELP_ENABLED
 static void at_show_help(void) {
     uart_println("");
     uart_println("+HELP:AT Command Reference");
     uart_println("  AT              Test connection");
     uart_println("  AT+VERSION?     Firmware version");
     uart_println("  AT+STATUS?      Robot status");
+#if AT_CMD_ALL_QUERY
     uart_println("  AT+ALL?         All sensor data");
+#endif
     uart_println("  AT+ACC_X?       X acceleration");
     uart_println("  AT+ACC_Y?       Y acceleration");
     uart_println("  AT+ACC_Z?       Z acceleration");
@@ -588,6 +597,7 @@ static void at_show_help(void) {
     uart_println("  AT+HELP         This help");
     at_cmd_respond_ok();
 }
+#endif /* AT_CMD_HELP_ENABLED */
 
 /* ==========================================================================
  * Task

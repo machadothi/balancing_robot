@@ -40,8 +40,10 @@
  * Private Definitions
  * ========================================================================== */
 
+#if UART_PRINTF_ENABLED
 /** Printf buffer size */
 #define UART_PRINTF_BUFFER_SIZE     256
+#endif
 
 /* ==========================================================================
  * Private Variables
@@ -153,6 +155,7 @@ UART_Status_t uart_write(const uint8_t *data, size_t len) {
 }
 
 int uart_printf(const char *fmt, ...) {
+#if UART_PRINTF_ENABLED
     if (uart_txq == NULL || tx_mutex == NULL) {
         return -1;
     }
@@ -176,6 +179,10 @@ int uart_printf(const char *fmt, ...) {
     xSemaphoreGive(tx_mutex);
     
     return len;
+#else
+    (void)fmt;
+    return 0;
+#endif
 }
 
 void uart_println(const char *s) {
@@ -231,15 +238,19 @@ void uart_rx_isr(void) {
     if (usart_get_flag(USART2, USART_SR_RXNE)) {
         char ch = (char)usart_recv(USART2);
         
-        /* Debug: echo received character */
+#if UART_ECHO_ENABLED
+        /* Echo received character */
         while (!usart_get_flag(USART2, USART_SR_TXE));
         usart_send(USART2, ch);
+#endif
         
         /* Handle line terminator */
         if (ch == '\r' || ch == '\n') {
+#if UART_ECHO_ENABLED
             /* Echo newline */
             while (!usart_get_flag(USART2, USART_SR_TXE));
             usart_send(USART2, '\n');
+#endif
             
             if (rx_line_pos > 0) {
                 /* Complete line received - queue it */

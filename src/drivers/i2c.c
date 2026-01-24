@@ -20,10 +20,14 @@
  * @date 2023
  */
 
+#include "config.h"
+
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/i2c.h>
+#if I2C_DMA_ENABLED
 #include <libopencm3/stm32/dma.h>
+#endif
 #include <libopencm3/cm3/nvic.h>
 
 #include <FreeRTOS.h>
@@ -45,10 +49,12 @@
 #define I2C_TRISE_VAL   0x25    /* Rise time for 100kHz */
 #define I2C_CCR_VAL     180     /* CCR for 100kHz: 180 * 1/36MHz */
 
+#if I2C_DMA_ENABLED
 /* DMA Channels for I2C1 */
 #define I2C1_DMA        DMA1
 #define I2C1_DMA_TX_CH  DMA_CHANNEL6
 #define I2C1_DMA_RX_CH  DMA_CHANNEL7
+#endif
 
 #define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
@@ -156,6 +162,7 @@ static inline TickType_t diff_ticks(TickType_t early, TickType_t later) {
  * If a slave is holding SDA low (e.g., interrupted mid-transaction),
  * toggle SCL up to 9 times to release it.
  */
+#if I2C_BUS_RECOVERY
 void i2c_bus_recovery(void) {
     /* Configure SCL as GPIO output */
     gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_2_MHZ,
@@ -177,6 +184,7 @@ void i2c_bus_recovery(void) {
     gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
                   GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, I2C_SCL_PIN);
 }
+#endif
 
 void NO_OPT i2c_setup_peripheral(void) {
     rcc_periph_clock_enable(RCC_GPIOB);
@@ -190,8 +198,10 @@ void NO_OPT i2c_setup_peripheral(void) {
     /* Set idle high */
     gpio_set(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN);
     
+#if I2C_BUS_RECOVERY
     /* Recover bus if stuck */
     i2c_bus_recovery();
+#endif
 }
 
 // -----------------------------------------------------------------------------
@@ -634,6 +644,8 @@ I2C_Fails_t i2c_write_reg_it(I2C_Control_t *dev, uint8_t regAddr,
 /* ==========================================================================
  * DMA-Based Implementation
  * ========================================================================== */
+
+#if I2C_DMA_ENABLED
 
 void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
     /* Initialize async state */
@@ -1152,5 +1164,7 @@ void i2c_dma_rx_isr(I2C_Control_t *dev) {
         }
     }
 }
+
+#endif /* I2C_DMA_ENABLED */
 
 // i2c.c
