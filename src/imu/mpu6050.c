@@ -3,6 +3,7 @@
 
 #include "FreeRTOS.h"
 #include "task.h"
+#include "semphr.h"
 
 #include "mpu6050.h"
 #include "drivers/i2c.h"
@@ -10,12 +11,24 @@
 
 #define NO_OPT __attribute__((optimize("O0")))
 
-static I2C_Control_t i2c;            // I2C Control struct
+/* MPU6050 reads 14 bytes: AccX, AccY, AccZ, Temp, GyroX, GyroY, GyroZ (2 bytes each) */
+#define MPU6050_DATA_SIZE   14
+
+/* I2C Control struct - non-static for ISR access from interrupts.c */
+I2C_Control_t i2c;
+static SemaphoreHandle_t i2c_transfer_sem;      /* DMA transfer complete semaphore */
+static volatile uint8_t dma_buffer[MPU6050_DATA_SIZE];  /* DMA receive buffer */
+static volatile bool dma_transfer_ok = false;   /* Transfer status */
+
+/* Cached sensor values (updated after each DMA transfer) */
+static volatile int16_t cached_acc_x, cached_acc_y, cached_acc_z;
+static volatile int16_t cached_gyro_x, cached_gyro_y, cached_gyro_z;
 
 IMU_t *get_mpu6050_imu(void) {
     static IMU_t mpu6050_imu = {
         .init = initialize,
         .id = get_device_id,
+        .read_all = mpu6050_read_all_dma,
         .acc_x = get_acceleration_x,
         .acc_y = get_acceleration_y,
         .acc_z = get_acceleration_z,
@@ -47,6 +60,37 @@ static const char* getIMUErrorText(IMU_Fails_t error) {
 
 // -----------------------------------------------------------------------------
 
+/**
+ * @brief DMA transfer complete callback
+ * 
+ * Called from ISR context when DMA transfer finishes.
+ * Parses the raw buffer into cached sensor values and signals the semaphore.
+ */
+static void mpu6050_dma_callback(I2C_Control_t *dev, I2C_Fails_t result) {
+    (void)dev;
+    BaseType_t higher_priority_woken = pdFALSE;
+    
+    if (result == I2C_Ok) {
+        /* Parse DMA buffer into cached values (big-endian) */
+        cached_acc_x  = ((int16_t)dma_buffer[0] << 8) | dma_buffer[1];
+        cached_acc_y  = ((int16_t)dma_buffer[2] << 8) | dma_buffer[3];
+        cached_acc_z  = ((int16_t)dma_buffer[4] << 8) | dma_buffer[5];
+        /* Skip temperature (bytes 6-7) */
+        cached_gyro_x = ((int16_t)dma_buffer[8] << 8) | dma_buffer[9];
+        cached_gyro_y = ((int16_t)dma_buffer[10] << 8) | dma_buffer[11];
+        cached_gyro_z = ((int16_t)dma_buffer[12] << 8) | dma_buffer[13];
+        dma_transfer_ok = true;
+    } else {
+        dma_transfer_ok = false;
+    }
+    
+    /* Signal the waiting task */
+    xSemaphoreGiveFromISR(i2c_transfer_sem, &higher_priority_woken);
+    portYIELD_FROM_ISR(higher_priority_woken);
+}
+
+// -----------------------------------------------------------------------------
+
 IMU_Fails_t NO_OPT
 initialize(void) {
     log_message(INFO, MPU6050, "Setting up MPU6050.");
@@ -55,6 +99,14 @@ initialize(void) {
     setup_reset_pin();
     hard_reset();
     
+    /* Create binary semaphore for DMA transfer synchronization */
+    i2c_transfer_sem = xSemaphoreCreateBinary();
+    if (i2c_transfer_sem == NULL) {
+        log_message(ERROR, MPU6050, "Failed to create I2C semaphore");
+        return IMU_Config_Error;
+    }
+    
+    /* Configure I2C (polling mode for initialization commands) */
     I2C_Fails_t i2c_status = i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000);
     if(i2c_status) {
         log_message_with_error(ERROR, MPU6050, "Fail to setup I2C",
@@ -62,6 +114,10 @@ initialize(void) {
         
         return IMU_COMM_BUS_ERROR;
     }
+    
+    /* Initialize DMA for sensor reads (priority 5) */
+    i2c_init_dma(&i2c, 5);
+    i2c.callback = mpu6050_dma_callback;
 
     log_message(DEBUG, I2C_BUS,"Setting clock source!");
     IMU_Fails_t status = set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
@@ -202,48 +258,70 @@ set_sleep_enabled(bool enabled) {
 
 // -----------------------------------------------------------------------------
 
+/**
+ * @brief Trigger a DMA read of all sensor data (14 bytes)
+ * 
+ * Reads accelerometer (3 axes), temperature, and gyroscope (3 axes) in one
+ * DMA transfer. Blocks until transfer completes or timeout.
+ * 
+ * @return IMU_Fails_t IMU_Ok on success, error code otherwise
+ */
+IMU_Fails_t NO_OPT
+mpu6050_read_all_dma(void) {
+    /* Start DMA read of all 14 bytes starting from ACCEL_XOUT_H */
+    I2C_Fails_t status = i2c_read_reg_dma(&i2c, MPU6050_RA_ACCEL_XOUT_H,
+                                           (uint8_t*)dma_buffer, MPU6050_DATA_SIZE,
+                                           mpu6050_dma_callback);
+    if (status != I2C_Ok) {
+        return IMU_COMM_BUS_ERROR;
+    }
+    
+    /* Wait for DMA transfer to complete (timeout 100ms) */
+    if (xSemaphoreTake(i2c_transfer_sem, pdMS_TO_TICKS(100)) != pdTRUE) {
+        i2c_abort(&i2c);
+        return IMU_Read_Timeout;
+    }
+    
+    /* Check transfer result */
+    if (!dma_transfer_ok) {
+        return IMU_COMM_BUS_ERROR;
+    }
+    
+    return IMU_Ok;
+}
+
+// -----------------------------------------------------------------------------
+
 int16_t get_acceleration_x(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_XOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_acc_x;
 }
 
 // -----------------------------------------------------------------------------
 
 int16_t get_acceleration_y(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_YOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_acc_y;
 }
 
 // -----------------------------------------------------------------------------
 
 int16_t get_acceleration_z(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_ACCEL_ZOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_acc_z;
 }
 
 // -----------------------------------------------------------------------------
 
 int16_t get_rotation_x(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_XOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_gyro_x;
 }
 
 // -----------------------------------------------------------------------------
 
 int16_t get_rotation_y(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_YOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_gyro_y;
 }
 
 // -----------------------------------------------------------------------------
 
 int16_t get_rotation_z(void) {
-    uint8_t buffer[2];
-    i2c_read_bytes(&i2c, (MPU6050_RA_GYRO_ZOUT_H), buffer, 2);
-    return (((int16_t)buffer[0]) << 8) | buffer[1];
+    return cached_gyro_z;
 }

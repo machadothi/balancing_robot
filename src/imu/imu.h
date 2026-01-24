@@ -70,6 +70,7 @@ typedef enum {
 typedef struct {
     IMU_Status_t (*init)(void);     /**< Initialize the IMU */
     uint8_t (*id)(void);            /**< Get device ID */
+    IMU_Status_t (*read_all)(void); /**< Read all sensors via DMA (bulk read) */
     int16_t (*acc_x)(void);         /**< Read X accelerometer (raw) */
     int16_t (*acc_y)(void);         /**< Read Y accelerometer (raw) */
     int16_t (*acc_z)(void);         /**< Read Z accelerometer (raw) */

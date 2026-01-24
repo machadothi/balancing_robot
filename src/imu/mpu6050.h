@@ -203,6 +203,17 @@ int16_t get_rotation_y(void);
  */
 int16_t get_rotation_z(void);
 
+/**
+ * @brief Read all sensor data via DMA (14 bytes burst)
+ * 
+ * Performs a single DMA transfer to read all accelerometer and gyroscope data.
+ * This is more efficient than individual axis reads.
+ * After this call, get_acceleration_x/y/z and get_rotation_x/y/z return cached values.
+ * 
+ * @return IMU_Fails_t IMU_Ok on success, error code otherwise
+ */
+IMU_Fails_t mpu6050_read_all_dma(void);
+
 
 #define MPU6050_ADDRESS_AD0_LOW     0x68 // address pin low (GND), default for InvenSense evaluation board
 #define MPU6050_ADDRESS_AD0_HIGH    0x69 // address pin high (VCC)

@@ -72,8 +72,17 @@ int16_t imu_gyro_z(IMU_Driver_t *imu) {
 
 /**
  * @brief Read and convert IMU data to physical units
+ * 
+ * Performs a single DMA burst read of all sensors, then extracts
+ * the cached values. Much more efficient than 6 individual I2C reads.
  */
 static void read_imu_data(IMU_Driver_t *imu, IMU_Data_t *data) {
+    /* Trigger DMA read of all sensor data at once */
+    if (imu->read_all != NULL) {
+        imu->read_all();
+    }
+    
+    /* Now read cached values (no I2C transactions) */
     data->acc_x = imu_acc_x(imu) / ACC_SENS_SCALE_FACTOR;
     data->acc_y = imu_acc_y(imu) / ACC_SENS_SCALE_FACTOR;
     data->acc_z = imu_acc_z(imu) / ACC_SENS_SCALE_FACTOR;

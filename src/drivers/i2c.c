@@ -4,12 +4,16 @@
  * 
  * Features:
  *   - Master mode only
- *   - Polling (no interrupts)
+ *   - Polling (blocking)
+ *   - Interrupt-driven (non-blocking)
+ *   - DMA-driven (hardware transfers)
  *   - Bus recovery for stuck slaves
  *   - Configurable timeout
  * 
  * Hardware:
  *   - I2C1: PB6=SCL, PB7=SDA
+ *   - DMA1 Channel 6: I2C1_TX
+ *   - DMA1 Channel 7: I2C1_RX
  *   - 100 kHz standard mode
  * 
  * @author Thiago Cunha
@@ -19,6 +23,8 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/i2c.h>
+#include <libopencm3/stm32/dma.h>
+#include <libopencm3/cm3/nvic.h>
 
 #include <FreeRTOS.h>
 #include <task.h>
@@ -39,8 +45,16 @@
 #define I2C_TRISE_VAL   0x25    /* Rise time for 100kHz */
 #define I2C_CCR_VAL     180     /* CCR for 100kHz: 180 * 1/36MHz */
 
+/* DMA Channels for I2C1 */
+#define I2C1_DMA        DMA1
+#define I2C1_DMA_TX_CH  DMA_CHANNEL6
+#define I2C1_DMA_RX_CH  DMA_CHANNEL7
+
 #define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
+
+/* Temp buffer for register address in async operations */
+static uint8_t i2c_reg_addr_buf;
 
 /* ==========================================================================
  * Private Function Prototypes
@@ -52,7 +66,7 @@
  * @param fail I2C_Fails_t enum value
  * @return const char* String representation of the I2C_Fails_t
  */
-static const char* i2c_fail_to_string(I2C_Fails_t fail) {
+const char* i2c_error_string(I2C_Fails_t fail) {
     switch (fail) {
         case I2C_Ok:
             return "I2C_Ok";
@@ -64,9 +78,26 @@ static const char* i2c_fail_to_string(I2C_Fails_t fail) {
             return "I2C_Read_Timeout";
         case I2C_Busy_Timeout:
             return "I2C_Busy_Timeout";
+        case I2C_Busy:
+            return "I2C_Busy";
+        case I2C_DMA_Error:
+            return "I2C_DMA_Error";
+        case I2C_Bus_Error:
+            return "I2C_Bus_Error";
+        case I2C_Arbitration_Lost:
+            return "I2C_Arbitration_Lost";
+        case I2C_Nack:
+            return "I2C_Nack";
+        case I2C_Overrun:
+            return "I2C_Overrun";
         default:
             return "UNKNOWN_ERROR";
     }
+}
+
+/* Keep old name for internal use */
+static const char* i2c_fail_to_string(I2C_Fails_t fail) {
+    return i2c_error_string(fail);
 }
 
 
@@ -432,6 +463,694 @@ static I2C_Fails_t NO_OPT i2c_transfer(I2C_Control_t *dev, const uint8_t *w,
     }
 
     return I2C_Ok;
+}
+
+/* ==========================================================================
+ * Utility Functions
+ * ========================================================================== */
+
+bool i2c_is_busy(I2C_Control_t *dev) {
+    return dev->state != I2C_STATE_IDLE;
+}
+
+I2C_State_t i2c_get_state(I2C_Control_t *dev) {
+    return dev->state;
+}
+
+I2C_Fails_t i2c_get_error(I2C_Control_t *dev) {
+    return dev->error;
+}
+
+void i2c_abort(I2C_Control_t *dev) {
+    /* Disable DMA requests */
+    I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+    
+    /* Disable I2C interrupts */
+    I2C_CR2(dev->device) &= ~(I2C_CR2_ITBUFEN | I2C_CR2_ITEVTEN | I2C_CR2_ITERREN);
+    
+    /* Send STOP condition */
+    i2c_send_stop(dev->device);
+    
+    /* Reset state */
+    dev->state = I2C_STATE_IDLE;
+    dev->error = I2C_Ok;
+}
+
+/* ==========================================================================
+ * Interrupt-Based Implementation
+ * ========================================================================== */
+
+void i2c_init_it(I2C_Control_t *dev, uint8_t priority) {
+    /* Initialize async state */
+    dev->state = I2C_STATE_IDLE;
+    dev->mode = I2C_MODE_IT;
+    dev->error = I2C_Ok;
+    dev->callback = NULL;
+    
+    /* Configure NVIC for I2C1 */
+    if (dev->device == I2C1) {
+        nvic_set_priority(NVIC_I2C1_EV_IRQ, priority << 4);
+        nvic_set_priority(NVIC_I2C1_ER_IRQ, priority << 4);
+        nvic_enable_irq(NVIC_I2C1_EV_IRQ);
+        nvic_enable_irq(NVIC_I2C1_ER_IRQ);
+    }
+    
+    log_message(INFO, I2C_BUS, "I2C interrupt mode initialized");
+}
+
+I2C_Fails_t i2c_write_it(I2C_Control_t *dev, const uint8_t *data, size_t len,
+                         I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    /* Check if bus is busy */
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Setup transfer */
+    dev->tx_buf = data;
+    dev->tx_len = len;
+    dev->tx_count = 0;
+    dev->rx_buf = NULL;
+    dev->rx_len = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_TX;
+    dev->direction = I2C_DIR_WRITE;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_IT;
+    
+    /* Enable I2C interrupts */
+    I2C_CR2(dev->device) |= I2C_CR2_ITEVTEN | I2C_CR2_ITERREN | I2C_CR2_ITBUFEN;
+    
+    /* Generate START condition */
+    i2c_send_start(dev->device);
+    
+    return I2C_Ok;
+}
+
+I2C_Fails_t i2c_read_it(I2C_Control_t *dev, uint8_t *data, size_t len,
+                        I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Setup transfer */
+    dev->tx_buf = NULL;
+    dev->tx_len = 0;
+    dev->rx_buf = data;
+    dev->rx_len = len;
+    dev->rx_count = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_RX;
+    dev->direction = I2C_DIR_READ;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_IT;
+    
+    /* Enable ACK for multi-byte reads */
+    if (len > 1) {
+        i2c_enable_ack(dev->device);
+    }
+    
+    /* Enable I2C interrupts */
+    I2C_CR2(dev->device) |= I2C_CR2_ITEVTEN | I2C_CR2_ITERREN | I2C_CR2_ITBUFEN;
+    
+    /* Generate START condition */
+    i2c_send_start(dev->device);
+    
+    return I2C_Ok;
+}
+
+I2C_Fails_t i2c_read_reg_it(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
+                            size_t len, I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Store register address */
+    i2c_reg_addr_buf = regAddr;
+    
+    /* Setup transfer: write reg addr, then read data */
+    dev->tx_buf = &i2c_reg_addr_buf;
+    dev->tx_len = 1;
+    dev->tx_count = 0;
+    dev->rx_buf = data;
+    dev->rx_len = len;
+    dev->rx_count = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_TX_RX;
+    dev->direction = I2C_DIR_WRITE;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_IT;
+    
+    /* Enable I2C interrupts */
+    I2C_CR2(dev->device) |= I2C_CR2_ITEVTEN | I2C_CR2_ITERREN | I2C_CR2_ITBUFEN;
+    
+    /* Generate START condition */
+    i2c_send_start(dev->device);
+    
+    return I2C_Ok;
+}
+
+I2C_Fails_t i2c_write_reg_it(I2C_Control_t *dev, uint8_t regAddr,
+                             const uint8_t *data, size_t len,
+                             I2C_Callback_t callback) {
+    /* For register write, we need to send regAddr + data
+     * This is a limitation - caller should prepare buffer with reg addr prepended
+     * Or we could use a scatter-gather approach */
+    (void)regAddr;
+    return i2c_write_it(dev, data, len, callback);
+}
+
+/* ==========================================================================
+ * DMA-Based Implementation
+ * ========================================================================== */
+
+void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
+    /* Initialize async state */
+    dev->state = I2C_STATE_IDLE;
+    dev->mode = I2C_MODE_DMA;
+    dev->error = I2C_Ok;
+    dev->callback = NULL;
+    
+    /* Enable DMA1 clock */
+    rcc_periph_clock_enable(RCC_DMA1);
+    
+    if (dev->device == I2C1) {
+        /* Configure NVIC for DMA channels */
+        nvic_set_priority(NVIC_DMA1_CHANNEL6_IRQ, priority << 4);  /* TX */
+        nvic_set_priority(NVIC_DMA1_CHANNEL7_IRQ, priority << 4);  /* RX */
+        nvic_enable_irq(NVIC_DMA1_CHANNEL6_IRQ);
+        nvic_enable_irq(NVIC_DMA1_CHANNEL7_IRQ);
+        
+        /* Also enable I2C error interrupt */
+        nvic_set_priority(NVIC_I2C1_ER_IRQ, priority << 4);
+        nvic_enable_irq(NVIC_I2C1_ER_IRQ);
+    }
+    
+    log_message(INFO, I2C_BUS, "I2C DMA mode initialized");
+}
+
+static void i2c_dma_tx_setup(I2C_Control_t *dev, const uint8_t *data, size_t len) {
+    uint32_t dma = I2C1_DMA;
+    uint8_t channel = I2C1_DMA_TX_CH;
+    
+    /* Disable channel first */
+    dma_disable_channel(dma, channel);
+    
+    /* Configure DMA channel */
+    dma_set_peripheral_address(dma, channel, (uint32_t)&I2C_DR(dev->device));
+    dma_set_memory_address(dma, channel, (uint32_t)data);
+    dma_set_number_of_data(dma, channel, len);
+    
+    dma_set_read_from_memory(dma, channel);
+    dma_enable_memory_increment_mode(dma, channel);
+    dma_disable_peripheral_increment_mode(dma, channel);
+    dma_set_peripheral_size(dma, channel, DMA_CCR_PSIZE_8BIT);
+    dma_set_memory_size(dma, channel, DMA_CCR_MSIZE_8BIT);
+    dma_set_priority(dma, channel, DMA_CCR_PL_HIGH);
+    
+    /* Enable transfer complete interrupt */
+    dma_enable_transfer_complete_interrupt(dma, channel);
+    
+    /* Enable channel */
+    dma_enable_channel(dma, channel);
+}
+
+static void i2c_dma_rx_setup(I2C_Control_t *dev, uint8_t *data, size_t len) {
+    uint32_t dma = I2C1_DMA;
+    uint8_t channel = I2C1_DMA_RX_CH;
+    
+    /* Disable channel first */
+    dma_disable_channel(dma, channel);
+    
+    /* Configure DMA channel */
+    dma_set_peripheral_address(dma, channel, (uint32_t)&I2C_DR(dev->device));
+    dma_set_memory_address(dma, channel, (uint32_t)data);
+    dma_set_number_of_data(dma, channel, len);
+    
+    dma_set_read_from_peripheral(dma, channel);
+    dma_enable_memory_increment_mode(dma, channel);
+    dma_disable_peripheral_increment_mode(dma, channel);
+    dma_set_peripheral_size(dma, channel, DMA_CCR_PSIZE_8BIT);
+    dma_set_memory_size(dma, channel, DMA_CCR_MSIZE_8BIT);
+    dma_set_priority(dma, channel, DMA_CCR_PL_HIGH);
+    
+    /* Enable transfer complete interrupt */
+    dma_enable_transfer_complete_interrupt(dma, channel);
+    
+    /* Enable channel */
+    dma_enable_channel(dma, channel);
+}
+
+I2C_Fails_t i2c_write_dma(I2C_Control_t *dev, const uint8_t *data, size_t len,
+                          I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Setup transfer state */
+    dev->tx_buf = data;
+    dev->tx_len = len;
+    dev->tx_count = 0;
+    dev->rx_buf = NULL;
+    dev->rx_len = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_TX;
+    dev->direction = I2C_DIR_WRITE;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_DMA;
+    
+    /* Setup DMA TX */
+    i2c_dma_tx_setup(dev, data, len);
+    
+    /* Enable DMA request and error interrupt */
+    I2C_CR2(dev->device) |= I2C_CR2_DMAEN | I2C_CR2_ITERREN;
+    
+    /* Generate START and send address */
+    i2c_send_start(dev->device);
+    
+    /* Wait for START */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
+    
+    /* Send address */
+    i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
+    
+    /* Wait for address ACK */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
+        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
+            /* NACK received */
+            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+            i2c_send_stop(dev->device);
+            dev->state = I2C_STATE_IDLE;
+            dev->error = I2C_Nack;
+            return I2C_Nack;
+        }
+    }
+    
+    /* Clear ADDR by reading SR1 and SR2 */
+    (void)I2C_SR1(dev->device);
+    (void)I2C_SR2(dev->device);
+    
+    /* DMA will now handle the transfer */
+    return I2C_Ok;
+}
+
+I2C_Fails_t i2c_read_dma(I2C_Control_t *dev, uint8_t *data, size_t len,
+                         I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Setup transfer state */
+    dev->tx_buf = NULL;
+    dev->tx_len = 0;
+    dev->rx_buf = data;
+    dev->rx_len = len;
+    dev->rx_count = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_RX;
+    dev->direction = I2C_DIR_READ;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_DMA;
+    
+    /* Setup DMA RX */
+    i2c_dma_rx_setup(dev, data, len);
+    
+    /* For DMA reads > 1 byte, enable LAST bit for automatic NACK on last byte */
+    if (len > 1) {
+        I2C_CR2(dev->device) |= I2C_CR2_LAST;
+        i2c_enable_ack(dev->device);
+    } else {
+        i2c_disable_ack(dev->device);
+    }
+    
+    /* Enable DMA request and error interrupt */
+    I2C_CR2(dev->device) |= I2C_CR2_DMAEN | I2C_CR2_ITERREN;
+    
+    /* Generate START */
+    i2c_send_start(dev->device);
+    
+    /* Wait for START */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
+    
+    /* Send address with READ bit */
+    i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
+    
+    /* Wait for address ACK */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
+        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
+            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+            i2c_send_stop(dev->device);
+            dev->state = I2C_STATE_IDLE;
+            dev->error = I2C_Nack;
+            return I2C_Nack;
+        }
+    }
+    
+    /* Clear ADDR */
+    (void)I2C_SR1(dev->device);
+    (void)I2C_SR2(dev->device);
+    
+    /* DMA will now handle the transfer */
+    return I2C_Ok;
+}
+
+I2C_Fails_t i2c_read_reg_dma(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
+                             size_t len, I2C_Callback_t callback) {
+    if (dev->state != I2C_STATE_IDLE) {
+        return I2C_Busy;
+    }
+    
+    if (I2C_SR2(dev->device) & I2C_SR2_BUSY) {
+        return I2C_Busy_Timeout;
+    }
+    
+    /* Setup transfer state */
+    dev->rx_buf = data;
+    dev->rx_len = len;
+    dev->rx_count = 0;
+    dev->callback = callback;
+    dev->state = I2C_STATE_BUSY_RX;
+    dev->direction = I2C_DIR_READ;
+    dev->error = I2C_Ok;
+    dev->mode = I2C_MODE_DMA;
+    
+    /* Setup DMA RX before starting I2C transaction */
+    i2c_dma_rx_setup(dev, data, len);
+    
+    /* Phase 1: Send register address (polling) */
+    i2c_send_start(dev->device);
+    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
+    
+    i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
+    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
+        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
+            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+            i2c_send_stop(dev->device);
+            dev->state = I2C_STATE_IDLE;
+            return I2C_Nack;
+        }
+    }
+    (void)I2C_SR1(dev->device);
+    (void)I2C_SR2(dev->device);
+    
+    /* Send register address */
+    i2c_send_data(dev->device, regAddr);
+    while (!(I2C_SR1(dev->device) & I2C_SR1_BTF));
+    
+    /* Phase 2: Repeated START for read with DMA */
+    
+    /* For DMA reads > 1 byte, enable LAST bit for automatic NACK on last byte */
+    if (len > 1) {
+        I2C_CR2(dev->device) |= I2C_CR2_LAST;
+        i2c_enable_ack(dev->device);
+    } else {
+        i2c_disable_ack(dev->device);
+    }
+    
+    /* Enable DMA request and error interrupt */
+    I2C_CR2(dev->device) |= I2C_CR2_DMAEN | I2C_CR2_ITERREN;
+    
+    /* Generate repeated START */
+    i2c_send_start(dev->device);
+    
+    /* Wait for START */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
+    
+    /* Send address with READ bit */
+    i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
+    
+    /* Wait for address ACK */
+    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
+        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
+            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+            i2c_send_stop(dev->device);
+            dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+            I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+            dev->state = I2C_STATE_IDLE;
+            dev->error = I2C_Nack;
+            return I2C_Nack;
+        }
+    }
+    
+    /* Clear ADDR - this starts the DMA transfer */
+    (void)I2C_SR1(dev->device);
+    (void)I2C_SR2(dev->device);
+    
+    /* DMA will now handle the transfer and call the callback when done */
+    return I2C_Ok;
+}
+
+/* ==========================================================================
+ * Interrupt Service Routines
+ * ========================================================================== */
+
+void i2c_ev_isr(I2C_Control_t *dev) {
+    uint32_t sr1 = I2C_SR1(dev->device);
+    uint32_t sr2 = I2C_SR2(dev->device);
+    
+    /* Start bit sent */
+    if (sr1 & I2C_SR1_SB) {
+        if (dev->direction == I2C_DIR_WRITE) {
+            i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
+        } else {
+            i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
+        }
+        return;
+    }
+    
+    /* Address sent, ACK received */
+    if (sr1 & I2C_SR1_ADDR) {
+        /* Clear ADDR by reading SR1 and SR2 */
+        (void)sr1;
+        (void)sr2;
+        
+        if (dev->direction == I2C_DIR_READ) {
+            if (dev->rx_len == 1) {
+                /* Single byte read: disable ACK before clearing ADDR */
+                i2c_disable_ack(dev->device);
+                i2c_send_stop(dev->device);
+            } else if (dev->rx_len == 2) {
+                /* Two byte read: set POS and disable ACK */
+                I2C_CR1(dev->device) |= I2C_CR1_POS;
+                i2c_disable_ack(dev->device);
+            }
+        }
+        return;
+    }
+    
+    /* TX buffer empty - ready to send next byte */
+    if ((sr1 & I2C_SR1_TxE) && dev->direction == I2C_DIR_WRITE) {
+        if (dev->tx_count < dev->tx_len) {
+            i2c_send_data(dev->device, dev->tx_buf[dev->tx_count++]);
+        } else {
+            /* TX complete */
+            if (dev->state == I2C_STATE_BUSY_TX_RX && dev->rx_len > 0) {
+                /* Switch to RX phase with repeated start */
+                dev->direction = I2C_DIR_READ;
+                dev->rx_count = 0;
+                
+                if (dev->rx_len > 1) {
+                    i2c_enable_ack(dev->device);
+                }
+                
+                i2c_send_start(dev->device);
+            } else {
+                /* All done, send STOP */
+                I2C_CR2(dev->device) &= ~(I2C_CR2_ITBUFEN | I2C_CR2_ITEVTEN);
+                i2c_send_stop(dev->device);
+                
+                dev->state = I2C_STATE_IDLE;
+                if (dev->callback) {
+                    dev->callback(dev, I2C_Ok);
+                }
+            }
+        }
+        return;
+    }
+    
+    /* RX buffer not empty - data received */
+    if ((sr1 & I2C_SR1_RxNE) && dev->direction == I2C_DIR_READ) {
+        if (dev->rx_count < dev->rx_len) {
+            dev->rx_buf[dev->rx_count++] = i2c_get_data(dev->device);
+            
+            /* Handle end of reception */
+            if (dev->rx_count == dev->rx_len - 1 && dev->rx_len > 2) {
+                /* Next byte is last: disable ACK */
+                i2c_disable_ack(dev->device);
+                i2c_send_stop(dev->device);
+            } else if (dev->rx_count == dev->rx_len) {
+                /* All bytes received */
+                I2C_CR2(dev->device) &= ~(I2C_CR2_ITBUFEN | I2C_CR2_ITEVTEN);
+                
+                dev->state = I2C_STATE_IDLE;
+                if (dev->callback) {
+                    dev->callback(dev, I2C_Ok);
+                }
+            }
+        }
+        return;
+    }
+    
+    /* Byte transfer finished (for 2-byte reads) */
+    if ((sr1 & I2C_SR1_BTF) && dev->direction == I2C_DIR_READ && dev->rx_len == 2) {
+        i2c_send_stop(dev->device);
+        dev->rx_buf[0] = i2c_get_data(dev->device);
+        dev->rx_buf[1] = i2c_get_data(dev->device);
+        dev->rx_count = 2;
+        
+        I2C_CR2(dev->device) &= ~(I2C_CR2_ITBUFEN | I2C_CR2_ITEVTEN);
+        I2C_CR1(dev->device) &= ~I2C_CR1_POS;
+        
+        dev->state = I2C_STATE_IDLE;
+        if (dev->callback) {
+            dev->callback(dev, I2C_Ok);
+        }
+    }
+}
+
+void i2c_er_isr(I2C_Control_t *dev) {
+    uint32_t sr1 = I2C_SR1(dev->device);
+    I2C_Fails_t error = I2C_Ok;
+    
+    /* Bus error */
+    if (sr1 & I2C_SR1_BERR) {
+        I2C_SR1(dev->device) &= ~I2C_SR1_BERR;
+        error = I2C_Bus_Error;
+    }
+    
+    /* Arbitration lost */
+    if (sr1 & I2C_SR1_ARLO) {
+        I2C_SR1(dev->device) &= ~I2C_SR1_ARLO;
+        error = I2C_Arbitration_Lost;
+    }
+    
+    /* Acknowledge failure */
+    if (sr1 & I2C_SR1_AF) {
+        I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+        i2c_send_stop(dev->device);
+        error = I2C_Nack;
+    }
+    
+    /* Overrun/Underrun */
+    if (sr1 & I2C_SR1_OVR) {
+        I2C_SR1(dev->device) &= ~I2C_SR1_OVR;
+        error = I2C_Overrun;
+    }
+    
+    if (error != I2C_Ok) {
+        /* Disable interrupts */
+        I2C_CR2(dev->device) &= ~(I2C_CR2_ITBUFEN | I2C_CR2_ITEVTEN | I2C_CR2_ITERREN);
+        I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+        
+        dev->error = error;
+        dev->state = I2C_STATE_ERROR;
+        
+        if (dev->callback) {
+            dev->callback(dev, error);
+        }
+        
+        dev->state = I2C_STATE_IDLE;
+    }
+}
+
+void i2c_dma_tx_isr(I2C_Control_t *dev) {
+    /* Clear DMA transfer complete flag */
+    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TCIF)) {
+        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TCIF);
+        
+        /* Disable DMA channel */
+        dma_disable_channel(I2C1_DMA, I2C1_DMA_TX_CH);
+        
+        /* Wait for BTF (byte transfer finished) before STOP */
+        while (!(I2C_SR1(dev->device) & I2C_SR1_BTF));
+        
+        /* Send STOP condition */
+        i2c_send_stop(dev->device);
+        
+        /* Disable DMA request */
+        I2C_CR2(dev->device) &= ~I2C_CR2_DMAEN;
+        
+        dev->tx_count = dev->tx_len;
+        dev->state = I2C_STATE_IDLE;
+        
+        if (dev->callback) {
+            dev->callback(dev, I2C_Ok);
+        }
+    }
+    
+    /* Check for DMA error */
+    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TEIF)) {
+        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TEIF);
+        dma_disable_channel(I2C1_DMA, I2C1_DMA_TX_CH);
+        
+        i2c_send_stop(dev->device);
+        I2C_CR2(dev->device) &= ~I2C_CR2_DMAEN;
+        
+        dev->error = I2C_DMA_Error;
+        dev->state = I2C_STATE_IDLE;
+        
+        if (dev->callback) {
+            dev->callback(dev, I2C_DMA_Error);
+        }
+    }
+}
+
+void i2c_dma_rx_isr(I2C_Control_t *dev) {
+    /* Clear DMA transfer complete flag */
+    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TCIF)) {
+        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TCIF);
+        
+        /* Disable DMA channel */
+        dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+        
+        /* Send STOP condition */
+        i2c_send_stop(dev->device);
+        
+        /* Disable DMA request and LAST bit */
+        I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+        
+        dev->rx_count = dev->rx_len;
+        dev->state = I2C_STATE_IDLE;
+        
+        if (dev->callback) {
+            dev->callback(dev, I2C_Ok);
+        }
+    }
+    
+    /* Check for DMA error */
+    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TEIF)) {
+        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TEIF);
+        dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+        
+        i2c_send_stop(dev->device);
+        I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+        
+        dev->error = I2C_DMA_Error;
+        dev->state = I2C_STATE_IDLE;
+        
+        if (dev->callback) {
+            dev->callback(dev, I2C_DMA_Error);
+        }
+    }
 }
 
 // i2c.c
