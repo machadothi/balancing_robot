@@ -126,6 +126,7 @@ target_include_directories(freertos PUBLIC
 set(APP_SOURCES
     ${SRC_DIR}/main.c
     ${SRC_DIR}/interrupts.c
+    ${SRC_DIR}/cmd/at_cmd.c
     ${SRC_DIR}/drivers/i2c.c
     ${SRC_DIR}/drivers/pwm.c
     ${SRC_DIR}/drivers/uart.c

@@ -2,7 +2,7 @@
  * @file interrupts.c
  * @brief Interrupt Service Routines (ISRs)
  * 
- * Contains ISR implementations for DMA and I2C peripherals.
+ * Contains ISR implementations for DMA, I2C, and UART peripherals.
  * These override the weak default handlers from libopencm3.
  * 
  * @author Thiago Cunha
@@ -13,6 +13,7 @@
 #include <libopencm3/cm3/nvic.h>
 
 #include "drivers/i2c.h"
+#include "drivers/uart.h"
 
 /* ==========================================================================
  * External I2C Control Reference
@@ -51,4 +52,12 @@ void dma1_channel6_isr(void) {
 
 void dma1_channel7_isr(void) {
     i2c_dma_rx_isr(&i2c);
+}
+
+/* ==========================================================================
+ * USART2 Interrupt Handler
+ * ========================================================================== */
+
+void usart2_isr(void) {
+    uart_rx_isr();
 }

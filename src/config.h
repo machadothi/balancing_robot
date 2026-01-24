@@ -101,18 +101,22 @@ extern "C" {
  */
 
 /* Stack sizes (in words, not bytes) */
-#define TASK_STACK_LED          128     /**< LED task stack size */
-#define TASK_STACK_UART         256     /**< UART task stack size */
-#define TASK_STACK_IMU          400     /**< IMU task stack size */
-#define TASK_STACK_ROBOT        512     /**< Robot control task stack size */
-#define TASK_STACK_MOTOR        256     /**< Motor demo task stack size */
+#define TASK_STACK_LED          64      /**< LED task stack size */
+#define TASK_STACK_UART         128     /**< UART task stack size */
+#define TASK_STACK_UART_RX      384     /**< UART RX task stack size (AT cmd + float printf) */
+#define TASK_STACK_IMU          192     /**< IMU task stack size */
+#define TASK_STACK_ROBOT        192     /**< Robot control task stack size */
+#define TASK_STACK_MOTOR        128     /**< Motor demo task stack size */
+#define TASK_STACK_AT_CMD       128     /**< AT command task stack size */
 
 /* Task names (for debugging) */
 #define TASK_NAME_LED           "LED"
 #define TASK_NAME_UART          "UART"
+#define TASK_NAME_UART_RX       "UART_RX"
 #define TASK_NAME_IMU           "IMU"
 #define TASK_NAME_ROBOT         "ROBOT"
 #define TASK_NAME_MOTOR         "MOTOR"
+#define TASK_NAME_AT_CMD        "AT_CMD"
 /** @} */
 
 /* ==========================================================================
@@ -123,6 +127,7 @@ extern "C" {
  *  @brief Debug and logging settings
  *  @{
  */
+#define LOG_ENABLED             0       /**< Enable logging (uses ~300 bytes stack) */
 #define DEBUG_BUFFER_SIZE       150     /**< Debug output buffer size */
 #define LOG_BUFFER_SIZE         256     /**< Log message buffer size */
 /** @} */

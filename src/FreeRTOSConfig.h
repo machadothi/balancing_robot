@@ -129,7 +129,7 @@ configKERNEL_INTERRUPT_PRIORITY setting.  Here 15 corresponds to the lowest
 NVIC value of 255. */
 #define configLIBRARY_KERNEL_INTERRUPT_PRIORITY	15
 
-/* Defining to remove a warning. */
-#define configUSE_MALLOC_FAILED_HOOK 0
+/* Enable debug hooks */
+#define configUSE_MALLOC_FAILED_HOOK 1
 
 #endif /* FREERTOS_CONFIG_H */
