@@ -24,16 +24,25 @@ A self-balancing robot project using STM32 Blue Pill (STM32F103C8T6) with FreeRT
 
 ```
 balancing-robot/
+├── CMakeLists.txt          # CMake build configuration
+├── cmake/                  # CMake toolchain files
+├── lib/
+│   ├── libopencm3/         # ARM Cortex-M library (submodule)
+│   └── FreeRTOS-Kernel/    # Real-time OS (submodule)
+├── scripts/
+│   └── setup.sh            # Project setup script
 ├── src/
 │   ├── main.c              # Main application
 │   ├── config.h            # Centralized configuration
+│   ├── FreeRTOSConfig.h    # FreeRTOS configuration
 │   ├── communication/      # I2C and UART drivers
 │   ├── filter/             # Kalman and Complementary filters
 │   ├── imu/                # MPU6050 driver and IMU interface
+│   ├── led/                # LED control module
 │   ├── motor/              # Motor control
 │   ├── robot/              # Robot task and control logic
 │   ├── log/                # Logging utilities
-│   └── rtos/               # FreeRTOS source files
+│   └── rtos/               # FreeRTOS integration
 ├── test/
 │   └── statistics.py       # Filter analysis script
 ├── img/                    # Images and plots
@@ -48,14 +57,29 @@ See [BUILD.md](BUILD.md) for detailed build instructions.
 
 ```bash
 # Clone the repository
-git clone --recurse-submodules https://github.com/machadothi/stm32f103c8t6.git
-cd stm32f103c8t6/rtos/balancing-robot/src
+git clone https://github.com/machadothi/balancing-robot.git
+cd balancing-robot
 
-# Build
-make
+# Run setup script (clones dependencies, builds everything)
+./scripts/setup.sh
 
 # Flash to STM32
-make flash
+cd build && make flash
+```
+
+### Manual Build
+
+```bash
+# Initialize submodules
+git submodule update --init --recursive
+
+# Build libopencm3
+cd lib/libopencm3 && make TARGETS=stm32/f1 && cd ../..
+
+# Build with CMake
+mkdir build && cd build
+cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/arm-none-eabi.cmake ..
+make
 ```
 
 ## Kalman Filter Performance

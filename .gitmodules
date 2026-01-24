@@ -1,0 +1,8 @@
+[submodule "lib/libopencm3"]
+	path = lib/libopencm3
+	url = https://github.com/libopencm3/libopencm3.git
+
+[submodule "lib/FreeRTOS-Kernel"]
+	path = lib/FreeRTOS-Kernel
+	url = https://github.com/FreeRTOS/FreeRTOS-Kernel.git
+	branch = V10.4.3-LTS-Patch-2

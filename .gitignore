@@ -54,3 +54,18 @@ dkms.conf
 
 # Build folder
 build/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+compile_commands.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Dependencies (submodules have their own .gitignore)
+# lib/ is managed via git submodules

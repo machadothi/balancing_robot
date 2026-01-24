@@ -53,7 +53,7 @@ extern "C" {
  */
 #define IMU_SAMPLE_RATE_MS      10      /**< IMU sample period in ms (100Hz) */
 #define IMU_SAMPLE_RATE_S       (IMU_SAMPLE_RATE_MS / 1000.0f)
-#define IMU_QUEUE_SIZE          256     /**< IMU data queue size (samples) */
+#define IMU_QUEUE_SIZE          16      /**< IMU data queue size (samples) */
 
 /** Gyroscope calibration offset (degrees/second)
  *  Measure with IMU stationary and adjust to get ~0 output */
@@ -101,11 +101,11 @@ extern "C" {
  */
 
 /* Stack sizes (in words, not bytes) */
-#define TASK_STACK_LED          50      /**< LED task stack size */
-#define TASK_STACK_UART         150     /**< UART task stack size */
-#define TASK_STACK_IMU          800     /**< IMU task stack size */
-#define TASK_STACK_ROBOT        1200    /**< Robot control task stack size */
-#define TASK_STACK_MOTOR        300     /**< Motor demo task stack size */
+#define TASK_STACK_LED          128     /**< LED task stack size */
+#define TASK_STACK_UART         256     /**< UART task stack size */
+#define TASK_STACK_IMU          400     /**< IMU task stack size */
+#define TASK_STACK_ROBOT        512     /**< Robot control task stack size */
+#define TASK_STACK_MOTOR        256     /**< Motor demo task stack size */
 
 /* Task names (for debugging) */
 #define TASK_NAME_LED           "LED"

@@ -25,6 +25,8 @@
 #include "log/log.h"
 #include "robot/robot.h"
 
+#include <libopencm3/stm32/gpio.h>
+
 /* ==========================================================================
  * FreeRTOS Hooks
  * ========================================================================== */
@@ -32,8 +34,11 @@
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void)xTask;
     (void)pcTaskName;
+    
+    /* Fast blink LED on stack overflow */
     for (;;) {
-        /* Halt on stack overflow */
+        gpio_toggle(GPIOC, GPIO13);
+        for (volatile int i = 0; i < 100000; i++);
     }
 }
 
@@ -57,7 +62,7 @@ int main(void) {
 
     /* Configure logging */
     static LogDriver_t log_driver = {
-        .log_level = LOG_INFO,
+        .log_level = LOG_DEBUG,
         .send = uart_puts
     };
     log_init(&log_driver);
