@@ -1,33 +1,50 @@
-/** A stm32f103 I2C library for user applications
- * Thiago Cunha
- * Thu Sep 14 2023
- *
- * Notes:
- *    1. Master I2C mode only
- *    2. No interrupts are used
- *    3. ReSTART I2C is not supported
- *    4. Uses PB6=SCL, PB7=SDA
- *    5. Requires GPIOB clock enabled
- *    6. PB6+PB7 must be GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN
- *    7. Requires rcc_periph_clock_enable(RCC_I2C1);
- *    8. Requires rcc_periph_clock_enable(RCC_AFIO);
- *    9. 100 kHz
+/**
+ * @file i2c.c
+ * @brief I2C driver for STM32F103
+ * 
+ * Features:
+ *   - Master mode only
+ *   - Polling (no interrupts)
+ *   - Bus recovery for stuck slaves
+ *   - Configurable timeout
+ * 
+ * Hardware:
+ *   - I2C1: PB6=SCL, PB7=SDA
+ *   - 100 kHz standard mode
+ * 
+ * @author Thiago Cunha
+ * @date 2023
  */
+
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/i2c.h>
 
-#include "FreeRTOS.h"
-#include "task.h"
+#include <FreeRTOS.h>
+#include <task.h>
 
 #include "i2c.h"
 #include "log/log.h"
 
+/* ==========================================================================
+ * Configuration
+ * ========================================================================== */
+
+#define I2C_SCL_PIN     GPIO6
+#define I2C_SDA_PIN     GPIO7
+#define I2C_PORT        GPIOB
+#define I2C_PERIPH      I2C1
+
+#define I2C_APB_FREQ    36      /* APB1 frequency in MHz */
+#define I2C_TRISE_VAL   0x25    /* Rise time for 100kHz */
+#define I2C_CCR_VAL     180     /* CCR for 100kHz: 180 * 1/36MHz */
+
 #define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
 
-// -----------------------------------------------------------------------------
-/* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Private Function Prototypes
+ * ========================================================================== */
 
 /**
  * @brief Converts I2C_Fails_t enum to string.
@@ -90,170 +107,193 @@ static I2C_Fails_t i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n);
 static I2C_Fails_t i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n);
 
 /**
- * @brief Compute the difference in ticks.
-*/
-static inline TickType_t
-diff_ticks(TickType_t early,TickType_t later) {
-
-    if ( later >= early )
+ * @brief Compute the difference in ticks (handles wrap-around)
+ */
+static inline TickType_t diff_ticks(TickType_t early, TickType_t later) {
+    if (later >= early)
         return later - early;
     return ~(TickType_t)0 - early + 1 + later;
 }
 
-// -----------------------------------------------------------------------------
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
 
-/* ---------------------------- PUBLIC FUNCTIONS -----------------------------*/
+/**
+ * @brief Recover I2C bus from stuck state
+ * 
+ * If a slave is holding SDA low (e.g., interrupted mid-transaction),
+ * toggle SCL up to 9 times to release it.
+ */
+void i2c_bus_recovery(void) {
+    /* Configure SCL as GPIO output */
+    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_2_MHZ,
+                  GPIO_CNF_OUTPUT_OPENDRAIN, I2C_SCL_PIN);
+    
+    /* Toggle SCL up to 9 times */
+    for (int i = 0; i < 9; i++) {
+        gpio_clear(I2C_PORT, I2C_SCL_PIN);
+        for (volatile int j = 0; j < 1000; j++);
+        gpio_set(I2C_PORT, I2C_SCL_PIN);
+        for (volatile int j = 0; j < 1000; j++);
+        
+        /* Check if SDA is released */
+        if (gpio_get(I2C_PORT, I2C_SDA_PIN))
+            break;
+    }
+    
+    /* Reconfigure as I2C alternate function */
+    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
+                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, I2C_SCL_PIN);
+}
 
-// TODO: Add parameters verification and error handling with I2C_Fails_t codes.
-
-void NO_OPT
-i2c_setup_peripheral(void) {
-    rcc_periph_clock_enable(RCC_GPIOB);    // I2C
-    rcc_periph_clock_enable(RCC_I2C1);    // I2C
-    gpio_set_mode(GPIOB,
-        GPIO_MODE_OUTPUT_50_MHZ,
-        GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
-        GPIO6|GPIO7);            // I2C
-
-    gpio_set(GPIOB,GPIO6|GPIO7);        // Idle high
-
+void NO_OPT i2c_setup_peripheral(void) {
+    rcc_periph_clock_enable(RCC_GPIOB);
+    rcc_periph_clock_enable(RCC_I2C1);
+    
+    /* Configure I2C pins as open-drain alternate function */
+    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
+                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
+                  I2C_SCL_PIN | I2C_SDA_PIN);
+    
+    /* Set idle high */
+    gpio_set(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN);
+    
+    /* Recover bus if stuck */
+    i2c_bus_recovery();
 }
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails_t NO_OPT
-i2c_configure(I2C_Control_t *dev,uint32_t i2c, uint8_t address, 
-  uint32_t  timeout) {
-
+I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c, 
+                                 uint8_t address, uint32_t timeout) {
     dev->device = i2c;
     dev->addr = address;
     dev->timeout = timeout;
 
-    log_message(INFO,I2C_BUS, "Setting up I2C.");
-    log_message_with_int(DEBUG, I2C_BUS, "Device: ", dev->device);
-    log_message_with_int(DEBUG, I2C_BUS, "Address: ", dev->addr);
-    log_message_with_int(DEBUG, I2C_BUS, "Timeout: ", dev->timeout);
+    log_message(INFO, I2C_BUS, "Setting up I2C.");
 
+    /* 
+     * STM32F1 I2C BUSY flag errata workaround:
+     * The BUSY flag can get stuck. To fix:
+     * 1. Disable I2C peripheral
+     * 2. Configure SCL/SDA as GPIO outputs
+     * 3. Toggle SCL to release any stuck slave
+     * 4. Generate STOP condition manually
+     * 5. Reconfigure as I2C alternate function
+     * 6. Reset I2C via SWRST
+     */
+    
+    /* Step 1: Disable I2C */
     i2c_peripheral_disable(dev->device);
-    i2c_clear_stop(dev->device);
-    i2c_set_standard_mode(dev->device);    // 100 kHz mode
-    i2c_set_clock_frequency(dev->device, 36); // APB Freq
-    i2c_set_trise(dev->device,0x5);        // 500 ns
-    i2c_set_dutycycle(dev->device,I2C_CCR_DUTY_DIV2);
-    i2c_set_ccr(dev->device,180);        // 100 kHz <= 180 * 1 /36M
+    
+    /* Step 2-4: Bus recovery with STOP condition */
+    /* Configure as GPIO */
+    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
+                  GPIO_CNF_OUTPUT_OPENDRAIN, I2C_SCL_PIN | I2C_SDA_PIN);
+    
+    /* Ensure both lines are high */
+    gpio_set(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN);
+    for (volatile int i = 0; i < 1000; i++);
+    
+    /* Toggle SCL to release stuck slave */
+    for (int i = 0; i < 16; i++) {
+        gpio_clear(I2C_PORT, I2C_SCL_PIN);
+        for (volatile int j = 0; j < 500; j++);
+        gpio_set(I2C_PORT, I2C_SCL_PIN);
+        for (volatile int j = 0; j < 500; j++);
+    }
+    
+    /* Generate STOP: SDA low while SCL high, then SDA high */
+    gpio_clear(I2C_PORT, I2C_SDA_PIN);
+    for (volatile int i = 0; i < 500; i++);
+    gpio_set(I2C_PORT, I2C_SCL_PIN);
+    for (volatile int i = 0; i < 500; i++);
+    gpio_set(I2C_PORT, I2C_SDA_PIN);
+    for (volatile int i = 0; i < 500; i++);
+    
+    /* Step 5: Reconfigure as I2C */
+    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
+                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, I2C_SCL_PIN | I2C_SDA_PIN);
+    
+    /* Step 6: Software reset via SWRST bit */
+    I2C_CR1(dev->device) |= I2C_CR1_SWRST;
+    for (volatile int i = 0; i < 100; i++);
+    I2C_CR1(dev->device) &= ~I2C_CR1_SWRST;
+    
+    /* Configure I2C peripheral */
+    i2c_set_standard_mode(dev->device);
+    i2c_set_clock_frequency(dev->device, I2C_APB_FREQ);
+    i2c_set_trise(dev->device, I2C_TRISE_VAL);
+    i2c_set_dutycycle(dev->device, I2C_CCR_DUTY_DIV2);
+    i2c_set_ccr(dev->device, I2C_CCR_VAL);
     i2c_peripheral_enable(dev->device);
 
+    /* Final check */
     if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to configure I2C. ", 
-          i2c_fail_to_string(I2C_Busy_Timeout));
+        log_message(ERROR, I2C_BUS, "I2C bus busy after configure");
         return I2C_Busy_Timeout;
     }
 
     return I2C_Ok;
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t NO_OPT
-i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t *data) {
+I2C_Fails_t NO_OPT i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, 
+                                 uint8_t bitNum, uint8_t *data) {
     uint8_t b = 0;
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
-    if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
-          i2c_fail_to_string(status));
+    if (status != I2C_Ok) {
+        return status;
     }
 
-    *data = b & (1 << bitNum);
+    *data = (b >> bitNum) & 0x01;
     return I2C_Ok;
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t NO_OPT
-i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitNum, uint8_t data) {
+I2C_Fails_t NO_OPT i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, 
+                                  uint8_t bitNum, uint8_t data) {
     uint8_t b = 0;
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
-    if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
-          i2c_fail_to_string(status));
+    if (status != I2C_Ok) {
+        return status;
     }
 
     b = (data != 0) ? (b | (1 << bitNum)) : (b & ~(1 << bitNum));
-
-    status = i2c_write_byte(dev, regAddr, b);
-    if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. ", 
-          i2c_fail_to_string(status));
-    }
-
-    return status;
+    return i2c_write_byte(dev, regAddr, b);
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t NO_OPT
-i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, uint8_t bitStart, uint8_t length, 
-  uint8_t data) {
-    //      010 value to write
-    // 76543210 bit numbers
-    //    xxx   args: bitStart=4, length=3
-    // 00011100 mask byte
-    // 10101111 original value (sample)
-    // 10100011 original & ~mask
-    // 10101011 masked | value
+I2C_Fails_t NO_OPT i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, 
+                                   uint8_t bitStart, uint8_t length, uint8_t data) {
     uint8_t b = 0;
 
     I2C_Fails_t status = i2c_read_byte(dev, regAddr, &b);
-    if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to read I2C. ", 
-          i2c_fail_to_string(status));
+    if (status != I2C_Ok) {
+        return status;
     }
 
     uint8_t mask = ((1 << length) - 1) << (bitStart - length + 1);
-    data <<= (bitStart - length + 1); // shift data into correct position
-    data &= mask; // zero all non-important bits in data
-    b &= ~(mask); // zero all important bits in existing byte
-    b |= data; // combine data with existing byte
+    data <<= (bitStart - length + 1);
+    data &= mask;
+    b &= ~mask;
+    b |= data;
 
-    status = i2c_write_byte(dev, regAddr, b);
-    if(status) {
-        log_message_with_error(ERROR,I2C_BUS,"Failed to write I2C. ", 
-          i2c_fail_to_string(status));
-    }
-    return status;
+    return i2c_write_byte(dev, regAddr, b);
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t NO_OPT
-i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
-    
+I2C_Fails_t NO_OPT i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
     const uint8_t content[2] = {regAddr, data};
-
-    i2c_transfer(dev, content, 2, &data, 0);
-    return I2C_Ok;
+    return i2c_transfer(dev, content, 2, NULL, 0);
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t
-i2c_read_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data) {
-
-    i2c_transfer(dev, &regAddr, 1, data, 1);
-
-    return I2C_Ok;
+I2C_Fails_t i2c_read_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data) {
+    return i2c_transfer(dev, &regAddr, 1, data, 1);
 }
 
-// -----------------------------------------------------------------------------
-
-I2C_Fails_t
-i2c_read_bytes(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data, 
-  uint8_t length) {
-    
-    i2c_transfer(dev, &regAddr, 1, data, length);
-    return I2C_Ok;
+I2C_Fails_t i2c_read_bytes(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data, 
+                           uint8_t length) {
+    return i2c_transfer(dev, &regAddr, 1, data, length);
 }
 
 // -----------------------------------------------------------------------------
@@ -369,41 +409,27 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     return I2C_Ok;
 }
 
-// -----------------------------------------------------------------------------
-
-static I2C_Fails_t NO_OPT
-i2c_transfer(I2C_Control_t *dev, const uint8_t *w, size_t wn, 
-  uint8_t *r, size_t rn) {
-    I2C_Fails_t status = 0;
-
-    log_message_with_int(DEBUG, I2C_BUS, "I2C device address: ", (int)dev->device);
-    log_message_with_int(DEBUG, I2C_BUS, "Slave address: ", (int)dev->addr);
-    log_message_with_int(DEBUG, I2C_BUS, "Timeout value: ", (int)dev->timeout);
-    log_message_with_int(DEBUG, I2C_BUS, "Value of wn: ", (int)wn);
-    log_message_with_int(DEBUG, I2C_BUS, "Value of rn: ", (int)rn);
-
+static I2C_Fails_t NO_OPT i2c_transfer(I2C_Control_t *dev, const uint8_t *w, 
+                                        size_t wn, uint8_t *r, size_t rn) {
+    I2C_Fails_t status = I2C_Ok;
 
     if (wn) {
         status = i2c_write(dev, w, wn);
-        if (status) {
-            log_message_with_error(ERROR,I2C_BUS,"Failed to write transfer I2C. Err: ", 
-              i2c_fail_to_string(status));
+        if (status != I2C_Ok) {
+            log_message(ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     }
 
     if (rn) {
         status = i2c_read(dev, r, rn);
-        if (status) {
-            log_message_with_error(ERROR,I2C_BUS,"Failed to read transfer I2C. Err: ", 
-              i2c_fail_to_string(status));
+        if (status != I2C_Ok) {
+            log_message(ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     } else {
         i2c_send_stop(dev->device);
     }
-
-    log_message(DEBUG, I2C_BUS,"End of transmission");
 
     return I2C_Ok;
 }

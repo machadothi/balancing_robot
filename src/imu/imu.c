@@ -13,7 +13,7 @@
 #include <task.h>
 
 #include "config.h"
-#include "communication/uart.h"
+#include "drivers/uart.h"
 #include "imu/mpu6050.h"
 #include "log/log.h"
 #include "imu/imu.h"

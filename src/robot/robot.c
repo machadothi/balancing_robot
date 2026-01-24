@@ -19,7 +19,7 @@
 #include "robot/robot.h"
 #include "imu/imu.h"
 #include "filter/filter.h"
-#include "communication/uart.h"
+#include "drivers/uart.h"
 #include "log/log.h"
 
 /* ==========================================================================

@@ -5,7 +5,7 @@
 #include "task.h"
 
 #include "mpu6050.h"
-#include "communication/i2c.h"
+#include "drivers/i2c.h"
 #include "log/log.h"
 
 #define NO_OPT __attribute__((optimize("O0")))

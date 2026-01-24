@@ -19,7 +19,7 @@
 #include <libopencm3/stm32/usart.h>
 
 #include "config.h"
-#include "communication/uart.h"
+#include "drivers/uart.h"
 #include "imu/mpu6050.h"
 #include "led/led.h"
 #include "log/log.h"
@@ -30,6 +30,9 @@
 /* ==========================================================================
  * FreeRTOS Hooks
  * ========================================================================== */
+
+/* Declared in FreeRTOS task.h but needs definition */
+extern void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName);
 
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void)xTask;

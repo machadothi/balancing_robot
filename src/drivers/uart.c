@@ -11,7 +11,7 @@
 #include <libopencm3/stm32/usart.h>
 
 #include "config.h"
-#include "communication/uart.h"
+#include "drivers/uart.h"
 #include "log/log.h"
 
 /* ==========================================================================
