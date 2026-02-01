@@ -32,7 +32,7 @@
  * ========================================================================== */
 
 /** PWM frequency for motor control (Hz) */
-#define MOTOR_PWM_FREQUENCY_HZ      20000
+#define MOTOR_PWM_FREQUENCY_HZ      1000    /* Optimized for JGA25-370 motors with TB6612 */
 
 /** PWM resolution (1000 = 0.1% steps) */
 #define MOTOR_PWM_RESOLUTION        1000
