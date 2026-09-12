@@ -154,7 +154,7 @@ static void robot_unlock(void) {
 }
 
 /**
- * @brief Print one telemetry line in the format test/statistics.py parses
+ * @brief Print one telemetry line in the format test/filter_comparison.py parses
  */
 static void robot_stream_sample(float acc_angle, float kalman_angle, float comp_angle) {
     char acc[16], kal[16], comp[16];
@@ -340,6 +340,8 @@ static AT_Result_t at_exec_handler(const char *cmd) {
         robot_state.motors_enabled = false;
         robot_state.target_velocity = 0.0f;
         robot_state.turn_rate = 0.0f;
+        robot_state.speed_left = 0.0f;
+        robot_state.speed_right = 0.0f;
         motor1_set_speed(0);
         motor2_set_speed(0);
         motor_standby(true);

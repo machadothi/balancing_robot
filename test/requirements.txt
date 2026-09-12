@@ -1,0 +1,6 @@
+pyserial>=3.5
+pytest>=7.0
+
+# filter_comparison.py (filter comparison plot)
+numpy
+matplotlib

@@ -64,6 +64,11 @@ CMakeFiles/
 cmake_install.cmake
 compile_commands.json
 
+# Python
+__pycache__/
+.pytest_cache/
+.venv/
+
 # IDE
 .vscode/
 .idea/

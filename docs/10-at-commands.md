@@ -141,7 +141,7 @@ AT+STOP
 OK
 ```
 
-### Stream filter data for `test/statistics.py`
+### Stream filter data for `test/filter_comparison.py`
 
 ```
 AT+STREAM=1

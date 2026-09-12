@@ -128,7 +128,7 @@ sequenceDiagram
 | `src/*.ld` | Linker scripts per MCU |
 | `cmake/` | Toolchain file and per-board CMake settings |
 | `lib/` | libopencm3 and FreeRTOS-Kernel submodules |
-| `test/` | Filter analysis script (`statistics.py`) |
+| `test/` | Hardware tests over the AT console ([test/README.md](../test/README.md)) and `filter_comparison.py` |
 | `vendor/hiwonder/` | Original firmware image of the F407 board |
 | `docs/` | This book |
 

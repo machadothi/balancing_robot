@@ -12,7 +12,7 @@ the two filters in the firmware, and shows how to measure them on your robot.
 | Complementary filter | [`complementary_update()`](../src/filter/complementary.c#L32), `COMPLEMENTARY_ALPHA` in [config.h](../src/config.h#L75) |
 | Kalman filter | [`kalman_update()`](../src/filter/kalman.c#L34), `KALMAN_Q_ANGLE` / `KALMAN_R_MEASURE` in [config.h](../src/config.h#L67) |
 | Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L367), `ATTITUDE_FILTER` CMake option |
-| Telemetry for analysis | `AT+STREAM`, [`robot_stream_sample()`](../src/robot/robot.c#L159), [test/statistics.py](../test/statistics.py) |
+| Telemetry for analysis | `AT+STREAM`, [`robot_stream_sample()`](../src/robot/robot.c#L159), [test/filter_comparison.py](../test/filter_comparison.py) |
 
 ## 1. Two sensors, two error models
 
@@ -202,7 +202,7 @@ yet.
 3. Close the terminal (the script needs the port), then run the analysis. Edit
    `SERIAL_PORT` / `BAUD_RATE` at the top of the script if needed:
    ```bash
-   cd test && python3 statistics.py
+   cd test && python3 filter_comparison.py
    ```
    It collects 1000 lines (10 s at 100 Hz), prints noise statistics and writes
    `img/filter_comparison.png`.

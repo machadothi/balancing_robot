@@ -12,11 +12,11 @@ the linked [docs](docs/README.md) chapter.
       new 1 kHz tick, 42 Hz sensor low-pass filter and task priorities. The extra
       ~5 ms of sensor delay may need slightly more `KD`
       ([06 §4](docs/06-control-theory.md#4-going-digital-sampling-and-delay)).
-- [ ] **Safety checks** on either board:
-  - [ ] Disconnect the IMU while balancing: motors stop within ~50 ms.
-  - [ ] Normal operation never triggers a watchdog reset.
-  - [ ] `AT+KP=nan` and `AT+KP=abc` return `ERROR:3`.
-  - [ ] `AT+PIDON` / `AT+PIDOFF` return `OK`; `AT+SAVE` returns `ERROR:1`.
+- [ ] Run the hardware test suite on both boards: `pytest` (robot still), then
+      `--motors` (lifted), then `--motors --interactive`
+      ([test/README.md](test/README.md)). It covers the safety checks: IMU-loss
+      and tilt cut-offs, no watchdog resets, `ERROR:3` for `nan`/garbage
+      parameters, `AT+PIDON`/`AT+PIDOFF`/`AT+SAVE` replies.
 - [ ] **F407 bring-up** in order: LED blink → console on Type-C → `AT+ANGLE?` →
       motor direction per port → balancing
       ([09](docs/09-tuning-and-experiments.md#bring-up-checklist)).
@@ -73,12 +73,11 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 
 - [ ] Extend `AT+STREAM` with PID terms and PWM, keeping lines short
       ([09](docs/09-tuning-and-experiments.md#what-to-observe)).
-- [ ] [test/statistics.py](test/statistics.py): take port, baud and sample count
-      as command-line arguments, send `AT+STREAM=1` itself, and update the
-      docstring to the current `acc_deg | kalman | comp` format.
-- [ ] Replace the stale host tests in `test/` (`test/CMakeLists.txt` points at
-      files that no longer exist) with host unit tests for the pure C modules:
-      filters, PID, `at_format_fixed()`, AT parsing.
+- [ ] [test/filter_comparison.py](test/filter_comparison.py): reuse `at_console.py` (port and
+      baud options, sends `AT+STREAM=1` itself) and update its docstring to the
+      current `acc_deg | kalman | comp` format.
+- [ ] Host unit tests for the pure C modules (filters, PID, `at_format_fixed()`,
+      AT parsing), complementing the hardware tests in `test/`.
 - [ ] CI: build both presets (plus `-DATTITUDE_FILTER=kalman` and all AT flags ON)
       with warnings as errors.
 

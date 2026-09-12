@@ -113,7 +113,7 @@ a starting point, not a result.
 
 | Measurement | How |
 |-------------|-----|
-| Filter noise and lag | `AT+STREAM=1` + [test/statistics.py](../test/statistics.py) ([07 §5](07-sensor-fusion.md#5-lab-compare-the-filters-on-your-robot)) |
+| Filter noise and lag | `AT+STREAM=1` + [test/filter_comparison.py](../test/filter_comparison.py) ([07 §5](07-sensor-fusion.md#5-lab-compare-the-filters-on-your-robot)) |
 | Balance state | `AT+STATUS?` (`BALANCED` = \|tilt\| < 5°) |
 | Current gains | `AT+KP?`, `AT+KI?`, `AT+KD?` |
 
@@ -121,6 +121,13 @@ The stream does not include the PID output or PWM yet. Adding them to
 [`robot_stream_sample()`](../src/robot/robot.c#L159) is the most useful
 next instrumentation step for tuning; keep the line short, since the UART
 queue holds 256 characters.
+
+## Automated checks
+
+`test/` holds a pytest suite that drives the AT console: protocol and error
+codes, IMU sanity, loop rate and filter behaviour, watchdog stability, plus
+opt-in motor and operator-assisted safety tests. Run it after flashing and after
+every firmware change ([test/README.md](../test/README.md)).
 
 ## Symptom → cause
 

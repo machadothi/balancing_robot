@@ -58,7 +58,7 @@ embedded engineers:
 | `CMakePresets.json` | One configure/build preset per board |
 | `lib/` | libopencm3 and FreeRTOS-Kernel submodules |
 | `docs/` | Documentation book and hardware references |
-| `test/` | Filter analysis script |
+| `test/` | Hardware tests over the AT console (pytest) and filter analysis script |
 | `scripts/` | Setup script |
 | `vendor/` | Original firmware image of the Hiwonder board |
 
