@@ -240,6 +240,12 @@ void motor_standby(bool enable) {
     motor_apply(&motors[1]);
 }
 
+void motor_emergency_stop(void) {
+    for (size_t i = 0; i < MOTOR_COUNT; i++) {
+        motor_set_inputs(&motors[i], 0);
+    }
+}
+
 /* ==========================================================================
  * Public Functions - Encoder
  * ========================================================================== */

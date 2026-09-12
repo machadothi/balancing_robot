@@ -3,7 +3,8 @@
  * @brief System-wide configuration and constants
  *
  * Fixed constants live here. Build options (board, feature flags, baud rate,
- * sample rates) are CMake options generated into app_config.h - see BUILD.md.
+ * sample rates) are CMake options generated into app_config.h - see
+ * docs/02-build-and-configuration.md.
  *
  * @author Thiago Cunha
  * @date 2024
@@ -46,7 +47,9 @@ extern "C" {
  *  @{
  */
 #define IMU_SAMPLE_RATE_S       (IMU_SAMPLE_RATE_MS / 1000.0f)
-#define IMU_QUEUE_SIZE          16      /**< IMU data queue size (samples) */
+#define IMU_QUEUE_SIZE          1       /**< Latest-sample mailbox: control never works through a backlog */
+#define IMU_STALL_TIMEOUT_MS    (5 * IMU_SAMPLE_RATE_MS)  /**< No sample for this long: motors are stopped */
+#define IMU_DLPF_MODE           MPU6050_DLPF_BW_42        /**< ~42 Hz sensor bandwidth, ~4.8 ms delay */
 
 /** Gyroscope calibration offset (degrees/second)
  *  Measure with IMU stationary and adjust to get ~0 output */
@@ -97,7 +100,7 @@ extern "C" {
 #define TASK_STACK_UART         128     /**< UART task stack size */
 #define TASK_STACK_UART_RX      384     /**< UART RX task stack size (AT cmd + float printf) */
 #define TASK_STACK_IMU          192     /**< IMU task stack size */
-#define TASK_STACK_ROBOT        192     /**< Robot control task stack size */
+#define TASK_STACK_ROBOT        320     /**< Robot control task stack size (includes telemetry snprintf) */
 #define TASK_STACK_MOTOR        128     /**< Motor demo task stack size */
 #define TASK_STACK_AT_CMD       128     /**< AT command task stack size */
 
@@ -109,6 +112,12 @@ extern "C" {
 #define TASK_NAME_ROBOT         "ROBOT"
 #define TASK_NAME_MOTOR         "MOTOR"
 #define TASK_NAME_AT_CMD        "AT_CMD"
+
+/* Priorities (configMAX_PRIORITIES = 5): the sensing/control chain must never
+ * wait behind console I/O, and the heartbeat runs only when nothing else does */
+#define TASK_PRIORITY_CONTROL   4       /**< IMU and robot control tasks */
+#define TASK_PRIORITY_IO        2       /**< UART RX (AT commands) and TX tasks */
+#define TASK_PRIORITY_LED       1       /**< Heartbeat LED */
 /** @} */
 
 /* ==========================================================================
@@ -121,6 +130,7 @@ extern "C" {
  */
 #define DEBUG_BUFFER_SIZE       150     /**< Debug output buffer size */
 #define LOG_BUFFER_SIZE         256     /**< Log message buffer size */
+#define WATCHDOG_TIMEOUT_MS     500     /**< Independent watchdog timeout (WATCHDOG_ENABLED) */
 /** @} */
 
 #ifdef __cplusplus

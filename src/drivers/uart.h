@@ -133,6 +133,17 @@ UART_Status_t uart_putc(char ch);
 UART_Status_t uart_puts(const char *s);
 
 /**
+ * @brief Queue a string only if it fits entirely, never blocking
+ *
+ * For periodic output from time-critical tasks: when the TX queue lacks
+ * space the string is dropped instead of stalling the caller.
+ *
+ * @param s     Pointer to null-terminated string
+ * @return UART_OK if queued, UART_OVERFLOW if it did not fit
+ */
+UART_Status_t uart_try_puts(const char *s);
+
+/**
  * @brief Send a buffer of known length
  * 
  * @param data  Pointer to data buffer

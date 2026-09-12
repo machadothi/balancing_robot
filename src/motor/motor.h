@@ -153,6 +153,14 @@ void motor2_coast(void);
  */
 void motor_standby(bool enable);
 
+/**
+ * @brief Cut all motor drive immediately
+ *
+ * Safe from fault handlers and with interrupts disabled: register writes
+ * only, no RTOS calls. Harmless before motor_init().
+ */
+void motor_emergency_stop(void);
+
 /* ==========================================================================
  * Encoder Functions
  * ========================================================================== */

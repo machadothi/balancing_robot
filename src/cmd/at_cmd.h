@@ -32,14 +32,15 @@
  *   AT+KD=<val>            - Set PID derivative gain
  *   AT+SPEED=<l>,<r>       - Set left/right wheel speed (-100 to 100 each)
  *   AT+SPEED?              - Get current wheel speeds
+ *   AT+STREAM=<0|1>        - Stream filter angles (acc_deg | kalman | comp)
  *   AT+ENABLE              - Enable motors
  *   AT+DISABLE             - Disable motors
+ *   AT+PID / PIDON / PIDOFF - Toggle / enable / disable the balance PID
  *   AT+STOP                - Emergency stop
  *   AT+RESET               - Software reset
- *   AT+SAVE                - Save settings to flash
- *   AT+LOAD                - Load settings from flash
- *   AT+DEFAULT             - Restore default settings
- *   AT+HELP                - List available commands
+ *   AT+SAVE / AT+LOAD      - Not implemented yet (return ERROR)
+ *   AT+DEFAULT             - Restore default gains
+ *   AT+HELP                - List available commands (AT_CMD_HELP_ENABLED)
  * 
  * Response Format:
  *   OK                     - Command successful (no data)
@@ -57,6 +58,7 @@
 extern "C" {
 #endif
 
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -96,6 +98,7 @@ typedef struct {
     char         param[64];     /**< Parameter string (for SET commands) */
     float        param_float;   /**< Parsed float parameter */
     int32_t      param_int;     /**< Parsed integer parameter */
+    bool         param_is_number; /**< Whole parameter is one finite number */
 } AT_Command_t;
 
 /**
@@ -145,9 +148,17 @@ typedef bool (*AT_SetCallback_t)(const char *param, float value, float value2);
  * @brief Callback for execute commands
  * 
  * @param cmd   Command name (e.g., "ENABLE", "STOP")
- * @return true if successful
+ * @return AT_OK, AT_ERROR_UNKNOWN_CMD if not handled, or another error code
  */
-typedef bool (*AT_ExecCallback_t)(const char *cmd);
+typedef AT_Result_t (*AT_ExecCallback_t)(const char *cmd);
+
+/**
+ * @brief Lock/unlock hooks guarding the shared robot state
+ *
+ * Called around state reads and set/execute callbacks, so the AT handlers
+ * (UART RX task) and the control loop never see a half-updated state.
+ */
+typedef void (*AT_LockCallback_t)(void);
 
 /* ==========================================================================
  * Initialization
@@ -186,6 +197,28 @@ void at_cmd_set_callback(AT_SetCallback_t callback);
  * @param callback  Function to handle execute operations
  */
 void at_cmd_exec_callback(AT_ExecCallback_t callback);
+
+/**
+ * @brief Register lock hooks for the robot state
+ *
+ * @param lock      Called before reading the state or calling a callback
+ * @param unlock    Called afterwards; responses are sent after unlocking
+ */
+void at_cmd_set_lock(AT_LockCallback_t lock, AT_LockCallback_t unlock);
+
+/**
+ * @brief Format a float with fixed decimals using integer printf only
+ *
+ * Float printf needs far more stack. Rounds once on the scaled value, so the
+ * sign of small negatives and carries (1.96 → "2.0") are correct.
+ *
+ * @param buf       Output buffer (16 bytes is enough)
+ * @param len       Buffer size
+ * @param value     Value to format
+ * @param decimals  Digits after the point, 0 to 4
+ * @return buf
+ */
+const char *at_format_fixed(char *buf, size_t len, float value, int decimals);
 
 /* ==========================================================================
  * Command Processing

@@ -77,23 +77,23 @@ void app_hardware_init(void) {
 void app_tasks_init(void) {
     /* LED heartbeat task */
     xTaskCreate(led_task, TASK_NAME_LED, TASK_STACK_LED,
-        NULL, configMAX_PRIORITIES - 1, NULL);
+        NULL, TASK_PRIORITY_LED, NULL);
 
 #if !APP_BLINK_ONLY
     /* UART TX task */
     xTaskCreate(uart_tx_task, TASK_NAME_UART, TASK_STACK_UART,
-        NULL, configMAX_PRIORITIES - 1, NULL);
+        NULL, TASK_PRIORITY_IO, NULL);
 
     /* UART RX task (processes AT commands) */
     xTaskCreate(uart_rx_task, TASK_NAME_UART_RX, TASK_STACK_UART_RX,
-        NULL, configMAX_PRIORITIES - 1, NULL);
+        NULL, TASK_PRIORITY_IO, NULL);
 
     /* IMU reading task */
     xTaskCreate(imu_task, TASK_NAME_IMU, TASK_STACK_IMU,
-        NULL, configMAX_PRIORITIES - 1, NULL);
+        NULL, TASK_PRIORITY_CONTROL, NULL);
 
     /* Robot control task */
     xTaskCreate(robot_task, TASK_NAME_ROBOT, TASK_STACK_ROBOT,
-        NULL, configMAX_PRIORITIES - 1, NULL);
+        NULL, TASK_PRIORITY_CONTROL, NULL);
 #endif // !APP_BLINK_ONLY
 }

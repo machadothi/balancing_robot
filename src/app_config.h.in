@@ -16,6 +16,7 @@
 #cmakedefine01 APP_BLINK_ONLY
 #define UART_BAUDRATE               @UART_BAUDRATE@
 #define IMU_SAMPLE_RATE_MS          @IMU_SAMPLE_RATE_MS@
+#cmakedefine01 ATTITUDE_FILTER_KALMAN
 
 /* Feature flags */
 #cmakedefine01 UART_PRINTF_ENABLED
@@ -27,5 +28,6 @@
 #cmakedefine01 AT_CMD_PID_TOGGLE
 #cmakedefine01 LOG_ENABLED
 #cmakedefine01 FAULT_HANDLERS_VERBOSE
+#cmakedefine01 WATCHDOG_ENABLED
 
 #endif // APP_CONFIG_H

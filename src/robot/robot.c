@@ -16,8 +16,10 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
+#include <semphr.h>
 
 #include "config.h"
+#include "board/board.h"
 #include "robot/robot.h"
 #include "imu/imu.h"
 #include "filter/filter.h"
@@ -32,11 +34,10 @@
 
 #define RAD_TO_DEG  (180.0f / 3.14159265f)
 
-/** PID control loop period in milliseconds */
-#define PID_PERIOD_MS       10
-
-/** PID dt in seconds */
-#define PID_DT              (PID_PERIOD_MS / 1000.0f)
+/** Balance PID gains at startup and after AT+DEFAULT */
+#define ROBOT_DEFAULT_KP    25.0f
+#define ROBOT_DEFAULT_KI    0.5f
+#define ROBOT_DEFAULT_KD    0.8f
 
 /** Setpoint angle for balance (degrees from vertical) */
 #define BALANCE_SETPOINT    0.0f
@@ -66,13 +67,19 @@ static AT_RobotState_t robot_state = {
     .velocity = 0.0f,
     .target_velocity = 0.0f,
     .turn_rate = 0.0f,
-    .kp = 25.0f,
-    .ki = 0.5f,
-    .kd = 0.8f,
+    .kp = ROBOT_DEFAULT_KP,
+    .ki = ROBOT_DEFAULT_KI,
+    .kd = ROBOT_DEFAULT_KD,
     .motors_enabled = false,
     .pid_enabled = true,  /* PID enabled by default */
     .is_balanced = false,
 };
+
+/** Guards robot_state and motor commands against the AT handlers (UART RX task) */
+static SemaphoreHandle_t state_mutex = NULL;
+
+/** AT+STREAM: print the filter angles every sample */
+static bool stream_enabled = false;
 
 /* ==========================================================================
  * PID Controller State
@@ -138,6 +145,30 @@ static void pid_reset(void) {
     pid.output = 0.0f;
 }
 
+static void robot_lock(void) {
+    xSemaphoreTake(state_mutex, portMAX_DELAY);
+}
+
+static void robot_unlock(void) {
+    xSemaphoreGive(state_mutex);
+}
+
+/**
+ * @brief Print one telemetry line in the format test/statistics.py parses
+ */
+static void robot_stream_sample(float acc_angle, float kalman_angle, float comp_angle) {
+    char acc[16], kal[16], comp[16];
+    char line[96];
+
+    snprintf(line, sizeof(line), "acc_deg: %s | kalman: %s | comp: %s\r\n",
+             at_format_fixed(acc, sizeof(acc), acc_angle, 2),
+             at_format_fixed(kal, sizeof(kal), kalman_angle, 2),
+             at_format_fixed(comp, sizeof(comp), comp_angle, 2));
+
+    /* Drop the sample rather than block the control loop on a full UART queue */
+    (void)uart_try_puts(line);
+}
+
 /**
  * @brief Calculate PID output for balance control
  * 
@@ -193,8 +224,9 @@ static void apply_motor_control(float output) {
     bool left_forward = (left_output >= 0.0f);
     bool right_forward = (right_output >= 0.0f);
     
-    uint8_t left_pwm = (uint8_t)fabsf(left_output);
-    uint8_t right_pwm = (uint8_t)fabsf(right_output);
+    /* Turn rate can push |output| past 255: saturate before narrowing to uint8_t */
+    uint8_t left_pwm = (uint8_t)fminf(fabsf(left_output), (float)MOTOR_MAX_PWM);
+    uint8_t right_pwm = (uint8_t)fminf(fabsf(right_output), (float)MOTOR_MAX_PWM);
     
     /* Apply deadband compensation */
     if (left_pwm > 0 && left_pwm < MOTOR_DEADBAND) {
@@ -220,7 +252,11 @@ static void apply_motor_control(float output) {
  * @param value2    Second value (for dual-parameter commands like SPEED)
  */
 static bool at_set_handler(const char *param, float value, float value2) {
-    if (strcmp(param, "SPEED") == 0) {
+    if (strcmp(param, "STREAM") == 0) {
+        stream_enabled = (value != 0.0f);
+        return true;
+    }
+    else if (strcmp(param, "SPEED") == 0) {
         /* Direct wheel speed control */
         uint8_t pwm_left, pwm_right;
         bool dir_left, dir_right;
@@ -266,15 +302,17 @@ static bool at_set_handler(const char *param, float value, float value2) {
  * 
  * Handles EXECUTE commands from AT interface.
  */
-static bool at_exec_handler(const char *cmd) {
-    if (strcmp(cmd, "ENABLE") == 0) {        pid_reset();  /* Clear PID state before enabling */        robot_state.motors_enabled = true;
+static AT_Result_t at_exec_handler(const char *cmd) {
+    if (strcmp(cmd, "ENABLE") == 0) {
+        pid_reset();  /* Clear PID state before enabling */
+        robot_state.motors_enabled = true;
         motor_standby(false);  /* Exit standby */
-        return true;
+        return AT_OK;
     }
     else if (strcmp(cmd, "DISABLE") == 0) {
         robot_state.motors_enabled = false;
         motor_standby(true);  /* Enter standby */
-        return true;
+        return AT_OK;
     }
 #if AT_CMD_PID_TOGGLE
     else if (strcmp(cmd, "PID") == 0) {
@@ -283,11 +321,11 @@ static bool at_exec_handler(const char *cmd) {
         if (!robot_state.pid_enabled) {
             pid_reset();
         }
-        return true;
+        return AT_OK;
     }
     else if (strcmp(cmd, "PIDON") == 0) {
         robot_state.pid_enabled = true;
-        return true;
+        return AT_OK;
     }
     else if (strcmp(cmd, "PIDOFF") == 0) {
         robot_state.pid_enabled = false;
@@ -295,9 +333,9 @@ static bool at_exec_handler(const char *cmd) {
         /* Stop motors when disabling PID */
         motor1_set_speed(0);
         motor2_set_speed(0);
-        return true;
+        return AT_OK;
     }
-#endif /* AT_CMD_PID_TOGGLE */
+#endif // AT_CMD_PID_TOGGLE
     else if (strcmp(cmd, "STOP") == 0) {
         robot_state.motors_enabled = false;
         robot_state.target_velocity = 0.0f;
@@ -305,25 +343,21 @@ static bool at_exec_handler(const char *cmd) {
         motor1_set_speed(0);
         motor2_set_speed(0);
         motor_standby(true);
-        return true;
+        return AT_OK;
     }
-    else if (strcmp(cmd, "SAVE") == 0) {
-        /* TODO: Save to flash */
-        return true;
-    }
-    else if (strcmp(cmd, "LOAD") == 0) {
-        /* TODO: Load from flash */
-        return true;
+    else if (strcmp(cmd, "SAVE") == 0 || strcmp(cmd, "LOAD") == 0) {
+        /* Parameter storage in flash is not implemented yet */
+        return AT_ERROR;
     }
     else if (strcmp(cmd, "DEFAULT") == 0) {
-        robot_state.kp = 10.0f;
-        robot_state.ki = 0.5f;
-        robot_state.kd = 1.0f;
+        robot_state.kp = ROBOT_DEFAULT_KP;
+        robot_state.ki = ROBOT_DEFAULT_KI;
+        robot_state.kd = ROBOT_DEFAULT_KD;
         robot_state.target_velocity = 0.0f;
         robot_state.turn_rate = 0.0f;
-        return true;
+        return AT_OK;
     }
-    return false;
+    return AT_ERROR_UNKNOWN_CMD;
 }
 
 /* ==========================================================================
@@ -341,63 +375,105 @@ void robot_task(void *args) {
     
     kalman_init(&kalman);
     complementary_init(&complementary);
-    
+    bool filters_seeded = false;
+
+    state_mutex = xSemaphoreCreateMutex();
+
     /* Initialize motor driver */
     motor_init();
     motor_standby(true);  /* Start in standby */
-    
+
     /* Register AT command handlers */
+    at_cmd_set_lock(robot_lock, robot_unlock);
     at_cmd_set_state(&robot_state);
     at_cmd_set_callback(at_set_handler);
     at_cmd_exec_callback(at_exec_handler);
 
+#if WATCHDOG_ENABLED
+    /* Refreshed on every loop pass (sample or stall timeout): a hung control
+     * task, e.g. deadlocked on the state mutex, resets the MCU */
+    board_watchdog_start(WATCHDOG_TIMEOUT_MS);
+#endif // WATCHDOG_ENABLED
+
     for (;;) {
-        if (xQueueReceive(imu_content, &imu_data, 500) == pdPASS) {
-            /* Update robot state with IMU data */
-            robot_state.acc_x = imu_data.acc_x;
-            robot_state.acc_y = imu_data.acc_y;
-            robot_state.acc_z = imu_data.acc_z;
-            robot_state.gyro_x = imu_data.gyro_x;
-            robot_state.gyro_y = imu_data.gyro_y;
-            robot_state.gyro_z = imu_data.gyro_z;
-            
-            /* Calculate angle from accelerometer */
-            float acc_angle = calc_angle_from_accel(&imu_data);
-            
-            /* Update both filters */
-            float kalman_angle = kalman_update(&kalman, imu_data.gyro_x, 
-                acc_angle, IMU_SAMPLE_RATE_S);
-            float comp_angle = complementary_update(&complementary, imu_data.gyro_x, 
-                acc_angle, IMU_SAMPLE_RATE_S);
-            
-            /* Store filtered angle (use complementary for now) */
-            /* Normalize angle: 0 = vertical, positive = tilting forward */
-            float tilt_angle = comp_angle - 90.0f;
-            robot_state.angle = tilt_angle;
-            
-            /* Check if balanced (within ~5 degrees of vertical) */
-            robot_state.is_balanced = (fabsf(tilt_angle) < 5.0f);
+#if WATCHDOG_ENABLED
+        board_watchdog_refresh();
+#endif // WATCHDOG_ENABLED
 
-            /* PID balance control */
-            if (robot_state.motors_enabled && robot_state.pid_enabled) {
-                /* Safety: disable if tilted too far */
-                if (fabsf(tilt_angle) > MAX_TILT_ANGLE) {
-                    robot_state.motors_enabled = false;
-                    motor1_set_speed(0);
-                    motor2_set_speed(0);
-                    motor_standby(true);
-                    pid_reset();
-                } else {
-                    /* Compute PID and apply to motors */
-                    float output = pid_compute(tilt_angle, IMU_SAMPLE_RATE_S);
-                    apply_motor_control(output);
-                }
+        if (xQueueReceive(imu_content, &imu_data, pdMS_TO_TICKS(IMU_STALL_TIMEOUT_MS)) != pdPASS) {
+            /* No fresh attitude: acting on stale data is worse than stopping */
+            robot_lock();
+            if (robot_state.motors_enabled) {
+                robot_state.motors_enabled = false;
+                motor1_set_speed(0);
+                motor2_set_speed(0);
+                motor_standby(true);
+                pid_reset();
             }
+            robot_unlock();
+            continue;
+        }
 
-            /* Suppress unused variable warnings */
-            (void)kalman_angle;
-        } else {
-            taskYIELD();
+        /* Calculate angle from accelerometer */
+        float acc_angle = calc_angle_from_accel(&imu_data);
+
+        /* Start both filters at the measured angle instead of converging from 0 */
+        if (!filters_seeded) {
+            kalman.angle = acc_angle;
+            complementary.angle = acc_angle;
+            filters_seeded = true;
+        }
+
+        /* Run both filters so AT+STREAM can compare them */
+        float kalman_angle = kalman_update(&kalman, imu_data.gyro_x,
+            acc_angle, IMU_SAMPLE_RATE_S);
+        float comp_angle = complementary_update(&complementary, imu_data.gyro_x,
+            acc_angle, IMU_SAMPLE_RATE_S);
+
+#if ATTITUDE_FILTER_KALMAN
+        float filtered_angle = kalman_angle;
+#else
+        float filtered_angle = comp_angle;
+#endif // ATTITUDE_FILTER_KALMAN
+
+        /* Normalize angle: 0 = vertical, positive = tilting forward */
+        float tilt_angle = filtered_angle - 90.0f;
+
+        robot_lock();
+
+        /* Update robot state with IMU data */
+        robot_state.acc_x = imu_data.acc_x;
+        robot_state.acc_y = imu_data.acc_y;
+        robot_state.acc_z = imu_data.acc_z;
+        robot_state.gyro_x = imu_data.gyro_x;
+        robot_state.gyro_y = imu_data.gyro_y;
+        robot_state.gyro_z = imu_data.gyro_z;
+        robot_state.angle = tilt_angle;
+
+        /* Check if balanced (within ~5 degrees of vertical) */
+        robot_state.is_balanced = (fabsf(tilt_angle) < 5.0f);
+
+        /* PID balance control */
+        if (robot_state.motors_enabled && robot_state.pid_enabled) {
+            /* Safety: disable if tilted too far */
+            if (fabsf(tilt_angle) > MAX_TILT_ANGLE) {
+                robot_state.motors_enabled = false;
+                motor1_set_speed(0);
+                motor2_set_speed(0);
+                motor_standby(true);
+                pid_reset();
+            } else {
+                /* Compute PID and apply to motors */
+                float output = pid_compute(tilt_angle, IMU_SAMPLE_RATE_S);
+                apply_motor_control(output);
+            }
+        }
+
+        bool stream = stream_enabled;
+        robot_unlock();
+
+        if (stream) {
+            robot_stream_sample(acc_angle, kalman_angle, comp_angle);
         }
     }
 }

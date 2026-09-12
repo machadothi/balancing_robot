@@ -76,10 +76,11 @@ int16_t imu_gyro_z(IMU_Driver_t *imu) {
  * Performs a single DMA burst read of all sensors, then extracts
  * the cached values. Much more efficient than 6 individual I2C reads.
  */
-static void read_imu_data(IMU_Driver_t *imu, IMU_Data_t *data) {
-    /* Trigger DMA read of all sensor data at once */
-    if (imu->read_all != NULL) {
-        imu->read_all();
+static bool read_imu_data(IMU_Driver_t *imu, IMU_Data_t *data) {
+    /* Trigger DMA read of all sensor data at once; on failure the cached
+     * values are from the previous sample and must not be reported as new */
+    if (imu->read_all != NULL && imu->read_all() != IMU_OK) {
+        return false;
     }
     
     /* Now read cached values (no I2C transactions) */
@@ -89,13 +90,17 @@ static void read_imu_data(IMU_Driver_t *imu, IMU_Data_t *data) {
     data->gyro_x = (imu_gyro_x(imu) / GYRO_SENS_SCALE_FACTOR) + GYRO_CALIBRATION_OFFSET;
     data->gyro_y = imu_gyro_y(imu) / GYRO_SENS_SCALE_FACTOR;
     data->gyro_z = imu_gyro_z(imu) / GYRO_SENS_SCALE_FACTOR;
+    return true;
 }
 
 /**
- * @brief Send IMU data to queue
+ * @brief Publish the newest sample
+ *
+ * The queue holds one element: overwriting means the controller always gets
+ * the latest measurement instead of a backlog of old ones.
  */
 static void send_imu_data(const IMU_Data_t *data) {
-    xQueueSend(imu_content, data, portMAX_DELAY);
+    xQueueOverwrite(imu_content, data);
 }
 
 /* ==========================================================================
@@ -121,11 +126,13 @@ void imu_task(void *args) {
     
     log_message(LOG_INFO, IMU_TASK, "IMU initialized successfully");
 
-    for (;;) {
-        TickType_t last_wake_time = xTaskGetTickCount();
+    /* Read once: vTaskDelayUntil then keeps a fixed period instead of period + work time */
+    TickType_t last_wake_time = xTaskGetTickCount();
 
-        read_imu_data(imu_driver, &imu_data);
-        send_imu_data(&imu_data);
+    for (;;) {
+        if (read_imu_data(imu_driver, &imu_data)) {
+            send_imu_data(&imu_data);
+        }
 
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(IMU_SAMPLE_RATE_MS));
     }

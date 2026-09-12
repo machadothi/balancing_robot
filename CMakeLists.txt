@@ -67,15 +67,39 @@ option(APP_BLINK_ONLY "Only run the LED heartbeat task (no drivers)"
 
 set(UART_BAUDRATE 921600 CACHE STRING "UART baud rate")
 set(IMU_SAMPLE_RATE_MS 10 CACHE STRING "IMU sample period in ms")
-set(FREERTOS_TICK_RATE_HZ 250 CACHE STRING "FreeRTOS tick rate in Hz")
+set(FREERTOS_TICK_RATE_HZ 1000 CACHE STRING "FreeRTOS tick rate in Hz")
 set(FREERTOS_TOTAL_HEAP_SIZE ${BOARD_DEFAULT_HEAP_SIZE} CACHE STRING
     "FreeRTOS heap size in bytes")
+
+set(ATTITUDE_FILTERS complementary kalman)
+set(ATTITUDE_FILTER complementary CACHE STRING
+    "Tilt estimator used by the balance loop (${ATTITUDE_FILTERS})")
+set_property(CACHE ATTITUDE_FILTER PROPERTY STRINGS ${ATTITUDE_FILTERS})
+
+if(NOT ATTITUDE_FILTER IN_LIST ATTITUDE_FILTERS)
+    message(FATAL_ERROR "Unknown ATTITUDE_FILTER '${ATTITUDE_FILTER}'. Valid: ${ATTITUDE_FILTERS}")
+endif()
+
+if(ATTITUDE_FILTER STREQUAL "kalman")
+    set(ATTITUDE_FILTER_KALMAN ON)
+else()
+    set(ATTITUDE_FILTER_KALMAN OFF)
+endif()
 
 foreach(value UART_BAUDRATE IMU_SAMPLE_RATE_MS FREERTOS_TICK_RATE_HZ FREERTOS_TOTAL_HEAP_SIZE)
     if(NOT ${value} MATCHES "^[0-9]+$")
         message(FATAL_ERROR "${value} must be a positive integer, got '${${value}}'")
     endif()
 endforeach()
+
+# The filters and PID use IMU_SAMPLE_RATE_MS as dt, so the task period must be exact
+math(EXPR IMU_SAMPLE_PERIOD_REMAINDER "(${IMU_SAMPLE_RATE_MS} * ${FREERTOS_TICK_RATE_HZ}) % 1000")
+if(NOT IMU_SAMPLE_PERIOD_REMAINDER EQUAL 0)
+    message(FATAL_ERROR
+        "IMU_SAMPLE_RATE_MS=${IMU_SAMPLE_RATE_MS} is not a whole number of ticks at "
+        "FREERTOS_TICK_RATE_HZ=${FREERTOS_TICK_RATE_HZ}: the loop period would differ from dt."
+    )
+endif()
 
 # Driver features: forced OFF when the drivers are not built
 cmake_dependent_option(UART_PRINTF_ENABLED "Enable uart_printf" ON "NOT APP_BLINK_ONLY" OFF)
@@ -88,6 +112,7 @@ cmake_dependent_option(AT_CMD_PID_TOGGLE "AT+PIDON/PIDOFF/PID commands" ON "NOT 
 cmake_dependent_option(LOG_ENABLED "Logging over UART (~300 bytes stack)" OFF "NOT APP_BLINK_ONLY" OFF)
 # Verbose fault output needs an initialized UART
 cmake_dependent_option(FAULT_HANDLERS_VERBOSE "Print fault messages over UART" ON "NOT APP_BLINK_ONLY" OFF)
+cmake_dependent_option(WATCHDOG_ENABLED "Independent watchdog refreshed by the control task" ON "NOT APP_BLINK_ONLY" OFF)
 
 configure_file(${SRC_DIR}/app_config.h.in ${GENERATED_DIR}/app_config.h)
 
@@ -276,6 +301,32 @@ else()
 endif()
 
 # =============================================================================
+# API Documentation (Doxygen)
+# =============================================================================
+
+find_package(Doxygen OPTIONAL_COMPONENTS dot)
+
+if(DOXYGEN_FOUND)
+    set(DOXYGEN_OUTPUT_DIR ${CMAKE_BINARY_DIR}/docs)
+    if(DOXYGEN_DOT_FOUND)
+        set(DOXYGEN_HAVE_DOT YES)
+    else()
+        set(DOXYGEN_HAVE_DOT NO)
+    endif()
+
+    configure_file(${CMAKE_SOURCE_DIR}/docs/doxygen/Doxyfile.in
+        ${CMAKE_BINARY_DIR}/Doxyfile @ONLY)
+
+    add_custom_target(docs
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_BINARY_DIR}/Doxyfile
+        COMMENT "Generating API documentation in ${DOXYGEN_OUTPUT_DIR}/html"
+        VERBATIM
+    )
+else()
+    message(STATUS "doxygen not found - 'docs' target will not be available (sudo apt install doxygen graphviz)")
+endif()
+
+# =============================================================================
 # Clean Target (removes generated files)
 # =============================================================================
 
@@ -296,6 +347,7 @@ message(STATUS "MCU:            ${MCU_MODEL}")
 message(STATUS "Flash:          ${MCU_FLASH_SIZE}")
 message(STATUS "RAM:            ${MCU_RAM_SIZE}")
 message(STATUS "Blink only:     ${APP_BLINK_ONLY}")
+message(STATUS "Tilt filter:    ${ATTITUDE_FILTER}")
 message(STATUS "Toolchain:      ${CMAKE_C_COMPILER}")
 message(STATUS "libopencm3:     ${LIBOPENCM3_LIB}")
 message(STATUS "FreeRTOS:       ${FREERTOS_INCLUDE_DIRS}")

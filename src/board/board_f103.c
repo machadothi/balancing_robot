@@ -5,8 +5,21 @@
 
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
+#include <libopencm3/stm32/iwdg.h>
+#include <libopencm3/stm32/dbgmcu.h>
 
 #include "board/board.h"
+
+void board_watchdog_start(uint32_t timeout_ms) {
+    /* Without this, halting at a breakpoint resets the MCU */
+    DBGMCU_CR |= DBGMCU_CR_IWDG_STOP;
+    iwdg_set_period_ms(timeout_ms);
+    iwdg_start();
+}
+
+void board_watchdog_refresh(void) {
+    iwdg_reset();
+}
 
 void board_clock_init(void) {
     /* 72MHz from 8MHz HSE crystal */

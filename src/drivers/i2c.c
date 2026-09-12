@@ -46,6 +46,9 @@
 #define I2C_PORT        BOARD_I2C_PORT
 #define I2C_PERIPH      BOARD_I2C
 
+/** Upper bound for the BTF poll in the DMA TX ISR (~100 µs at 100 kHz) */
+#define I2C_ISR_BTF_SPINS   100000U
+
 #if I2C_DMA_ENABLED
 #if defined(STM32F1)
 #define I2C_DMA_PSIZE_8BIT  DMA_CCR_PSIZE_8BIT
@@ -354,6 +357,31 @@ I2C_Fails_t i2c_read_bytes(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
 /* ---------------------------- PRIVATE FUNCTIONS ----------------------------*/
 // -----------------------------------------------------------------------------
 
+/**
+ * @brief Poll SR1 for a flag, bounded by the device timeout
+ *
+ * Framing steps (START, address, one byte) finish in well under a millisecond,
+ * so polling beats an interrupt round-trip. A stuck bus or an absent device
+ * must still never hang the calling task.
+ *
+ * @return I2C_Ok, I2C_Nack if the slave did not acknowledge, or on_timeout
+ */
+static I2C_Fails_t i2c_wait_sr1(I2C_Control_t *dev, uint32_t flag, TickType_t t0,
+                                I2C_Fails_t on_timeout) {
+    while (!(I2C_SR1(dev->device) & flag)) {
+        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
+            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
+            return I2C_Nack;
+        }
+        if (diff_ticks(t0, systicks()) > dev->timeout) {
+            return on_timeout;
+        }
+    }
+    return I2C_Ok;
+}
+
+// -----------------------------------------------------------------------------
+
 static I2C_Fails_t NO_OPT
 i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 {
@@ -370,9 +398,11 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 
     /* Wait for the end of the start condition, master mode selected, 
         and BUSY bit set */
-    while ( !( (I2C_SR1(dev->device) & I2C_SR1_SB)
-        && (I2C_SR2(dev->device) & I2C_SR2_MSL)
-        && (I2C_SR2(dev->device) & I2C_SR2_BUSY) ));
+    if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
+        log_message(ERROR, I2C_BUS, "I2C START TIMEOUT!");
+        i2c_send_stop(dev->device);
+        return I2C_Busy_Timeout;
+    }
 
     i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
 
@@ -410,7 +440,11 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     i2c_send_start(dev->device);
     i2c_enable_ack(dev->device);
 
-    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
+    if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
+        log_message(ERROR, I2C_BUS, "I2C START TIMEOUT!");
+        i2c_send_stop(dev->device);
+        return I2C_Busy_Timeout;
+    }
 
     i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
 
@@ -684,6 +718,22 @@ void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
     log_message(INFO, I2C_BUS, "I2C DMA mode initialized");
 }
 
+/**
+ * @brief Undo a DMA transfer whose polled start phase failed
+ *
+ * Releases the bus, disarms the DMA stream and returns the driver to idle,
+ * so the next transfer starts from a clean state.
+ */
+static I2C_Fails_t i2c_dma_start_failed(I2C_Control_t *dev, uint8_t stream,
+                                        I2C_Fails_t err) {
+    i2c_send_stop(dev->device);
+    i2c_dma_disable(stream);
+    I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
+    dev->state = I2C_STATE_IDLE;
+    dev->error = err;
+    return err;
+}
+
 static void i2c_dma_tx_setup(I2C_Control_t *dev, const uint8_t *data, size_t len) {
     uint32_t dma = BOARD_I2C_DMA;
     uint8_t channel = BOARD_I2C_DMA_TX;
@@ -777,22 +827,16 @@ I2C_Fails_t i2c_write_dma(I2C_Control_t *dev, const uint8_t *data, size_t len,
     /* Generate START and send address */
     i2c_send_start(dev->device);
     
-    /* Wait for START */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
-    
-    /* Send address */
-    i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
-    
-    /* Wait for address ACK */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
-            /* NACK received */
-            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
-            i2c_send_stop(dev->device);
-            dev->state = I2C_STATE_IDLE;
-            dev->error = I2C_Nack;
-            return I2C_Nack;
-        }
+    /* Wait for START, send address, wait for ACK */
+    TickType_t t0 = systicks();
+    I2C_Fails_t status = i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout);
+
+    if (status == I2C_Ok) {
+        i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
+        status = i2c_wait_sr1(dev, I2C_SR1_ADDR, t0, I2C_Addr_Timeout);
+    }
+    if (status != I2C_Ok) {
+        return i2c_dma_start_failed(dev, BOARD_I2C_DMA_TX, status);
     }
     
     /* Clear ADDR by reading SR1 and SR2 */
@@ -842,21 +886,16 @@ I2C_Fails_t i2c_read_dma(I2C_Control_t *dev, uint8_t *data, size_t len,
     /* Generate START */
     i2c_send_start(dev->device);
     
-    /* Wait for START */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
-    
-    /* Send address with READ bit */
-    i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
-    
-    /* Wait for address ACK */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
-            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
-            i2c_send_stop(dev->device);
-            dev->state = I2C_STATE_IDLE;
-            dev->error = I2C_Nack;
-            return I2C_Nack;
-        }
+    /* Wait for START, send address with READ bit, wait for ACK */
+    TickType_t t0 = systicks();
+    I2C_Fails_t status = i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout);
+
+    if (status == I2C_Ok) {
+        i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
+        status = i2c_wait_sr1(dev, I2C_SR1_ADDR, t0, I2C_Addr_Timeout);
+    }
+    if (status != I2C_Ok) {
+        return i2c_dma_start_failed(dev, BOARD_I2C_DMA_RX, status);
     }
     
     /* Clear ADDR */
@@ -891,24 +930,26 @@ I2C_Fails_t i2c_read_reg_dma(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
     i2c_dma_rx_setup(dev, data, len);
     
     /* Phase 1: Send register address (polling) */
+    TickType_t t0 = systicks();
     i2c_send_start(dev->device);
-    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
-    
-    i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
-    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
-            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
-            i2c_send_stop(dev->device);
-            dev->state = I2C_STATE_IDLE;
-            return I2C_Nack;
-        }
+    I2C_Fails_t status = i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout);
+
+    if (status == I2C_Ok) {
+        i2c_send_7bit_address(dev->device, dev->addr, I2C_WRITE);
+        status = i2c_wait_sr1(dev, I2C_SR1_ADDR, t0, I2C_Addr_Timeout);
+    }
+    if (status != I2C_Ok) {
+        return i2c_dma_start_failed(dev, BOARD_I2C_DMA_RX, status);
     }
     (void)I2C_SR1(dev->device);
     (void)I2C_SR2(dev->device);
-    
+
     /* Send register address */
     i2c_send_data(dev->device, regAddr);
-    while (!(I2C_SR1(dev->device) & I2C_SR1_BTF));
+    status = i2c_wait_sr1(dev, I2C_SR1_BTF, t0, I2C_Write_Timeout);
+    if (status != I2C_Ok) {
+        return i2c_dma_start_failed(dev, BOARD_I2C_DMA_RX, status);
+    }
     
     /* Phase 2: Repeated START for read with DMA */
     
@@ -926,23 +967,15 @@ I2C_Fails_t i2c_read_reg_dma(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
     /* Generate repeated START */
     i2c_send_start(dev->device);
     
-    /* Wait for START */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_SB));
-    
-    /* Send address with READ bit */
-    i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
-    
-    /* Wait for address ACK */
-    while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
-        if (I2C_SR1(dev->device) & I2C_SR1_AF) {
-            I2C_SR1(dev->device) &= ~I2C_SR1_AF;
-            i2c_send_stop(dev->device);
-            i2c_dma_disable(BOARD_I2C_DMA_RX);
-            I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
-            dev->state = I2C_STATE_IDLE;
-            dev->error = I2C_Nack;
-            return I2C_Nack;
-        }
+    /* Wait for START, send address with READ bit, wait for ACK */
+    status = i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout);
+
+    if (status == I2C_Ok) {
+        i2c_send_7bit_address(dev->device, dev->addr, I2C_READ);
+        status = i2c_wait_sr1(dev, I2C_SR1_ADDR, t0, I2C_Addr_Timeout);
+    }
+    if (status != I2C_Ok) {
+        return i2c_dma_start_failed(dev, BOARD_I2C_DMA_RX, status);
     }
     
     /* Clear ADDR - this starts the DMA transfer */
@@ -1115,7 +1148,10 @@ void i2c_dma_tx_isr(I2C_Control_t *dev) {
         i2c_dma_disable(BOARD_I2C_DMA_TX);
         
         /* Wait for BTF (byte transfer finished) before STOP */
-        while (!(I2C_SR1(dev->device) & I2C_SR1_BTF));
+        /* Bounded: this runs in an ISR; BTF normally follows within one byte time */
+        for (uint32_t spins = 0;
+             spins < I2C_ISR_BTF_SPINS && !(I2C_SR1(dev->device) & I2C_SR1_BTF);
+             spins++);
         
         /* Send STOP condition */
         i2c_send_stop(dev->device);

@@ -246,6 +246,12 @@ void motor_standby(bool enable) {
     }
 }
 
+void motor_emergency_stop(void) {
+    gpio_clear(GPIOB, TB6612_STBY);
+    pwm_set_duty(&motor_a_pwm, 0);
+    pwm_set_duty(&motor_b_pwm, 0);
+}
+
 /* ==========================================================================
  * Public Functions - Encoder
  * ========================================================================== */

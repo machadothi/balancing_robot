@@ -31,16 +31,7 @@ extern "C" {
 /** Gyroscope sensitivity for ±250°/s range (LSB/(°/s)) */
 #define GYRO_SENS_SCALE_FACTOR  131.0f
 
-/** 
- * Gyroscope calibration offset (°/s)
- * Set to negative of gyro reading when stationary
- */
-#ifndef GYRO_CALIBRATION_OFFSET
-#define GYRO_CALIBRATION_OFFSET -0.45f
-#endif
-
-/* Legacy define for backward compatibility */
-#define GYRO_CONST_ERROR_MEAS   GYRO_CALIBRATION_OFFSET
+/* Gyroscope calibration offset: GYRO_CALIBRATION_OFFSET in config.h */
 
 /* ==========================================================================
  * Public Functions
@@ -160,6 +151,12 @@ IMU_Fails_t set_full_scale_accel_range(uint8_t range);
  * @see MPU6050_PWR1_SLEEP_BIT
  */
 IMU_Fails_t set_sleep_enabled(bool enabled);
+
+/**
+ * @brief Set the digital low-pass filter (CONFIG register, DLPF_CFG)
+ * @param mode  One of the MPU6050_DLPF_BW_* bandwidths
+ */
+IMU_Fails_t set_dlpf_mode(uint8_t mode);
 
 /** Get X-axis accelerometer reading.
  * @return X-axis acceleration measurement in 16-bit 2's complement format

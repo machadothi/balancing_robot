@@ -3,7 +3,7 @@
  * @brief Hiwonder ROS Robot Control Board (STM32F407VET6) peripheral assignments
  *
  * Taken from the vendor CubeMX project (RosRobotControllerM4.ioc), see
- * docs/PIN_CONNECTIONS_F407.md. Motor port pins live in
+ * docs/hardware/pin-connections-f407.md. Motor port pins live in
  * src/motor/motor_hiwonder.c.
  */
 

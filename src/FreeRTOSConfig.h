@@ -98,7 +98,7 @@
 #define configUSE_TRACE_FACILITY	0
 #define configUSE_16_BIT_TICKS		0
 #define configIDLE_SHOULD_YIELD		1
-#define configUSE_MUTEXES		0
+#define configUSE_MUTEXES		1
 #define configCHECK_FOR_STACK_OVERFLOW	1
 
 /* Co-routine definitions. */
@@ -131,5 +131,11 @@ NVIC value of 255. */
 
 /* Enable debug hooks */
 #define configUSE_MALLOC_FAILED_HOOK 1
+
+/* Also makes the port check that ISRs calling FromISR APIs respect
+configMAX_SYSCALL_INTERRUPT_PRIORITY. vAssertCalled() (fault_handlers.c) disables
+interrupts, stops the motors, reports file:line and halts. */
+void vAssertCalled( const char *file, int line );
+#define configASSERT( x )	if( ( x ) == 0 ) { vAssertCalled( __FILE__, __LINE__ ); }
 
 #endif /* FREERTOS_CONFIG_H */

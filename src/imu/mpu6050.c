@@ -5,6 +5,7 @@
 #include "task.h"
 #include "semphr.h"
 
+#include "config.h"
 #include "mpu6050.h"
 #include "board_config.h"
 #include "drivers/gpio_compat.h"
@@ -118,7 +119,8 @@ initialize(void) {
     }
     
     /* Initialize DMA for sensor reads (priority 5) */
-    i2c_init_dma(&i2c, 5);
+    /* 11 << 4 = 0xB0: the most urgent priority allowed to call FreeRTOS FromISR APIs */
+    i2c_init_dma(&i2c, 11);
     i2c.callback = mpu6050_dma_callback;
 
     log_message(DEBUG, I2C_BUS,"Setting clock source!");
@@ -142,6 +144,15 @@ initialize(void) {
     status = set_full_scale_accel_range(MPU6050_ACCEL_FS_2);
     if(status){
         log_message_with_error(ERROR, MPU6050, "Fail to set scale accel range. Err: ", 
+          getIMUErrorText(status));
+        return IMU_Config_Error;
+    }
+
+    /* Without it, 50-250 Hz motor vibration aliases into the 100 Hz samples */
+    log_message(DEBUG, I2C_BUS,"Setting digital low-pass filter!");
+    status = set_dlpf_mode(IMU_DLPF_MODE);
+    if(status){
+        log_message_with_error(ERROR, MPU6050, "Fail to set low-pass filter. Err: ",
           getIMUErrorText(status));
         return IMU_Config_Error;
     }
@@ -241,6 +252,18 @@ IMU_Fails_t NO_OPT
 set_full_scale_accel_range(uint8_t range) {
     if(i2c_write_bits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, 
       MPU6050_ACONFIG_AFS_SEL_LENGTH, range)) {
+        return IMU_COMM_BUS_ERROR;
+      }
+
+    return IMU_Ok;
+}
+
+// -----------------------------------------------------------------------------
+
+IMU_Fails_t NO_OPT
+set_dlpf_mode(uint8_t mode) {
+    if(i2c_write_bits(&i2c, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT,
+      MPU6050_CFG_DLPF_CFG_LENGTH, mode)) {
         return IMU_COMM_BUS_ERROR;
       }
 

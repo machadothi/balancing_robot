@@ -142,6 +142,25 @@ UART_Status_t uart_puts(const char *s) {
     return UART_OK;
 }
 
+UART_Status_t uart_try_puts(const char *s) {
+    if (uart_txq == NULL || s == NULL) {
+        return UART_NOT_INITIALIZED;
+    }
+
+    if (uxQueueSpacesAvailable(uart_txq) < strlen(s)) {
+        return UART_OVERFLOW;
+    }
+
+    while (*s) {
+        if (xQueueSend(uart_txq, s, 0) != pdPASS) {
+            return UART_OVERFLOW;
+        }
+        s++;
+    }
+
+    return UART_OK;
+}
+
 UART_Status_t uart_write(const uint8_t *data, size_t len) {
     if (uart_txq == NULL || data == NULL) {
         return UART_NOT_INITIALIZED;

@@ -2,7 +2,7 @@
  * @file board_config.h
  * @brief Blue Pill (STM32F103C8T6) peripheral assignments
  *
- * Wiring is documented in docs/PIN_CONNECTIONS.md. Motor pins live in
+ * Wiring is documented in docs/hardware/pin-connections-f103.md. Motor pins live in
  * src/motor/motor.h (TB6612FNG driver).
  */
 
