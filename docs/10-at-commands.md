@@ -1,336 +1,163 @@
-# AT Command Reference
+# 10 — AT Command Reference
 
-This document describes the AT command interface for the Self-Balancing Robot.
+The console accepts AT commands over the board's console UART: USART2 on the
+Blue Pill, the Type-C USB-serial port (USART1) on the F407 board. Commands are
+case-insensitive and are executed by the UART RX task under the robot state
+lock (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
-## Overview
+## Where in the code
 
-The AT command interface provides serial communication control over UART at **921600 baud**. Commands follow the standard AT command format and are **case-insensitive**.
+| What | Where |
+|------|-------|
+| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L199) |
+| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L368) |
+| Set commands (`AT+X=v`), range checks | `at_handle_set()` in [at_cmd.c](../src/cmd/at_cmd.c) |
+| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L566) |
+| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L254), [`at_exec_handler()`](../src/robot/robot.c#L305) |
+| Build flags | `AT_CMD_HELP_ENABLED`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `UART_ECHO_ENABLED` ([02](02-build-and-configuration.md#build-options)) |
 
-### Command Syntax
+## Syntax
 
-| Format | Description | Example |
-|--------|-------------|---------|
-| `AT` | Test connection | `AT` → `OK` |
-| `AT+CMD?` | Query value | `AT+ANGLE?` → `+ANGLE:12.34` |
-| `AT+CMD=value` | Set value | `AT+KP=1.5` → `OK` |
-| `AT+CMD` | Execute action | `AT+ENABLE` → `OK` |
+| Format | Meaning | Example |
+|--------|---------|---------|
+| `AT` | Connection test | `AT` → `OK` |
+| `AT+CMD?` | Query | `AT+ANGLE?` → `+ANGLE:1.23` |
+| `AT+CMD=value` | Set | `AT+KP=20` → `OK` |
+| `AT+CMD` | Execute | `AT+ENABLE` → `OK` |
 
-### Response Format
+Lines end with CR or LF. Typed characters are echoed (`UART_ECHO_ENABLED`),
+and `> ` is printed when the console is ready for the next command.
+
+### Responses and error codes
 
 | Response | Meaning |
 |----------|---------|
-| `OK` | Command executed successfully |
-| `ERROR:N` | Error with code N |
-| `+CMD:value` | Query response with data |
+| `OK` | Success |
+| `+CMD:value` | Query result (followed by the prompt) |
+| `ERROR:1` | General error (command known but failed, e.g. `AT+SAVE`) |
+| `ERROR:2` | Unknown command |
+| `ERROR:3` | Invalid parameter: missing, not a number, or not finite (`AT+KP=abc`, `AT+KP=nan`) |
+| `ERROR:4` | Value out of range |
+| `ERROR:5` | Not ready (robot task has not registered its handlers yet) |
 
-### Error Codes
+The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 
-| Code | Meaning |
-|------|---------|
-| 0 | Generic error |
-| 1 | Unknown command |
-| 2 | Invalid parameter |
-| 3 | Value out of range |
-| 4 | System not ready |
+## Queries
 
----
+| Command | Response | Notes |
+|---------|----------|-------|
+| `AT+VERSION?` | `+VERSION:1.0.0` | |
+| `AT+STATUS?` | `+STATUS:ENABLED,BALANCED` | Motors `ENABLED`/`DISABLED`; `BALANCED` when \|tilt\| < 5° |
+| `AT+ACC_X?` `AT+ACC_Y?` `AT+ACC_Z?` | `+ACC_X:-0.998` | g, 3 decimals |
+| `AT+GYRO_X?` `AT+GYRO_Y?` `AT+GYRO_Z?` | `+GYRO_X:0.125` | °/s, 3 decimals; X includes the calibration offset |
+| `AT+ANGLE?` | `+ANGLE:1.23` | Filtered tilt, 0 = upright, positive = leaning forward |
+| `AT+KP?` `AT+KI?` `AT+KD?` | `+KP:25.0000` | Current PID gains |
+| `AT+TURN?` | `+TURN:0.00` | |
+| `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |
+| `AT+TARGET?` | `+TARGET:0.00` | Stored only, see limitations |
+| `AT+VELOCITY?` | `+VELOCITY:0.00` | Always 0: velocity is not estimated yet |
+| `AT+ALL?` | `+ALL:ax,ay,az,gx,gy,gz,angle` | Only with `AT_CMD_ALL_QUERY=ON` (default OFF) |
 
-## Commands
+Queries copy the robot state under the lock and format the copy, so values in
+one response are consistent with each other.
 
-### System Commands
+## Set commands
 
-#### AT - Test Connection
-```
-AT
-OK
-```
-Tests if the device is responding.
+| Command | Range | Effect |
+|---------|-------|--------|
+| `AT+KP=n` `AT+KI=n` `AT+KD=n` | ≥ 0 | PID gains, effective on the next sample |
+| `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
+| `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
+| `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Stored in `target_velocity`, not used by the control law |
+| `AT+STREAM=0\|1` | 0 or 1 | Print `acc_deg: … \| kalman: … \| comp: …` every sample |
 
-#### AT+VERSION? - Firmware Version
-```
-AT+VERSION?
-+VERSION:1.0.0
-OK
-```
-Returns the firmware version string.
+## Execute commands
 
-#### AT+STATUS? - Robot Status
-```
-AT+STATUS?
-+STATUS:DISABLED,UNBALANCED
-OK
-```
-Returns motor state (`ENABLED`/`DISABLED`) and balance state (`BALANCED`/`UNBALANCED`).
+| Command | Effect |
+|---------|--------|
+| `AT+ENABLE` | Reset the PID state, leave motor standby, start balancing (if the PID is on) |
+| `AT+DISABLE` | Stop balancing and put the motor driver in standby |
+| `AT+STOP` | Like `DISABLE`, and also zero wheel speeds, `TURN` and `TARGET` |
+| `AT+PID` | Toggle the balance PID (`AT_CMD_PID_TOGGLE`, default ON) |
+| `AT+PIDON` / `AT+PIDOFF` | Enable / disable the PID; `PIDOFF` also zeroes the motors |
+| `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET` |
+| `AT+RESET` | Reply `OK`, wait 100 ms, then reset the MCU |
+| `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
+| `AT+HELP` | Command summary, only with `AT_CMD_HELP_ENABLED=ON` (default OFF) |
 
-#### AT+RESET - System Reset
-```
-AT+RESET
-OK
-```
-Performs a software reset of the microcontroller.
-
-#### AT+HELP - Show Help
-```
-AT+HELP
-```
-Displays a summary of all available commands.
-
----
-
-### Sensor Queries
-
-#### AT+ALL? - All Sensor Data
-```
-AT+ALL?
-+ALL:0.123,-0.045,1.001,0.500,-0.300,0.100,2.50
-OK
-```
-Returns all sensor data in CSV format:
-`acc_x, acc_y, acc_z, gyro_x, gyro_y, gyro_z, angle`
-
-#### AT+ACC_X? / AT+ACC_Y? / AT+ACC_Z? - Accelerometer
-```
-AT+ACC_X?
-+ACC_X:0.123
-OK
-```
-Returns accelerometer reading in g (3 decimal places).
-
-#### AT+GYRO_X? / AT+GYRO_Y? / AT+GYRO_Z? - Gyroscope
-```
-AT+GYRO_X?
-+GYRO_X:0.500
-OK
-```
-Returns gyroscope reading in degrees/second (3 decimal places).
-
-#### AT+ANGLE? - Tilt Angle
-```
-AT+ANGLE?
-+ANGLE:2.50
-OK
-```
-Returns the filtered tilt angle in degrees (2 decimal places).
-
----
-
-### Motion Control
-
-#### AT+ENABLE - Enable Motors
-```
-AT+ENABLE
-OK
-```
-Enables motor control. Robot will attempt to balance.
-
-#### AT+DISABLE - Disable Motors
-```
-AT+DISABLE
-OK
-```
-Disables motor control. Motors will coast to a stop.
-
-#### AT+STOP - Emergency Stop
-```
-AT+STOP
-OK
-```
-Immediately stops all motors (emergency brake).
-
-#### AT+VELOCITY? - Query Velocity
-```
-AT+VELOCITY?
-+VELOCITY:0.00
-OK
-```
-Returns current velocity estimate (2 decimal places).
-
-#### AT+VELOCITY=n / AT+TARGET=n - Set Target Velocity
-```
-AT+VELOCITY=50
-OK
-```
-Sets target forward/backward velocity.
-- **Range:** -100 to 100
-- Positive = forward, Negative = backward
-
-#### AT+TURN=n - Set Turn Rate
-```
-AT+TURN=-30
-OK
-```
-Sets the turn rate for differential steering.
-- **Range:** -100 to 100
-- Positive = turn right, Negative = turn left
-
-#### AT+TURN? - Query Turn Rate
-```
-AT+TURN?
-+TURN:-30.00
-OK
-```
-
-#### AT+SPEED=left,right - Set Wheel Speeds
-```
-AT+SPEED=-50,50
-OK
-```
-Sets individual wheel speeds directly.
-- **Range:** -100 to 100 for each wheel
-- Useful for manual control or testing
-
-#### AT+SPEED? - Query Wheel Speeds
-```
-AT+SPEED?
-+SPEED:-50.0,50.0
-OK
-```
-
----
-
-### PID Tuning
-
-#### AT+KP? / AT+KP=n - Proportional Gain
-```
-AT+KP?
-+KP:1.5000
-OK
-
-AT+KP=2.0
-OK
-```
-Query or set the PID proportional gain.
-- **Range:** ≥ 0
-
-#### AT+KI? / AT+KI=n - Integral Gain
-```
-AT+KI?
-+KI:0.0100
-OK
-
-AT+KI=0.02
-OK
-```
-Query or set the PID integral gain.
-- **Range:** ≥ 0
-
-#### AT+KD? / AT+KD=n - Derivative Gain
-```
-AT+KD?
-+KD:0.5000
-OK
-
-AT+KD=0.8
-OK
-```
-Query or set the PID derivative gain.
-- **Range:** ≥ 0
-
----
-
-### Configuration Persistence
-
-#### AT+SAVE - Save Settings
-```
-AT+SAVE
-OK
-```
-Saves current PID parameters to flash memory.
-
-#### AT+LOAD - Load Settings
-```
-AT+LOAD
-OK
-```
-Loads PID parameters from flash memory.
-
-#### AT+DEFAULT - Reset to Defaults
-```
-AT+DEFAULT
-OK
-```
-Resets all parameters to factory defaults.
-
----
+The robot starts with motors in standby: nothing moves until `AT+ENABLE`.
+Balancing also stops by itself when |tilt| exceeds 45° or when the IMU delivers
+no sample for 50 ms; send `AT+ENABLE` again once the cause is gone.
 
 ## Examples
 
-### Basic Test Sequence
+### Check the sensors
+
 ```
-AT
-OK
-AT+VERSION?
-+VERSION:1.0.0
-OK
 AT+STATUS?
 +STATUS:DISABLED,UNBALANCED
-OK
+AT+ANGLE?
++ANGLE:0.84
+AT+GYRO_X?
++GYRO_X:0.031
 ```
 
-### Enable and Control
+### Tuning session
+
 ```
+AT+KD=0
+OK
+AT+KI=0
+OK
+AT+KP=15
+OK
 AT+ENABLE
 OK
-AT+VELOCITY=30
+AT+KD=0.6
 OK
-AT+TURN=10
-OK
-AT+STOP
-OK
-AT+DISABLE
-OK
-```
-
-### PID Tuning Session
-```
 AT+KP?
-+KP:1.5000
-OK
-AT+KP=2.0
-OK
-AT+KI=0.01
-OK
-AT+KD=0.5
-OK
-AT+SAVE
-OK
++KP:15.0000
 ```
 
-### Monitor Sensors
-```
-AT+ANGLE?
-+ANGLE:1.23
-OK
-AT+ALL?
-+ALL:0.012,-0.034,0.998,0.123,-0.456,0.789,1.23
-OK
-```
+Gains are lost on reset: write the final values into `ROBOT_DEFAULT_KP/KI/KD`
+in [robot.c](../src/robot/robot.c#L38). The procedure is in
+[09 — Tuning and Experiments](09-tuning-and-experiments.md).
 
-### Direct Wheel Control
+### Direct wheel control
+
+The balance loop overwrites the motor commands every sample while it is
+active, so turn the PID off first. `AT+ENABLE` is still needed to leave standby:
+
 ```
-AT+SPEED=50,50
+AT+PIDOFF
+OK
+AT+ENABLE
+OK
+AT+SPEED=30,30
 OK
 AT+SPEED=-30,30
 OK
-AT+SPEED=0,0
+AT+STOP
 OK
 ```
 
----
+### Stream filter data for `test/statistics.py`
 
-## Notes
+```
+AT+STREAM=1
+OK
+acc_deg: 90.84 | kalman: 90.61 | comp: 90.58
+acc_deg: 90.77 | kalman: 90.66 | comp: 90.59
+```
 
-1. **Baud Rate:** 921600 bps, 8N1
-2. **Line Ending:** CR (`\r`) or LF (`\n`)
-3. **Echo:** Characters are echoed as typed
-4. **Prompt:** `> ` indicates ready for input
-5. **Case:** Commands are case-insensitive (`at+help` = `AT+HELP`)
+Streamed angles are raw filter outputs, so upright reads about 90° (see
+[05 — Sensing and IMU](05-sensing-and-imu.md)). Lines are dropped rather than
+delaying the control loop when the UART queue is full, and may interleave with
+command responses. Send `AT+STREAM=0` before typing other commands.
 
-## Troubleshooting
+## Limitations
 
-| Issue | Solution |
-|-------|----------|
-| No response | Check baud rate (921600) |
-| `ERROR:4` | Robot state not initialized, wait for startup |
-| `ERROR:1` | Unknown command, check syntax with `AT+HELP` |
-| `ERROR:3` | Value out of range, check parameter limits |
+- No persistence: `AT+SAVE`/`AT+LOAD` return `ERROR:1`.
+- `VELOCITY`/`TARGET` have no effect: there is no outer velocity loop yet
+  ([06 — Control Theory](06-control-theory.md#6-cascade-control-the-next-step)).
+- `AT+SPEED?` reports the last commanded values, not measured wheel speeds.

@@ -484,6 +484,6 @@ Complete pin assignment reference.
 ---
 
 **For more information:**
-- See [BUILD.md](BUILD.md) for build instructions
-- See [AT_COMMANDS.md](AT_COMMANDS.md) for command interface reference
-- See [README.md](README.md) for project overview
+- See [02 — Build and Configuration](../02-build-and-configuration.md) for build instructions
+- See [10 — AT Commands](../10-at-commands.md) for the command interface reference
+- See the [documentation index](../README.md) for the full book

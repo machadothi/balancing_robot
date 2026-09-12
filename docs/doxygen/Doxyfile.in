@@ -1,0 +1,31 @@
+# Doxygen configuration template, filled in by CMake (target: docs)
+
+PROJECT_NAME           = "Balancing Robot"
+PROJECT_NUMBER         = @PROJECT_VERSION@
+PROJECT_BRIEF          = "STM32 + FreeRTOS self-balancing robot firmware (board: @BOARD@)"
+OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
+
+INPUT                  = @CMAKE_SOURCE_DIR@/src @GENERATED_DIR@
+FILE_PATTERNS          = *.c *.h
+RECURSIVE              = YES
+EXCLUDE                = @CMAKE_SOURCE_DIR@/src/rtos
+
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+SOURCE_BROWSER         = YES
+
+ENABLE_PREPROCESSING   = YES
+MACRO_EXPANSION        = YES
+SEARCH_INCLUDES        = YES
+INCLUDE_PATH           = @CMAKE_SOURCE_DIR@/src @BOARD_INCLUDE_DIR@ @GENERATED_DIR@
+PREDEFINED             = @MCU_FAMILY@
+
+HAVE_DOT               = @DOXYGEN_HAVE_DOT@
+CALL_GRAPH             = YES
+CALLER_GRAPH           = YES
+
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO

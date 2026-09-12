@@ -1,6 +1,19 @@
-# Build Instructions
+# 02 — Build and Configuration
 
-This project is self-contained with all dependencies managed as git submodules.
+Toolchain setup, how the CMake presets, board files and build options fit
+together, flashing, and generating the API reference. All dependencies are git
+submodules.
+
+## Where in the code
+
+| What | Where |
+|------|-------|
+| Top-level build, option validation | [CMakeLists.txt](../CMakeLists.txt) |
+| Per-board settings | [cmake/boards/](../cmake/boards) |
+| Presets | [CMakePresets.json](../CMakePresets.json) |
+| Generated header template | [src/app_config.h.in](../src/app_config.h.in) |
+| Toolchain file | [cmake/arm-none-eabi.cmake](../cmake/arm-none-eabi.cmake) |
+| Doxygen template | [doxygen/Doxyfile.in](doxygen/Doxyfile.in) |
 
 ## Quick Start
 
@@ -15,8 +28,8 @@ cd balancing-robot
 This will:
 1. Check for required tools
 2. Clone libopencm3 and FreeRTOS-Kernel as submodules
-3. Build libopencm3 for STM32F1
-4. Build the project using CMake
+3. Build libopencm3 for STM32F1 and STM32F4
+4. Configure and build the `f103` preset (`BOARD=f407 ./scripts/setup.sh` for the F407 board)
 
 ## Prerequisites
 
@@ -106,6 +119,37 @@ Board peripheral assignments (console UART, I2C bus, DMA streams) are in
 Type-C USB-serial port (USART1), and the robot's motors plug into ports M1
 and M2; change `BOARD_MOTOR1_PORT` / `BOARD_MOTOR2_PORT` there to use others.
 
+## How configuration flows
+
+```mermaid
+flowchart LR
+    PRESET["CMakePresets.json<br/>preset f103 / f407"] -->|"BOARD, toolchain, build dir"| CML["CMakeLists.txt"]
+    USER["-D options, ccmake,<br/>CMakeUserPresets.json"] -->|"cache variables"| CML
+    CML -->|"include()"| BCM["cmake/boards/BOARD.cmake<br/>MCU, CPU flags, sources, defaults"]
+    BCM --> CML
+    CML -->|"validate, configure_file()"| HDR["generated/app_config.h"]
+    CML -->|"sources, include dirs,<br/>libopencm3, linker script"| ELF["balancing-robot.elf"]
+    HDR -->|"included by config.h<br/>and FreeRTOSConfig.h"| SRC["C sources"]
+    SRC --> ELF
+```
+
+1. **The preset** selects the board, the toolchain file and a build directory
+   per board.
+2. **The board file** (`cmake/boards/<board>.cmake`) sets everything
+   MCU-specific: CPU flags, libopencm3 library, linker script, FreeRTOS kernel
+   and port, clock frequency, board and motor sources, and per-board option
+   defaults.
+3. **Options** are declared after the board file, so board defaults apply, and
+   are then validated. Configuration stops with an error for an unknown board or
+   filter, a non-integer value, or an `IMU_SAMPLE_RATE_MS` that is not a whole
+   number of RTOS ticks.
+4. **`configure_file()`** writes the option values to
+   `build-<preset>/generated/app_config.h`. Firmware code never reads CMake
+   variables directly; it includes `config.h`, which includes this header.
+
+Because the header is generated per build directory, the two boards can be
+built side by side with different options.
+
 ## Build Options
 
 Options are CMake cache variables. They are written to
@@ -116,8 +160,9 @@ Options are CMake cache variables. They are written to
 | `BOARD` | `f103` | Target board: `f103` or `f407` |
 | `APP_BLINK_ONLY` | `OFF` | Only run the LED heartbeat task |
 | `UART_BAUDRATE` | `921600` | UART baud rate |
-| `IMU_SAMPLE_RATE_MS` | `10` | IMU sample period (ms) |
-| `FREERTOS_TICK_RATE_HZ` | `250` | FreeRTOS tick rate |
+| `IMU_SAMPLE_RATE_MS` | `10` | IMU and control loop period (ms); must be a whole number of ticks |
+| `ATTITUDE_FILTER` | `complementary` | Tilt estimator used by the controller: `complementary` or `kalman` ([07](07-sensor-fusion.md)) |
+| `FREERTOS_TICK_RATE_HZ` | `1000` | FreeRTOS tick rate |
 | `FREERTOS_TOTAL_HEAP_SIZE` | `10240` (f103), `32768` (f407) | FreeRTOS heap (bytes) |
 | `UART_PRINTF_ENABLED` | `ON` | `uart_printf` support |
 | `UART_ECHO_ENABLED` | `ON` | Echo received characters |
@@ -128,6 +173,7 @@ Options are CMake cache variables. They are written to
 | `AT_CMD_PID_TOGGLE` | `ON` | `AT+PIDON/PIDOFF/PID` commands |
 | `LOG_ENABLED` | `OFF` | Logging over UART |
 | `FAULT_HANDLERS_VERBOSE` | `ON` | Print fault messages over UART |
+| `WATCHDOG_ENABLED` | `ON` | Independent watchdog (500 ms) refreshed by the control task |
 
 With `APP_BLINK_ONLY=ON` the driver options (everything from
 `UART_PRINTF_ENABLED` down) are forced `OFF`.
@@ -212,39 +258,30 @@ rm -rf build-f103 build-f407
 ./scripts/setup.sh --rebuild
 ```
 
+## API Documentation (Doxygen)
+
+The `docs` target generates an HTML API reference from the source comments,
+with call graphs when Graphviz is installed:
+
+```bash
+sudo apt install doxygen graphviz
+cmake --preset f103        # re-run configure after installing doxygen
+cmake --build --preset f103 --target docs
+xdg-open build-f103/docs/html/index.html
+```
+
+The target only exists when CMake finds `doxygen`. The configuration template
+is [doxygen/Doxyfile.in](doxygen/Doxyfile.in); it documents `src/` (without the
+vendored FreeRTOS) using the selected board's include paths and MCU family
+define.
+
 ## Project Structure
 
-```
-balancing-robot/
-├── CMakeLists.txt          # Main CMake configuration
-├── cmake/
-│   └── arm-none-eabi.cmake # ARM toolchain file
-├── lib/
-│   ├── libopencm3/         # ARM Cortex-M library (submodule)
-│   └── FreeRTOS-Kernel/    # RTOS kernel (submodule)
-├── scripts/
-│   └── setup.sh            # Project setup script
-├── src/
-│   ├── main.c
-│   ├── config.h            # Centralized configuration
-│   ├── FreeRTOSConfig.h    # FreeRTOS configuration
-│   ├── stm32f103c8t6.ld    # Linker script
-│   ├── communication/      # I2C, UART drivers
-│   ├── filter/             # Kalman, Complementary filters
-│   ├── imu/                # MPU6050 driver
-│   ├── led/                # LED control
-│   ├── log/                # Logging module
-│   ├── motor/              # Motor control
-│   ├── robot/              # Robot control task
-│   └── rtos/               # FreeRTOS integration
-├── test/
-│   └── statistics.py       # Filter analysis script
-└── img/                    # Images and plots
-```
+See the repository map in [01 — System Overview](01-system-overview.md#repository-map).
 
 ## Troubleshooting
 
-### Build Errors
+### Build or Flash Errors
 
 - Run `./scripts/setup.sh --clean` to start fresh
 - Check ST-Link connection
@@ -253,6 +290,6 @@ balancing-robot/
 
 ### No Serial Output
 
-- Check UART wiring (PA2 is TX)
+- Check the console wiring: TX is PA2 on the Blue Pill; the F407 board uses its Type-C port
 - Verify baud rate matches (921600)
 - Ensure USB-Serial adapter is working: `ls /dev/ttyUSB*`
