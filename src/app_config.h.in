@@ -28,4 +28,4 @@
 #cmakedefine01 LOG_ENABLED
 #cmakedefine01 FAULT_HANDLERS_VERBOSE
 
-#endif /* APP_CONFIG_H */
+#endif // APP_CONFIG_H

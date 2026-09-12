@@ -101,8 +101,10 @@ cmake -B build-f407 -DBOARD=f407 -DCMAKE_TOOLCHAIN_FILE=cmake/arm-none-eabi.cmak
 cmake --build build-f407
 ```
 
-The F407 build currently only runs the LED heartbeat (`APP_BLINK_ONLY=ON`),
-because the UART, I2C and PWM drivers have not been ported to it yet.
+Board peripheral assignments (console UART, I2C bus, DMA streams) are in
+`src/board/<board>/board_config.h`. On the F407 board the console is the
+Type-C USB-serial port (USART1), and the robot's motors plug into ports M1
+and M2; change `BOARD_MOTOR1_PORT` / `BOARD_MOTOR2_PORT` there to use others.
 
 ## Build Options
 
@@ -112,7 +114,7 @@ Options are CMake cache variables. They are written to
 | Option | Default | Description |
 |--------|---------|-------------|
 | `BOARD` | `f103` | Target board: `f103` or `f407` |
-| `APP_BLINK_ONLY` | `OFF` (f103), `ON` (f407) | Only run the LED heartbeat task |
+| `APP_BLINK_ONLY` | `OFF` | Only run the LED heartbeat task |
 | `UART_BAUDRATE` | `921600` | UART baud rate |
 | `IMU_SAMPLE_RATE_MS` | `10` | IMU sample period (ms) |
 | `FREERTOS_TICK_RATE_HZ` | `250` | FreeRTOS tick rate |
@@ -190,7 +192,8 @@ tested on the board yet.
 
 ## Serial Monitor
 
-The project outputs debug data via UART2 (PA2) at 921600 baud:
+The project outputs debug data at 921600 baud via UART2 (PA2) on the Blue
+Pill, or the Type-C USB-serial port (USART1) on the F407 board:
 
 ```bash
 picocom -b 921600 /dev/ttyUSB0

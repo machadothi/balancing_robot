@@ -12,6 +12,8 @@ set(LINKER_SCRIPT ${SRC_DIR}/stm32f407vet6.ld)
 # Must match libopencm3's F4 build (hard-float ABI)
 set(CPU_FLAGS -mthumb -mcpu=cortex-m4 -mfloat-abi=hard -mfpu=fpv4-sp-d16)
 set(BOARD_SOURCE ${SRC_DIR}/board/board_f407.c)
+set(BOARD_INCLUDE_DIR ${SRC_DIR}/board/f407)
+set(MOTOR_SOURCE ${SRC_DIR}/motor/motor_hiwonder.c)
 
 set(SYS_CLOCK_HZ 168000000)
 
@@ -30,4 +32,4 @@ set(FREERTOS_INCLUDE_DIRS
 )
 
 set(BOARD_DEFAULT_HEAP_SIZE 32768)
-set(BOARD_DEFAULT_APP_BLINK_ONLY ON)
+set(BOARD_DEFAULT_APP_BLINK_ONLY OFF)

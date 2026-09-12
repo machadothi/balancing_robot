@@ -1,9 +1,9 @@
 # Hiwonder ROS Robot Control Board (STM32F407VET6) Pin Connections
 
-Pin facts collected from the
+Pin assignments come from the vendor firmware project
+(`RosRobotControllerM4.ioc` and `Hiwonder/Portings/motor_porting.c` in
+`RosRobotControllerM4_mecanum_8V.zip`) and the
 [Hiwonder wiki](https://wiki.hiwonder.com/projects/ROS-Robot-Control-Board/en/latest/docs/1_Controller_Hardware_Course.html).
-The official schematic has not been published; entries marked **unverified**
-still need confirming against the schematic, the vendor firmware, or the board itself.
 
 **MCU:** STM32F407VET6 (Cortex-M4F, 168 MHz, 512K flash, 128K SRAM + 64K CCM)
 **Clock:** 8 MHz HSE crystal
@@ -11,26 +11,40 @@ still need confirming against the schematic, the vendor firmware, or the board i
 
 ## Used by this firmware
 
-| Function | Pin | Notes |
-|----------|-----|-------|
-| User LED | PE10 | Active low; heartbeat LED |
-| SWDIO | PA13 | ST-Link |
-| SWCLK | PA14 | ST-Link |
+| Function | Pins | Peripheral | Notes |
+|----------|------|------------|-------|
+| User LED | PE10 | GPIO | Active low; heartbeat |
+| Console | PA9 (TX), PA10 (RX) | USART1 | Type-C USB-serial; also the bootloader port (DTR = reset, RTS = BOOT0) |
+| MPU-6050 | PB10 (SCL), PB11 (SDA) | I2C2 | DMA1 stream 7 (TX) / stream 2 (RX), channel 7 |
+| motor1 | Port M1 | see below | `BOARD_MOTOR1_PORT` in `src/board/f407/board_config.h` |
+| motor2 | Port M2 | see below | `BOARD_MOTOR2_PORT` |
+| SWD | PA13 (SWDIO), PA14 (SWCLK) | | ST-Link |
+
+## Encoder motor ports
+
+Each port's driver has two PWM inputs: PWM on the forward input with the reverse
+input low turns the motor forward (vendor convention), and vice versa. The
+encoders are quadrature, read by a timer in encoder mode.
+
+| Port | Forward PWM | Reverse PWM | Encoder A / B |
+|------|-------------|-------------|---------------|
+| M1 | TIM1_CH4 PE14 | TIM1_CH3 PE13 | TIM5 PA0 / PA1 |
+| M2 | TIM1_CH2 PE11 | TIM1_CH1 PE9 | TIM2 PA15 / PB3 |
+| M3 | TIM9_CH1 PE5 | TIM9_CH2 PE6 | TIM4 PB6 / PB7 |
+| M4 | TIM11_CH1 PB9 | TIM10_CH1 PB8 | TIM3 PB4 / PB5 |
 
 ## Not used yet
 
 | Function | Pins | Notes |
 |----------|------|-------|
-| MPU-6050 IMU | PB10 (SCL), PB11 (SDA) | I2C2, 10k pull-ups, INT pin not listed |
-| Motor driver (YX-4055AM) | PE9, PE11, PE13, PE14, PE5, PE6, PB8, PB9 | PE9/11/13/14 = TIM1 CH1–4; PE5/PE6 = TIM9 CH1/2; PB8/PB9 = TIM4 CH3/4 (**unverified**) |
-| Motor encoders | ? | Not documented; get from vendor firmware |
-| UART1 | Type-C USB-serial | Programming (bootloader: DTR = reset, RTS = BOOT0) and console |
-| UART2 | USB serial port 2 | Recommended link to Raspberry Pi / Jetson |
-| Bus servo | PE7, PG6 (TX), PC7 (RX) | As listed in wiki (**unverified**: PG6 is not on a 100-pin package) |
-| SBUS receiver | PD2 | Inverted through NPN transistor |
-| Bluetooth | PD5, PD6 | USART2 TX/RX |
-| OLED 0.96" (SPI) | PB13, PC3, PD14, PD13, PD12, PD11 | |
-| USB host | PB14 (D+), PB15 (D-) | USB OTG HS in FS mode |
-| Buzzer | PA4 | Through S8050 transistor |
-| User buttons | PE0, PE1 | Active low |
-| BOOT0 / BOOT1 | — | Pulled low (boot from flash) |
+| MPU-6050 interrupt | PB12 | EXTI12 |
+| Motor enable sense | PD3 | Input |
+| Battery voltage | PB0 | ADC IN8 |
+| Buzzer | PA8 | |
+| User buttons | PE0 (KEY2), PE1 (KEY1) | Active low |
+| PWM servos | PA11, PA12, PC8, PC9 | GPIO outputs in vendor firmware |
+| Serial bus servo | PC6 (TX), PC7 (RX), PE7 (TX enable), PE8 (RX enable) | USART6 |
+| SBUS receiver | PD2 | UART5 RX, inverted through NPN transistor |
+| Bluetooth | PD5 (TX), PD6 (RX) | USART2 |
+| Host link | PD8 (TX), PD9 (RX) | USART3, 1 Mbit/s in vendor firmware |
+| USB host | PB14 (D+), PB15 (D-) | |

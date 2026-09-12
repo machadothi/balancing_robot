@@ -17,6 +17,7 @@
 #if !APP_BLINK_ONLY
 #include <libopencm3/stm32/usart.h>
 
+#include "board_config.h"
 #include "drivers/uart.h"
 #include "cmd/at_cmd.h"
 #include "imu/mpu6050.h"
@@ -41,10 +42,10 @@ static void log_uart_send(const char *message) {
 void app_print_banner(void) {
     const char *banner = "\r\n=== Balancing Robot v1.0 ===\r\nAT Command Ready\r\n> ";
     for (const char *p = banner; *p; p++) {
-        usart_send_blocking(USART2, *p);
+        usart_send_blocking(BOARD_UART, *p);
     }
 }
-#endif /* !APP_BLINK_ONLY */
+#endif // !APP_BLINK_ONLY
 
 void app_hardware_init(void) {
     board_clock_init();
@@ -70,7 +71,7 @@ void app_hardware_init(void) {
 
     /* Initialize AT command parser (registers RX callback) */
     at_cmd_init();
-#endif
+#endif // !APP_BLINK_ONLY
 }
 
 void app_tasks_init(void) {
@@ -94,5 +95,5 @@ void app_tasks_init(void) {
     /* Robot control task */
     xTaskCreate(robot_task, TASK_NAME_ROBOT, TASK_STACK_ROBOT,
         NULL, configMAX_PRIORITIES - 1, NULL);
-#endif
+#endif // !APP_BLINK_ONLY
 }

@@ -15,6 +15,7 @@
 
 #include "config.h"
 #include "board/board.h"
+#include "board_config.h"
 #include "fault/fault_handlers.h"
 
 /* ==========================================================================
@@ -27,7 +28,7 @@
  */
 static void fault_puts(const char *s) {
     while (*s) {
-        usart_send_blocking(USART2, *s++);
+        usart_send_blocking(BOARD_UART, *s++);
     }
 }
 #endif

@@ -1,6 +1,6 @@
 /**
  * @file i2c.c
- * @brief I2C driver for STM32F103
+ * @brief I2C driver for STM32F1 and STM32F4
  * 
  * Features:
  *   - Master mode only
@@ -10,10 +10,9 @@
  *   - Bus recovery for stuck slaves
  *   - Configurable timeout
  * 
- * Hardware:
- *   - I2C1: PB6=SCL, PB7=SDA
- *   - DMA1 Channel 6: I2C1_TX
- *   - DMA1 Channel 7: I2C1_RX
+ * Hardware (peripheral, pins and DMA streams from board_config.h):
+ *   - BOARD_I2C on BOARD_I2C_SCL_PIN / BOARD_I2C_SDA_PIN
+ *   - BOARD_I2C_DMA_TX / BOARD_I2C_DMA_RX: DMA channels (F1) or streams (F4)
  *   - 100 kHz standard mode
  * 
  * @author Thiago Cunha
@@ -33,28 +32,52 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include "board_config.h"
 #include "i2c.h"
+#include "drivers/gpio_compat.h"
 #include "log/log.h"
 
 /* ==========================================================================
  * Configuration
  * ========================================================================== */
 
-#define I2C_SCL_PIN     GPIO6
-#define I2C_SDA_PIN     GPIO7
-#define I2C_PORT        GPIOB
-#define I2C_PERIPH      I2C1
-
-#define I2C_APB_FREQ    36      /* APB1 frequency in MHz */
-#define I2C_TRISE_VAL   0x25    /* Rise time for 100kHz */
-#define I2C_CCR_VAL     180     /* CCR for 100kHz: 180 * 1/36MHz */
+#define I2C_SCL_PIN     BOARD_I2C_SCL_PIN
+#define I2C_SDA_PIN     BOARD_I2C_SDA_PIN
+#define I2C_PORT        BOARD_I2C_PORT
+#define I2C_PERIPH      BOARD_I2C
 
 #if I2C_DMA_ENABLED
-/* DMA Channels for I2C1 */
-#define I2C1_DMA        DMA1
-#define I2C1_DMA_TX_CH  DMA_CHANNEL6
-#define I2C1_DMA_RX_CH  DMA_CHANNEL7
-#endif
+#if defined(STM32F1)
+#define I2C_DMA_PSIZE_8BIT  DMA_CCR_PSIZE_8BIT
+#define I2C_DMA_MSIZE_8BIT  DMA_CCR_MSIZE_8BIT
+#define I2C_DMA_PL_HIGH     DMA_CCR_PL_HIGH
+
+static void i2c_dma_disable(uint8_t channel) {
+    dma_disable_channel(BOARD_I2C_DMA, channel);
+}
+
+static void i2c_dma_enable(uint8_t channel) {
+    dma_enable_channel(BOARD_I2C_DMA, channel);
+}
+#else
+#define I2C_DMA_PSIZE_8BIT  DMA_SxCR_PSIZE_8BIT
+#define I2C_DMA_MSIZE_8BIT  DMA_SxCR_MSIZE_8BIT
+#define I2C_DMA_PL_HIGH     DMA_SxCR_PL_HIGH
+
+/* A stream must read back as disabled before it can be reconfigured */
+static void i2c_dma_disable(uint8_t stream) {
+    dma_disable_stream(BOARD_I2C_DMA, stream);
+    while (DMA_SCR(BOARD_I2C_DMA, stream) & DMA_SxCR_EN);
+}
+
+/* Stale flags from the previous transfer must be cleared before enabling */
+static void i2c_dma_enable(uint8_t stream) {
+    dma_clear_interrupt_flags(BOARD_I2C_DMA, stream,
+        DMA_TCIF | DMA_HTIF | DMA_TEIF | DMA_DMEIF | DMA_FEIF);
+    dma_enable_stream(BOARD_I2C_DMA, stream);
+}
+#endif // defined(STM32F1)
+#endif // I2C_DMA_ENABLED
 
 #define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
@@ -165,8 +188,7 @@ static inline TickType_t diff_ticks(TickType_t early, TickType_t later) {
 #if I2C_BUS_RECOVERY
 void i2c_bus_recovery(void) {
     /* Configure SCL as GPIO output */
-    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_2_MHZ,
-                  GPIO_CNF_OUTPUT_OPENDRAIN, I2C_SCL_PIN);
+    gpio_compat_output(I2C_PORT, I2C_SCL_PIN, true);
     
     /* Toggle SCL up to 9 times */
     for (int i = 0; i < 9; i++) {
@@ -181,19 +203,16 @@ void i2c_bus_recovery(void) {
     }
     
     /* Reconfigure as I2C alternate function */
-    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, I2C_SCL_PIN);
+    gpio_compat_af_output(I2C_PORT, I2C_SCL_PIN, BOARD_I2C_AF, true);
 }
 #endif
 
 void NO_OPT i2c_setup_peripheral(void) {
-    rcc_periph_clock_enable(RCC_GPIOB);
-    rcc_periph_clock_enable(RCC_I2C1);
+    rcc_periph_clock_enable(BOARD_I2C_PORT_RCC);
+    rcc_periph_clock_enable(BOARD_I2C_RCC);
     
     /* Configure I2C pins as open-drain alternate function */
-    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN,
-                  I2C_SCL_PIN | I2C_SDA_PIN);
+    gpio_compat_af_output(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, BOARD_I2C_AF, true);
     
     /* Set idle high */
     gpio_set(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN);
@@ -230,8 +249,7 @@ I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c,
     
     /* Step 2-4: Bus recovery with STOP condition */
     /* Configure as GPIO */
-    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_OPENDRAIN, I2C_SCL_PIN | I2C_SDA_PIN);
+    gpio_compat_output(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, true);
     
     /* Ensure both lines are high */
     gpio_set(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN);
@@ -254,8 +272,7 @@ I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c,
     for (volatile int i = 0; i < 500; i++);
     
     /* Step 5: Reconfigure as I2C */
-    gpio_set_mode(I2C_PORT, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_OPENDRAIN, I2C_SCL_PIN | I2C_SDA_PIN);
+    gpio_compat_af_output(I2C_PORT, I2C_SCL_PIN | I2C_SDA_PIN, BOARD_I2C_AF, true);
     
     /* Step 6: Software reset via SWRST bit */
     I2C_CR1(dev->device) |= I2C_CR1_SWRST;
@@ -263,11 +280,7 @@ I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c,
     I2C_CR1(dev->device) &= ~I2C_CR1_SWRST;
     
     /* Configure I2C peripheral */
-    i2c_set_standard_mode(dev->device);
-    i2c_set_clock_frequency(dev->device, I2C_APB_FREQ);
-    i2c_set_trise(dev->device, I2C_TRISE_VAL);
-    i2c_set_dutycycle(dev->device, I2C_CCR_DUTY_DIV2);
-    i2c_set_ccr(dev->device, I2C_CCR_VAL);
+    i2c_set_speed(dev->device, i2c_speed_sm_100k, rcc_apb1_frequency / 1000000);
     i2c_peripheral_enable(dev->device);
 
     /* Final check */
@@ -517,12 +530,12 @@ void i2c_init_it(I2C_Control_t *dev, uint8_t priority) {
     dev->error = I2C_Ok;
     dev->callback = NULL;
     
-    /* Configure NVIC for I2C1 */
-    if (dev->device == I2C1) {
-        nvic_set_priority(NVIC_I2C1_EV_IRQ, priority << 4);
-        nvic_set_priority(NVIC_I2C1_ER_IRQ, priority << 4);
-        nvic_enable_irq(NVIC_I2C1_EV_IRQ);
-        nvic_enable_irq(NVIC_I2C1_ER_IRQ);
+    /* Configure NVIC for the board's I2C peripheral */
+    if (dev->device == BOARD_I2C) {
+        nvic_set_priority(BOARD_I2C_EV_IRQ, priority << 4);
+        nvic_set_priority(BOARD_I2C_ER_IRQ, priority << 4);
+        nvic_enable_irq(BOARD_I2C_EV_IRQ);
+        nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
     log_message(INFO, I2C_BUS, "I2C interrupt mode initialized");
@@ -654,74 +667,83 @@ void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
     dev->error = I2C_Ok;
     dev->callback = NULL;
     
-    /* Enable DMA1 clock */
-    rcc_periph_clock_enable(RCC_DMA1);
+    rcc_periph_clock_enable(BOARD_I2C_DMA_RCC);
     
-    if (dev->device == I2C1) {
+    if (dev->device == BOARD_I2C) {
         /* Configure NVIC for DMA channels */
-        nvic_set_priority(NVIC_DMA1_CHANNEL6_IRQ, priority << 4);  /* TX */
-        nvic_set_priority(NVIC_DMA1_CHANNEL7_IRQ, priority << 4);  /* RX */
-        nvic_enable_irq(NVIC_DMA1_CHANNEL6_IRQ);
-        nvic_enable_irq(NVIC_DMA1_CHANNEL7_IRQ);
+        nvic_set_priority(BOARD_I2C_DMA_TX_IRQ, priority << 4);
+        nvic_set_priority(BOARD_I2C_DMA_RX_IRQ, priority << 4);
+        nvic_enable_irq(BOARD_I2C_DMA_TX_IRQ);
+        nvic_enable_irq(BOARD_I2C_DMA_RX_IRQ);
         
         /* Also enable I2C error interrupt */
-        nvic_set_priority(NVIC_I2C1_ER_IRQ, priority << 4);
-        nvic_enable_irq(NVIC_I2C1_ER_IRQ);
+        nvic_set_priority(BOARD_I2C_ER_IRQ, priority << 4);
+        nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
     log_message(INFO, I2C_BUS, "I2C DMA mode initialized");
 }
 
 static void i2c_dma_tx_setup(I2C_Control_t *dev, const uint8_t *data, size_t len) {
-    uint32_t dma = I2C1_DMA;
-    uint8_t channel = I2C1_DMA_TX_CH;
+    uint32_t dma = BOARD_I2C_DMA;
+    uint8_t channel = BOARD_I2C_DMA_TX;
     
     /* Disable channel first */
-    dma_disable_channel(dma, channel);
+    i2c_dma_disable(channel);
     
     /* Configure DMA channel */
     dma_set_peripheral_address(dma, channel, (uint32_t)&I2C_DR(dev->device));
     dma_set_memory_address(dma, channel, (uint32_t)data);
     dma_set_number_of_data(dma, channel, len);
     
+#if defined(STM32F1)
     dma_set_read_from_memory(dma, channel);
+#else
+    dma_channel_select(dma, channel, BOARD_I2C_DMA_CHANNEL);
+    dma_set_transfer_mode(dma, channel, DMA_SxCR_DIR_MEM_TO_PERIPHERAL);
+#endif // defined(STM32F1)
     dma_enable_memory_increment_mode(dma, channel);
     dma_disable_peripheral_increment_mode(dma, channel);
-    dma_set_peripheral_size(dma, channel, DMA_CCR_PSIZE_8BIT);
-    dma_set_memory_size(dma, channel, DMA_CCR_MSIZE_8BIT);
-    dma_set_priority(dma, channel, DMA_CCR_PL_HIGH);
+    dma_set_peripheral_size(dma, channel, I2C_DMA_PSIZE_8BIT);
+    dma_set_memory_size(dma, channel, I2C_DMA_MSIZE_8BIT);
+    dma_set_priority(dma, channel, I2C_DMA_PL_HIGH);
     
     /* Enable transfer complete interrupt */
     dma_enable_transfer_complete_interrupt(dma, channel);
     
     /* Enable channel */
-    dma_enable_channel(dma, channel);
+    i2c_dma_enable(channel);
 }
 
 static void i2c_dma_rx_setup(I2C_Control_t *dev, uint8_t *data, size_t len) {
-    uint32_t dma = I2C1_DMA;
-    uint8_t channel = I2C1_DMA_RX_CH;
+    uint32_t dma = BOARD_I2C_DMA;
+    uint8_t channel = BOARD_I2C_DMA_RX;
     
     /* Disable channel first */
-    dma_disable_channel(dma, channel);
+    i2c_dma_disable(channel);
     
     /* Configure DMA channel */
     dma_set_peripheral_address(dma, channel, (uint32_t)&I2C_DR(dev->device));
     dma_set_memory_address(dma, channel, (uint32_t)data);
     dma_set_number_of_data(dma, channel, len);
     
+#if defined(STM32F1)
     dma_set_read_from_peripheral(dma, channel);
+#else
+    dma_channel_select(dma, channel, BOARD_I2C_DMA_CHANNEL);
+    dma_set_transfer_mode(dma, channel, DMA_SxCR_DIR_PERIPHERAL_TO_MEM);
+#endif // defined(STM32F1)
     dma_enable_memory_increment_mode(dma, channel);
     dma_disable_peripheral_increment_mode(dma, channel);
-    dma_set_peripheral_size(dma, channel, DMA_CCR_PSIZE_8BIT);
-    dma_set_memory_size(dma, channel, DMA_CCR_MSIZE_8BIT);
-    dma_set_priority(dma, channel, DMA_CCR_PL_HIGH);
+    dma_set_peripheral_size(dma, channel, I2C_DMA_PSIZE_8BIT);
+    dma_set_memory_size(dma, channel, I2C_DMA_MSIZE_8BIT);
+    dma_set_priority(dma, channel, I2C_DMA_PL_HIGH);
     
     /* Enable transfer complete interrupt */
     dma_enable_transfer_complete_interrupt(dma, channel);
     
     /* Enable channel */
-    dma_enable_channel(dma, channel);
+    i2c_dma_enable(channel);
 }
 
 I2C_Fails_t i2c_write_dma(I2C_Control_t *dev, const uint8_t *data, size_t len,
@@ -915,7 +937,7 @@ I2C_Fails_t i2c_read_reg_dma(I2C_Control_t *dev, uint8_t regAddr, uint8_t *data,
         if (I2C_SR1(dev->device) & I2C_SR1_AF) {
             I2C_SR1(dev->device) &= ~I2C_SR1_AF;
             i2c_send_stop(dev->device);
-            dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+            i2c_dma_disable(BOARD_I2C_DMA_RX);
             I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);
             dev->state = I2C_STATE_IDLE;
             dev->error = I2C_Nack;
@@ -1086,11 +1108,11 @@ void i2c_er_isr(I2C_Control_t *dev) {
 
 void i2c_dma_tx_isr(I2C_Control_t *dev) {
     /* Clear DMA transfer complete flag */
-    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TCIF)) {
-        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TCIF);
+    if (dma_get_interrupt_flag(BOARD_I2C_DMA, BOARD_I2C_DMA_TX, DMA_TCIF)) {
+        dma_clear_interrupt_flags(BOARD_I2C_DMA, BOARD_I2C_DMA_TX, DMA_TCIF);
         
         /* Disable DMA channel */
-        dma_disable_channel(I2C1_DMA, I2C1_DMA_TX_CH);
+        i2c_dma_disable(BOARD_I2C_DMA_TX);
         
         /* Wait for BTF (byte transfer finished) before STOP */
         while (!(I2C_SR1(dev->device) & I2C_SR1_BTF));
@@ -1110,9 +1132,9 @@ void i2c_dma_tx_isr(I2C_Control_t *dev) {
     }
     
     /* Check for DMA error */
-    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TEIF)) {
-        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_TX_CH, DMA_TEIF);
-        dma_disable_channel(I2C1_DMA, I2C1_DMA_TX_CH);
+    if (dma_get_interrupt_flag(BOARD_I2C_DMA, BOARD_I2C_DMA_TX, DMA_TEIF)) {
+        dma_clear_interrupt_flags(BOARD_I2C_DMA, BOARD_I2C_DMA_TX, DMA_TEIF);
+        i2c_dma_disable(BOARD_I2C_DMA_TX);
         
         i2c_send_stop(dev->device);
         I2C_CR2(dev->device) &= ~I2C_CR2_DMAEN;
@@ -1128,11 +1150,11 @@ void i2c_dma_tx_isr(I2C_Control_t *dev) {
 
 void i2c_dma_rx_isr(I2C_Control_t *dev) {
     /* Clear DMA transfer complete flag */
-    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TCIF)) {
-        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TCIF);
+    if (dma_get_interrupt_flag(BOARD_I2C_DMA, BOARD_I2C_DMA_RX, DMA_TCIF)) {
+        dma_clear_interrupt_flags(BOARD_I2C_DMA, BOARD_I2C_DMA_RX, DMA_TCIF);
         
         /* Disable DMA channel */
-        dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+        i2c_dma_disable(BOARD_I2C_DMA_RX);
         
         /* Send STOP condition */
         i2c_send_stop(dev->device);
@@ -1149,9 +1171,9 @@ void i2c_dma_rx_isr(I2C_Control_t *dev) {
     }
     
     /* Check for DMA error */
-    if (dma_get_interrupt_flag(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TEIF)) {
-        dma_clear_interrupt_flags(I2C1_DMA, I2C1_DMA_RX_CH, DMA_TEIF);
-        dma_disable_channel(I2C1_DMA, I2C1_DMA_RX_CH);
+    if (dma_get_interrupt_flag(BOARD_I2C_DMA, BOARD_I2C_DMA_RX, DMA_TEIF)) {
+        dma_clear_interrupt_flags(BOARD_I2C_DMA, BOARD_I2C_DMA_RX, DMA_TEIF);
+        i2c_dma_disable(BOARD_I2C_DMA_RX);
         
         i2c_send_stop(dev->device);
         I2C_CR2(dev->device) &= ~(I2C_CR2_DMAEN | I2C_CR2_LAST);

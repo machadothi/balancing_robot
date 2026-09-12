@@ -52,8 +52,8 @@ if(NOT BOARD IN_LIST BOARDS)
     message(FATAL_ERROR "Unknown BOARD '${BOARD}'. Valid boards: ${BOARDS}")
 endif()
 
-# Sets MCU_*, LIBOPENCM3_*, LINKER_SCRIPT, CPU_FLAGS, FREERTOS_*,
-# SYS_CLOCK_HZ, BOARD_SOURCE and BOARD_DEFAULT_* for the options below
+# Sets MCU_*, LIBOPENCM3_*, LINKER_SCRIPT, CPU_FLAGS, FREERTOS_*, SYS_CLOCK_HZ,
+# BOARD_SOURCE, BOARD_INCLUDE_DIR, MOTOR_SOURCE and BOARD_DEFAULT_* (see below)
 include(${CMAKE_SOURCE_DIR}/cmake/boards/${BOARD}.cmake)
 
 # =============================================================================
@@ -88,13 +88,6 @@ cmake_dependent_option(AT_CMD_PID_TOGGLE "AT+PIDON/PIDOFF/PID commands" ON "NOT 
 cmake_dependent_option(LOG_ENABLED "Logging over UART (~300 bytes stack)" OFF "NOT APP_BLINK_ONLY" OFF)
 # Verbose fault output needs an initialized UART
 cmake_dependent_option(FAULT_HANDLERS_VERBOSE "Print fault messages over UART" ON "NOT APP_BLINK_ONLY" OFF)
-
-if(BOARD STREQUAL "f407" AND NOT APP_BLINK_ONLY)
-    message(FATAL_ERROR
-        "The F407 drivers (UART, I2C, PWM) are not ported yet.\n"
-        "Configure with -DAPP_BLINK_ONLY=ON."
-    )
-endif()
 
 configure_file(${SRC_DIR}/app_config.h.in ${GENERATED_DIR}/app_config.h)
 
@@ -198,7 +191,7 @@ if(NOT APP_BLINK_ONLY)
         ${SRC_DIR}/filter/complementary.c
         ${SRC_DIR}/imu/imu.c
         ${SRC_DIR}/imu/mpu6050.c
-        ${SRC_DIR}/motor/motor.c
+        ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
     )
 endif()
@@ -211,6 +204,7 @@ add_executable(${PROJECT_NAME}.elf ${APP_SOURCES})
 
 target_include_directories(${PROJECT_NAME}.elf PRIVATE
     ${SRC_DIR}
+    ${BOARD_INCLUDE_DIR}
     ${GENERATED_DIR}
     ${LIBOPENCM3_DIR}/include
 )

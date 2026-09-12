@@ -5,7 +5,7 @@
  * Full-duplex UART with interrupt-driven RX and queue-based TX.
  * 
  * RX Flow:
- *   1. Character received -> USART2 RX interrupt fires
+ *   1. Character received -> console UART RX interrupt fires
  *   2. ISR stores character in ring buffer
  *   3. On CR/LF, complete line is queued to uart_rxq
  *   4. uart_rx_task processes lines and invokes callback
@@ -34,6 +34,8 @@
 #include <semphr.h>
 
 #include "config.h"
+#include "board_config.h"
+#include "drivers/gpio_compat.h"
 #include "drivers/uart.h"
 
 /* ==========================================================================
@@ -71,25 +73,23 @@ static SemaphoreHandle_t tx_mutex = NULL;
 
 void uart_init(void) {
     /* Enable clocks */
-    rcc_periph_clock_enable(RCC_GPIOA);
-    rcc_periph_clock_enable(RCC_USART2);
+    rcc_periph_clock_enable(BOARD_UART_PORT_RCC);
+    rcc_periph_clock_enable(BOARD_UART_RCC);
+#if defined(STM32F1)
     rcc_periph_clock_enable(RCC_AFIO);
+#endif // defined(STM32F1)
 
-    /* Configure TX pin (PA2) */
-    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_50_MHZ,
-                  GPIO_CNF_OUTPUT_ALTFN_PUSHPULL, GPIO_USART2_TX);
-
-    /* Configure RX pin (PA3) */
-    gpio_set_mode(GPIOA, GPIO_MODE_INPUT,
-                  GPIO_CNF_INPUT_FLOAT, GPIO_USART2_RX);
+    /* Configure TX and RX pins */
+    gpio_compat_af_output(BOARD_UART_PORT, BOARD_UART_TX_PIN, BOARD_UART_AF, false);
+    gpio_compat_af_input(BOARD_UART_PORT, BOARD_UART_RX_PIN, BOARD_UART_AF);
 
     /* Configure USART */
-    usart_set_baudrate(USART2, UART_BAUDRATE);
-    usart_set_databits(USART2, 8);
-    usart_set_stopbits(USART2, USART_STOPBITS_1);
-    usart_set_parity(USART2, USART_PARITY_NONE);
-    usart_set_flow_control(USART2, USART_FLOWCONTROL_NONE);
-    usart_set_mode(USART2, USART_MODE_TX_RX);
+    usart_set_baudrate(BOARD_UART, UART_BAUDRATE);
+    usart_set_databits(BOARD_UART, 8);
+    usart_set_stopbits(BOARD_UART, USART_STOPBITS_1);
+    usart_set_parity(BOARD_UART, USART_PARITY_NONE);
+    usart_set_flow_control(BOARD_UART, USART_FLOWCONTROL_NONE);
+    usart_set_mode(BOARD_UART, USART_MODE_TX_RX);
 
     /* Create queues BEFORE enabling interrupts */
     uart_txq = xQueueCreate(UART_TX_QUEUE_SIZE, sizeof(char));
@@ -100,12 +100,12 @@ void uart_init(void) {
     xSemaphoreGive(tx_mutex);  /* Start in unlocked state */
 
     /* Enable USART first (needed for TX) */
-    usart_enable(USART2);
+    usart_enable(BOARD_UART);
 
     /* Enable RX interrupt AFTER queues are created */
-    usart_enable_rx_interrupt(USART2);
-    nvic_set_priority(NVIC_USART2_IRQ, 0xC0);  /* Lower priority than DMA */
-    nvic_enable_irq(NVIC_USART2_IRQ);
+    usart_enable_rx_interrupt(BOARD_UART);
+    nvic_set_priority(BOARD_UART_IRQ, 0xC0);  /* Lower priority than DMA */
+    nvic_enable_irq(BOARD_UART_IRQ);
 }
 
 void uart_peripheral_setup(void) {
@@ -235,21 +235,21 @@ void uart_rx_isr(void) {
     BaseType_t higher_priority_woken = pdFALSE;
     
     /* Check if data is available */
-    if (usart_get_flag(USART2, USART_SR_RXNE)) {
-        char ch = (char)usart_recv(USART2);
+    if (usart_get_flag(BOARD_UART, USART_SR_RXNE)) {
+        char ch = (char)usart_recv(BOARD_UART);
         
 #if UART_ECHO_ENABLED
         /* Echo received character */
-        while (!usart_get_flag(USART2, USART_SR_TXE));
-        usart_send(USART2, ch);
+        while (!usart_get_flag(BOARD_UART, USART_SR_TXE));
+        usart_send(BOARD_UART, ch);
 #endif
         
         /* Handle line terminator */
         if (ch == '\r' || ch == '\n') {
 #if UART_ECHO_ENABLED
             /* Echo newline */
-            while (!usart_get_flag(USART2, USART_SR_TXE));
-            usart_send(USART2, '\n');
+            while (!usart_get_flag(BOARD_UART, USART_SR_TXE));
+            usart_send(BOARD_UART, '\n');
 #endif
             
             if (rx_line_pos > 0) {
@@ -276,8 +276,8 @@ void uart_rx_isr(void) {
     }
     
     /* Clear overrun error if set */
-    if (usart_get_flag(USART2, USART_SR_ORE)) {
-        (void)usart_recv(USART2);  /* Clear by reading */
+    if (usart_get_flag(BOARD_UART, USART_SR_ORE)) {
+        (void)usart_recv(BOARD_UART);  /* Clear by reading */
     }
     
     portYIELD_FROM_ISR(higher_priority_woken);
@@ -293,10 +293,10 @@ void uart_tx_task(void *args) {
 
     for (;;) {
         if (xQueueReceive(uart_txq, &ch, pdMS_TO_TICKS(500)) == pdPASS) {
-            while (!usart_get_flag(USART2, USART_SR_TXE)) {
+            while (!usart_get_flag(BOARD_UART, USART_SR_TXE)) {
                 taskYIELD();
             }
-            usart_send(USART2, ch);
+            usart_send(BOARD_UART, ch);
         }
     }
 }

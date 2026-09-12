@@ -14,7 +14,7 @@ A self-balancing robot project using STM32 with FreeRTOS. The robot uses an MPU6
 
 ## Hardware
 
-- STM32F103C8T6 (Blue Pill), or the Hiwonder ROS Robot Control Board (STM32F407VET6, LED heartbeat only so far, see [docs/PIN_CONNECTIONS_F407.md](docs/PIN_CONNECTIONS_F407.md))
+- STM32F103C8T6 (Blue Pill), or the Hiwonder ROS Robot Control Board (STM32F407VET6, see [docs/PIN_CONNECTIONS_F407.md](docs/PIN_CONNECTIONS_F407.md))
 - MPU6050 IMU module
 - TB6612FNG motor driver
 - DC motors with encoders

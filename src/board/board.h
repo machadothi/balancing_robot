@@ -8,7 +8,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /** Configure the system clock tree (HSE + PLL) */
 void board_clock_init(void);
@@ -21,6 +21,6 @@ void board_led_toggle(void);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* BOARD_H */
+#endif // BOARD_H

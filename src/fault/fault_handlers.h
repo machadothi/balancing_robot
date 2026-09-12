@@ -28,6 +28,6 @@ void vApplicationMallocFailedHook(void);
  * @brief FreeRTOS stack overflow hook
  */
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName);
-#endif
+#endif // tskKERNEL_VERSION_MAJOR < 10
 
 #endif /* FAULT_HANDLERS_H */

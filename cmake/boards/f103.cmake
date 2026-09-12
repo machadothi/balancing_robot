@@ -10,6 +10,8 @@ set(LIBOPENCM3_LIB ${LIBOPENCM3_DIR}/lib/libopencm3_stm32f1.a)
 set(LINKER_SCRIPT ${SRC_DIR}/stm32f103c8t6.ld)
 set(CPU_FLAGS -mthumb -mcpu=cortex-m3 -msoft-float -mfix-cortex-m3-ldrd)
 set(BOARD_SOURCE ${SRC_DIR}/board/board_f103.c)
+set(BOARD_INCLUDE_DIR ${SRC_DIR}/board/f103)
+set(MOTOR_SOURCE ${SRC_DIR}/motor/motor.c)
 
 set(SYS_CLOCK_HZ 72000000)
 

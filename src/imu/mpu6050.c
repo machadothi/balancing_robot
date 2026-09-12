@@ -6,6 +6,8 @@
 #include "semphr.h"
 
 #include "mpu6050.h"
+#include "board_config.h"
+#include "drivers/gpio_compat.h"
 #include "drivers/i2c.h"
 #include "log/log.h"
 
@@ -107,7 +109,7 @@ initialize(void) {
     }
     
     /* Configure I2C (polling mode for initialization commands) */
-    I2C_Fails_t i2c_status = i2c_configure(&i2c, I2C1, MPU6050_DEFAULT_ADDRESS, 1000);
+    I2C_Fails_t i2c_status = i2c_configure(&i2c, BOARD_I2C, MPU6050_DEFAULT_ADDRESS, 1000);
     if(i2c_status) {
         log_message_with_error(ERROR, MPU6050, "Fail to setup I2C",
           getIMUErrorText(IMU_COMM_BUS_ERROR));
@@ -158,23 +160,24 @@ initialize(void) {
 // -----------------------------------------------------------------------------
 
 void setup_reset_pin(void) {
+#ifdef BOARD_IMU_RESET_PORT
     log_message(INFO, MPU6050, "Setting up reset pin.");
-    /* Enable GPIOA clock. */
-    rcc_periph_clock_enable(RCC_GPIOA);
+    rcc_periph_clock_enable(BOARD_IMU_RESET_PORT_RCC);
 
-    /* Set GPIO10 (in GPIO port A) to 'output push-pull'. */
-    gpio_set_mode(GPIOA,GPIO_MODE_OUTPUT_2_MHZ,
-              GPIO_CNF_OUTPUT_PUSHPULL,GPIO10);
+    gpio_compat_output(BOARD_IMU_RESET_PORT, BOARD_IMU_RESET_PIN, false);
+#endif // BOARD_IMU_RESET_PORT
 }
 
 // -----------------------------------------------------------------------------
 
 void hard_reset(void) {
+#ifdef BOARD_IMU_RESET_PORT
     log_message(INFO, MPU6050, "Hard reseting.");
 
-    gpio_clear(GPIOA,GPIO10);
+    gpio_clear(BOARD_IMU_RESET_PORT, BOARD_IMU_RESET_PIN);
     vTaskDelay(pdMS_TO_TICKS(500));
-    gpio_set(GPIOA,GPIO10); // enable ON
+    gpio_set(BOARD_IMU_RESET_PORT, BOARD_IMU_RESET_PIN); // enable ON
+#endif // BOARD_IMU_RESET_PORT
 }
 
 // -----------------------------------------------------------------------------
