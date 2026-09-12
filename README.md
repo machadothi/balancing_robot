@@ -1,6 +1,6 @@
 # Balancing Robot
 
-A self-balancing robot project using STM32 Blue Pill (STM32F103C8T6) with FreeRTOS. The robot uses an MPU6050 IMU with sensor fusion filters for stable angle estimation.
+A self-balancing robot project using STM32 with FreeRTOS. The robot uses an MPU6050 IMU with sensor fusion filters for stable angle estimation. It runs on the STM32 Blue Pill (STM32F103C8T6); a port to the Hiwonder ROS Robot Control Board (STM32F407VET6) is in progress.
 
 ![Balancing Robot](img/balancing_robot.png)
 
@@ -14,7 +14,7 @@ A self-balancing robot project using STM32 Blue Pill (STM32F103C8T6) with FreeRT
 
 ## Hardware
 
-- STM32F103C8T6 (Blue Pill)
+- STM32F103C8T6 (Blue Pill), or the Hiwonder ROS Robot Control Board (STM32F407VET6, LED heartbeat only so far, see [docs/PIN_CONNECTIONS_F407.md](docs/PIN_CONNECTIONS_F407.md))
 - MPU6050 IMU module
 - TB6612FNG motor driver
 - DC motors with encoders
@@ -61,10 +61,11 @@ git clone https://github.com/machadothi/balancing-robot.git
 cd balancing-robot
 
 # Run setup script (clones dependencies, builds everything)
-./scripts/setup.sh
+./scripts/setup.sh              # Blue Pill
+BOARD=f407 ./scripts/setup.sh   # Hiwonder STM32F407 board
 
 # Flash to STM32
-cd build && make flash
+cmake --build --preset f103 --target flash
 ```
 
 ### Manual Build
@@ -74,12 +75,11 @@ cd build && make flash
 git submodule update --init --recursive
 
 # Build libopencm3
-cd lib/libopencm3 && make TARGETS=stm32/f1 && cd ../..
+cd lib/libopencm3 && make TARGETS="stm32/f1 stm32/f4" && cd ../..
 
-# Build with CMake
-mkdir build && cd build
-cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/arm-none-eabi.cmake ..
-make
+# Build with CMake (preset f103 or f407)
+cmake --preset f103
+cmake --build --preset f103
 ```
 
 ## Kalman Filter Performance

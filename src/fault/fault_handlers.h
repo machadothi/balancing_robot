@@ -22,9 +22,12 @@ void hard_fault_handler(void);
  */
 void vApplicationMallocFailedHook(void);
 
+/* FreeRTOS V10+ already declares the stack overflow hook in task.h */
+#if tskKERNEL_VERSION_MAJOR < 10
 /**
  * @brief FreeRTOS stack overflow hook
  */
 void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName);
+#endif
 
 #endif /* FAULT_HANDLERS_H */

@@ -36,6 +36,7 @@
 *.i*86
 *.x86_64
 *.hex
+!vendor/**/*.hex
 
 # Debug files
 *.dSYM/
@@ -54,8 +55,10 @@ dkms.conf
 
 # Build folder
 build/
+build-*/
 
 # CMake
+CMakeUserPresets.json
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake

@@ -11,10 +11,10 @@
  * @date 2024
  */
 
-#include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/usart.h>
 
 #include "config.h"
+#include "board/board.h"
 #include "fault/fault_handlers.h"
 
 /* ==========================================================================
@@ -38,7 +38,7 @@ static void fault_puts(const char *s) {
  */
 static void fault_blink_forever(volatile int delay) {
     for (;;) {
-        gpio_toggle(GPIOC, GPIO13);
+        board_led_toggle();
         for (volatile int i = 0; i < delay; i++);
     }
 }

@@ -1,0 +1,29 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-${presetName}",
+      "toolchainFile": "${sourceDir}/cmake/arm-none-eabi.cmake"
+    },
+    {
+      "name": "f103",
+      "inherits": "base",
+      "displayName": "Blue Pill (STM32F103C8T6)",
+      "cacheVariables": { "BOARD": "f103" }
+    },
+    {
+      "name": "f407",
+      "inherits": "base",
+      "displayName": "Hiwonder ROS Robot Control Board (STM32F407VET6)",
+      "cacheVariables": { "BOARD": "f407" }
+    }
+  ],
+  "buildPresets": [
+    { "name": "f103", "configurePreset": "f103" },
+    { "name": "f407", "configurePreset": "f407" }
+  ]
+}

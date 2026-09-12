@@ -4,12 +4,8 @@
  * 
  * Provides LED initialization and heartbeat task for system status indication.
  * 
- * Hardware configuration:
- * - PC13: Blue Pill onboard LED (active low)
- * - PB12: External Green LED
- * - PB13: External Blue LED
- * - PB14: External Red LED
- * 
+ * LED pins are board specific, see src/board/board_<board>.c.
+ *
  * @author Thiago Cunha
  * @date 2024
  */

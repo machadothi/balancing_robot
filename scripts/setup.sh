@@ -33,7 +33,9 @@ PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 LIB_DIR="${PROJECT_ROOT}/lib"
 LIBOPENCM3_DIR="${LIB_DIR}/libopencm3"
 FREERTOS_DIR="${LIB_DIR}/FreeRTOS-Kernel"
-BUILD_DIR="${PROJECT_ROOT}/build"
+# Board to build (CMake preset name): f103 or f407
+BOARD="${BOARD:-f103}"
+BUILD_DIR="${PROJECT_ROOT}/build-${BOARD}"
 
 # =============================================================================
 # Helper Functions
@@ -78,8 +80,12 @@ show_help() {
     echo "  --deps-only Initialize submodules and build dependencies only"
     echo "  --help      Show this help message"
     echo ""
+    echo "Environment:"
+    echo "  BOARD=f103|f407 Board to build (default: f103)"
+    echo ""
     echo "Examples:"
     echo "  $0              # Full setup and build"
+    echo "  BOARD=f407 $0   # Build for the Hiwonder STM32F407 board"
     echo "  $0 --clean      # Clean everything and rebuild"
     echo "  $0 --deps-only  # Just setup dependencies"
 }
@@ -104,6 +110,16 @@ check_tools() {
         echo "  (flashing will be available)"
     else
         print_warning "st-flash not found - flashing will not be available"
+    fi
+
+    if check_command "stm32flash"; then
+        echo "  (serial bootloader flashing will be available)"
+    else
+        print_warning "stm32flash not found - 'flash-serial' will not be available (sudo apt install stm32flash)"
+    fi
+
+    if ! command -v ccmake &> /dev/null; then
+        print_warning "ccmake not found - optional build option editor (sudo apt install cmake-curses-gui)"
     fi
     
     if [ $missing -eq 1 ]; then
@@ -192,15 +208,15 @@ build_libopencm3() {
     cd "$LIBOPENCM3_DIR"
     
     # Check if already built
-    if [ -f "lib/libopencm3_stm32f1.a" ] && [ "$1" != "--rebuild" ]; then
+    if [ -f "lib/libopencm3_stm32f1.a" ] && [ -f "lib/libopencm3_stm32f4.a" ] && [ "$1" != "--rebuild" ]; then
         print_success "libopencm3 already built (use --rebuild to force)"
         return 0
     fi
-    
-    echo "Building libopencm3 for STM32F1..."
-    make TARGETS=stm32/f1 -j$(nproc)
-    
-    if [ -f "lib/libopencm3_stm32f1.a" ]; then
+
+    echo "Building libopencm3 for STM32F1 and STM32F4..."
+    make TARGETS="stm32/f1 stm32/f4" -j$(nproc)
+
+    if [ -f "lib/libopencm3_stm32f1.a" ] && [ -f "lib/libopencm3_stm32f4.a" ]; then
         print_success "libopencm3 built successfully!"
     else
         print_error "libopencm3 build failed!"
@@ -216,33 +232,29 @@ build_project() {
     print_header "Building Balancing Robot"
     
     cd "$PROJECT_ROOT"
-    
-    # Create build directory
-    mkdir -p "$BUILD_DIR"
-    cd "$BUILD_DIR"
-    
+
     # Configure with CMake
-    echo "Configuring with CMake..."
-    cmake -DCMAKE_TOOLCHAIN_FILE=../cmake/arm-none-eabi.cmake ..
-    
+    echo "Configuring with CMake (preset: ${BOARD})..."
+    cmake --preset "$BOARD"
+
     # Build
     echo ""
     echo "Building..."
-    make -j$(nproc)
-    
+    cmake --build --preset "$BOARD" -j$(nproc)
+
     # Check if build succeeded
-    if [ -f "balancing-robot.elf" ]; then
+    if [ -f "$BUILD_DIR/balancing-robot.elf" ]; then
         echo ""
         print_success "Build successful!"
         echo ""
         echo "Output files:"
-        echo "  - build/balancing-robot.elf"
-        echo "  - build/balancing-robot.bin"
-        echo "  - build/balancing-robot.hex"
+        echo "  - build-${BOARD}/balancing-robot.elf"
+        echo "  - build-${BOARD}/balancing-robot.bin"
+        echo "  - build-${BOARD}/balancing-robot.hex"
         echo ""
         echo "To flash:"
-        echo "  cd build && make flash"
-        echo "  or: st-flash write build/balancing-robot.bin 0x8000000"
+        echo "  cmake --build --preset ${BOARD} --target flash"
+        echo "  or: st-flash write build-${BOARD}/balancing-robot.bin 0x8000000"
     else
         print_error "Build failed!"
         exit 1
