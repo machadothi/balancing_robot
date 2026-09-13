@@ -15,15 +15,19 @@ set(MOTOR_SOURCE ${SRC_DIR}/motor/motor.c)
 
 set(SYS_CLOCK_HZ 72000000)
 
-# Vendored FreeRTOS V9, Cortex-M3 port
+# FreeRTOS-Kernel submodule (V10.4.3 LTS), Cortex-M3 port
+set(FREERTOS_KERNEL_DIR ${CMAKE_SOURCE_DIR}/lib/FreeRTOS-Kernel)
 set(FREERTOS_SOURCES
-    ${SRC_DIR}/rtos/tasks.c
-    ${SRC_DIR}/rtos/queue.c
-    ${SRC_DIR}/rtos/list.c
-    ${SRC_DIR}/rtos/heap_4.c
-    ${SRC_DIR}/rtos/port.c
+    ${FREERTOS_KERNEL_DIR}/tasks.c
+    ${FREERTOS_KERNEL_DIR}/queue.c
+    ${FREERTOS_KERNEL_DIR}/list.c
+    ${FREERTOS_KERNEL_DIR}/portable/MemMang/heap_4.c
+    ${FREERTOS_KERNEL_DIR}/portable/GCC/ARM_CM3/port.c
 )
-set(FREERTOS_INCLUDE_DIRS ${SRC_DIR}/rtos)
+set(FREERTOS_INCLUDE_DIRS
+    ${FREERTOS_KERNEL_DIR}/include
+    ${FREERTOS_KERNEL_DIR}/portable/GCC/ARM_CM3
+)
 
 set(BOARD_DEFAULT_HEAP_SIZE 12288)
 set(BOARD_DEFAULT_APP_BLINK_ONLY OFF)

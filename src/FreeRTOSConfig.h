@@ -138,4 +138,4 @@ interrupts, stops the motors, reports file:line and halts. */
 void vAssertCalled( const char *file, int line );
 #define configASSERT( x )	if( ( x ) == 0 ) { vAssertCalled( __FILE__, __LINE__ ); }
 
-#endif /* FREERTOS_CONFIG_H */
+#endif // FREERTOS_CONFIG_H

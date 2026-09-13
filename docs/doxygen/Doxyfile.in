@@ -8,7 +8,6 @@ OUTPUT_DIRECTORY       = @DOXYGEN_OUTPUT_DIR@
 INPUT                  = @CMAKE_SOURCE_DIR@/src @GENERATED_DIR@
 FILE_PATTERNS          = *.c *.h
 RECURSIVE              = YES
-EXCLUDE                = @CMAKE_SOURCE_DIR@/src/rtos
 
 OPTIMIZE_OUTPUT_FOR_C  = YES
 EXTRACT_ALL            = YES

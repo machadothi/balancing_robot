@@ -104,7 +104,6 @@ endif()
 
 # Driver features: forced OFF when the drivers are not built
 cmake_dependent_option(UART_ECHO_ENABLED "Echo command lines on the USB console" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(I2C_DMA_ENABLED "I2C DMA transfers (required for IMU)" ON "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(I2C_BUS_RECOVERY "I2C bus recovery" ON "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(AT_CMD_HELP_ENABLED "AT+HELP command" OFF "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(AT_CMD_ALL_QUERY "AT+ALL? bulk query" OFF "NOT APP_BLINK_ONLY" OFF)
@@ -180,7 +179,7 @@ add_compile_definitions(${MCU_FAMILY})
 # =============================================================================
 
 add_library(freertos STATIC ${FREERTOS_SOURCES})
-# NOTE: src/rtos/opencm3.c is linked with app (not library) to ensure interrupt
+# NOTE: src/rtos_glue/opencm3.c is linked with app (not library) to ensure interrupt
 # handlers are included - static library would drop unreferenced symbols
 
 target_include_directories(freertos PUBLIC
@@ -202,7 +201,7 @@ set(APP_SOURCES
     ${SRC_DIR}/log/log.c
     ${BOARD_SOURCE}
     # FreeRTOS interrupt handlers - must be in app to ensure linkage
-    ${SRC_DIR}/rtos/opencm3.c
+    ${SRC_DIR}/rtos_glue/opencm3.c
 )
 
 if(NOT APP_BLINK_ONLY)
@@ -219,6 +218,7 @@ if(NOT APP_BLINK_ONLY)
         ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
         ${SRC_DIR}/telemetry/telemetry.c
+        ${SRC_DIR}/util/fmt.c
     )
 endif()
 

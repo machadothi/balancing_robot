@@ -18,7 +18,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Kalman Filter
@@ -113,6 +113,6 @@ float complementary_update(ComplementaryFilter_t *cf, float gyro_rate, float acc
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* FILTER_H */
+#endif // FILTER_H

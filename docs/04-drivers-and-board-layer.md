@@ -13,11 +13,11 @@ UART, PWM and encoder paths work in detail.
 | Per-board build selection | [cmake/boards/](../cmake/boards) |
 | GPIO API compatibility | [gpio_compat.h](../src/drivers/gpio_compat.h) |
 | Interrupt handler wiring | [interrupts.c](../src/interrupts.c) |
-| I2C (polling, IT, DMA) | [i2c.c](../src/drivers/i2c.c): [`i2c_read_reg_dma()`](../src/drivers/i2c.c#L909), [`i2c_dma_rx_isr()`](../src/drivers/i2c.c#L1187) |
+| I2C (polling, IT, DMA) | [i2c.c](../src/drivers/i2c.c): [`i2c_read_reg_dma()`](../src/drivers/i2c.c#L903), [`i2c_dma_rx_isr()`](../src/drivers/i2c.c#L1181) |
 | UART consoles (USB, Bluetooth) | [uart.c](../src/drivers/uart.c): `uart_write()`, `uart_isr()`, `uart_rx_task()` |
 | Telemetry logger | [telemetry.c](../src/telemetry/telemetry.c) |
 | PWM | [`pwm_timer_init()`](../src/drivers/pwm.c#L141) |
-| Motor drivers | [motor.c](../src/motor/motor.c) (TB6612), [motor_hiwonder.c](../src/motor/motor_hiwonder.c#L68) |
+| Motor drivers | [motor.c](../src/motor/motor.c) (TB6612), [motor_hiwonder.c](../src/motor/motor_hiwonder.c#L65) |
 
 ## The board layer
 

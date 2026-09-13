@@ -12,8 +12,6 @@
 #include "drivers/i2c.h"
 #include "log/log.h"
 
-#define NO_OPT __attribute__((optimize("O0")))
-
 /* MPU6050 reads 14 bytes: AccX, AccY, AccZ, Temp, GyroX, GyroY, GyroZ (2 bytes each) */
 #define MPU6050_DATA_SIZE   14
 
@@ -27,35 +25,35 @@ static volatile bool dma_transfer_ok = false;   /* Transfer status */
 static volatile int16_t cached_acc_x, cached_acc_y, cached_acc_z;
 static volatile int16_t cached_gyro_x, cached_gyro_y, cached_gyro_z;
 
-IMU_t *get_mpu6050_imu(void) {
-    static IMU_t mpu6050_imu = {
-        .init = initialize,
-        .id = get_device_id,
+IMU_Driver_t *mpu6050_get_driver(void) {
+    static IMU_Driver_t mpu6050_imu = {
+        .init = mpu6050_init,
+        .id = mpu6050_get_device_id,
         .read_all = mpu6050_read_all_dma,
-        .acc_x = get_acceleration_x,
-        .acc_y = get_acceleration_y,
-        .acc_z = get_acceleration_z,
-        .gyro_x = get_rotation_x,
-        .gyro_y = get_rotation_y,
-        .gyro_z = get_rotation_z
+        .acc_x = mpu6050_get_acceleration_x,
+        .acc_y = mpu6050_get_acceleration_y,
+        .acc_z = mpu6050_get_acceleration_z,
+        .gyro_x = mpu6050_get_rotation_x,
+        .gyro_y = mpu6050_get_rotation_y,
+        .gyro_z = mpu6050_get_rotation_z
     };
     return &mpu6050_imu;
 }
 
 // -----------------------------------------------------------------------------
 
-static const char* getIMUErrorText(IMU_Fails_t error) {
+static const char* getIMUErrorText(IMU_Status_t error) {
     switch(error) {
-        case IMU_Ok:
-            return "IMU_Ok";
-        case IMU_Config_Error:
-            return "IMU_Config_Error";
+        case IMU_OK:
+            return "IMU_OK";
+        case IMU_CONFIG_ERROR:
+            return "IMU_CONFIG_ERROR";
         case IMU_COMM_BUS_ERROR:
             return "IMU_COMM_BUS_ERROR";
-        case IMU_Read_Timeout:
-            return "IMU_Read_Timeout";
-        case IMU_Busy_Timeout:
-            return "IMU_Busy_Timeout";
+        case IMU_READ_TIMEOUT:
+            return "IMU_READ_TIMEOUT";
+        case IMU_BUSY_TIMEOUT:
+            return "IMU_BUSY_TIMEOUT";
         default:
             return "Unknown error";
     }
@@ -94,25 +92,25 @@ static void mpu6050_dma_callback(I2C_Control_t *dev, I2C_Fails_t result) {
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-initialize(void) {
-    log_message(INFO, MPU6050, "Setting up MPU6050.");
+IMU_Status_t
+mpu6050_init(void) {
+    log_message(LOG_INFO, MPU6050, "Setting up MPU6050.");
 
     i2c_setup_peripheral();
-    setup_reset_pin();
-    hard_reset();
+    mpu6050_setup_reset_pin();
+    mpu6050_hard_reset();
     
     /* Create binary semaphore for DMA transfer synchronization */
     i2c_transfer_sem = xSemaphoreCreateBinary();
     if (i2c_transfer_sem == NULL) {
-        log_message(ERROR, MPU6050, "Failed to create I2C semaphore");
-        return IMU_Config_Error;
+        log_message(LOG_ERROR, MPU6050, "Failed to create I2C semaphore");
+        return IMU_CONFIG_ERROR;
     }
     
     /* Configure I2C (polling mode for initialization commands) */
     I2C_Fails_t i2c_status = i2c_configure(&i2c, BOARD_I2C, MPU6050_DEFAULT_ADDRESS, 1000);
     if(i2c_status) {
-        log_message_with_error(ERROR, MPU6050, "Fail to setup I2C",
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to setup I2C",
           getIMUErrorText(IMU_COMM_BUS_ERROR));
         
         return IMU_COMM_BUS_ERROR;
@@ -123,56 +121,56 @@ initialize(void) {
     i2c_init_dma(&i2c, 11);
     i2c.callback = mpu6050_dma_callback;
 
-    log_message(DEBUG, I2C_BUS,"Setting clock source!");
-    IMU_Fails_t status = set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
+    log_message(LOG_DEBUG, I2C_BUS,"Setting clock source!");
+    IMU_Status_t status = mpu6050_set_clock_source(MPU6050_CLOCK_PLL_XGYRO);
     if(status) {
-        log_message_with_error(ERROR, MPU6050, "Fail to set clock source. Error: ",
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to set clock source. Error: ",
           getIMUErrorText(status));
         
-        return IMU_Config_Error;
+        return IMU_CONFIG_ERROR;
     }
 
-    log_message(DEBUG, I2C_BUS,"Setting gyro scale range!");
-    status = set_full_scale_gyro_range(MPU6050_GYRO_FS_250);
+    log_message(LOG_DEBUG, I2C_BUS,"Setting gyro scale range!");
+    status = mpu6050_set_full_scale_gyro_range(MPU6050_GYRO_FS_250);
     if(status){
-        log_message_with_error(ERROR, MPU6050, "Fail to set scale gyro range. Err: ", 
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to set scale gyro range. Err: ", 
           getIMUErrorText(status));
-        return IMU_Config_Error;
+        return IMU_CONFIG_ERROR;
     }
 
-    log_message(DEBUG, I2C_BUS,"Setting accelerometer scale range!");
-    status = set_full_scale_accel_range(MPU6050_ACCEL_FS_2);
+    log_message(LOG_DEBUG, I2C_BUS,"Setting accelerometer scale range!");
+    status = mpu6050_set_full_scale_accel_range(MPU6050_ACCEL_FS_2);
     if(status){
-        log_message_with_error(ERROR, MPU6050, "Fail to set scale accel range. Err: ", 
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to set scale accel range. Err: ", 
           getIMUErrorText(status));
-        return IMU_Config_Error;
+        return IMU_CONFIG_ERROR;
     }
 
     /* Without it, 50-250 Hz motor vibration aliases into the 100 Hz samples */
-    log_message(DEBUG, I2C_BUS,"Setting digital low-pass filter!");
-    status = set_dlpf_mode(IMU_DLPF_MODE);
+    log_message(LOG_DEBUG, I2C_BUS,"Setting digital low-pass filter!");
+    status = mpu6050_set_dlpf_mode(IMU_DLPF_MODE);
     if(status){
-        log_message_with_error(ERROR, MPU6050, "Fail to set low-pass filter. Err: ",
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to set low-pass filter. Err: ",
           getIMUErrorText(status));
-        return IMU_Config_Error;
+        return IMU_CONFIG_ERROR;
     }
 
-    log_message(DEBUG, I2C_BUS,"Disabling sleep enable!");
-    status = set_sleep_enabled(false);
+    log_message(LOG_DEBUG, I2C_BUS,"Disabling sleep enable!");
+    status = mpu6050_set_sleep_enabled(false);
     if(status){
-        log_message_with_error(ERROR, MPU6050, "Fail to set sleep enable. Err: ", 
+        log_message_with_error(LOG_ERROR, MPU6050, "Fail to set sleep enable. Err: ", 
           getIMUErrorText(status));
-        return IMU_Config_Error;
+        return IMU_CONFIG_ERROR;
     }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-void setup_reset_pin(void) {
+void mpu6050_setup_reset_pin(void) {
 #ifdef BOARD_IMU_RESET_PORT
-    log_message(INFO, MPU6050, "Setting up reset pin.");
+    log_message(LOG_INFO, MPU6050, "Setting up reset pin.");
     rcc_periph_clock_enable(BOARD_IMU_RESET_PORT_RCC);
 
     gpio_compat_output(BOARD_IMU_RESET_PORT, BOARD_IMU_RESET_PIN, false);
@@ -181,9 +179,9 @@ void setup_reset_pin(void) {
 
 // -----------------------------------------------------------------------------
 
-void hard_reset(void) {
+void mpu6050_hard_reset(void) {
 #ifdef BOARD_IMU_RESET_PORT
-    log_message(INFO, MPU6050, "Hard reseting.");
+    log_message(LOG_INFO, MPU6050, "Hard reseting.");
 
     gpio_clear(BOARD_IMU_RESET_PORT, BOARD_IMU_RESET_PIN);
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -194,14 +192,14 @@ void hard_reset(void) {
 // -----------------------------------------------------------------------------
 
 bool
-test_connection(void) {
-    return get_device_id() == MPU6050_DEFAULT_ADDRESS;
+mpu6050_test_connection(void) {
+    return mpu6050_get_device_id() == MPU6050_DEFAULT_ADDRESS;
 }
 
 // -----------------------------------------------------------------------------
 
-uint8_t NO_OPT
-get_device_id(void) {
+uint8_t
+mpu6050_get_device_id(void) {
     uint8_t buffer = 0;
     i2c_read_byte(&i2c, MPU6050_RA_WHO_AM_I, &buffer);
 
@@ -210,76 +208,76 @@ get_device_id(void) {
 
 // -----------------------------------------------------------------------------
 
-void set_device_id(uint8_t id) {
+void mpu6050_set_device_id(uint8_t id) {
     i2c_write_bits(&i2c, MPU6050_RA_WHO_AM_I, MPU6050_WHO_AM_I_BIT, MPU6050_WHO_AM_I_LENGTH, id);
 }
 
 // -----------------------------------------------------------------------------
 
-void NO_OPT
-soft_reset(void) {
+void
+mpu6050_soft_reset(void) {
     i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_DEVICE_RESET_BIT, true);
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-set_clock_source(uint8_t source) {
+IMU_Status_t
+mpu6050_set_clock_source(uint8_t source) {
 
     if(i2c_write_bits(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_CLKSEL_BIT, 
       MPU6050_PWR1_CLKSEL_LENGTH, source)) {
         return IMU_COMM_BUS_ERROR;
       }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-set_full_scale_gyro_range(uint8_t range) {
+IMU_Status_t
+mpu6050_set_full_scale_gyro_range(uint8_t range) {
     if(i2c_write_bits(&i2c, MPU6050_RA_GYRO_CONFIG, MPU6050_GCONFIG_FS_SEL_BIT, 
       MPU6050_GCONFIG_FS_SEL_LENGTH, range)) {
         return IMU_COMM_BUS_ERROR;
       }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-set_full_scale_accel_range(uint8_t range) {
+IMU_Status_t
+mpu6050_set_full_scale_accel_range(uint8_t range) {
     if(i2c_write_bits(&i2c, MPU6050_RA_ACCEL_CONFIG, MPU6050_ACONFIG_AFS_SEL_BIT, 
       MPU6050_ACONFIG_AFS_SEL_LENGTH, range)) {
         return IMU_COMM_BUS_ERROR;
       }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-set_dlpf_mode(uint8_t mode) {
+IMU_Status_t
+mpu6050_set_dlpf_mode(uint8_t mode) {
     if(i2c_write_bits(&i2c, MPU6050_RA_CONFIG, MPU6050_CFG_DLPF_CFG_BIT,
       MPU6050_CFG_DLPF_CFG_LENGTH, mode)) {
         return IMU_COMM_BUS_ERROR;
       }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-IMU_Fails_t NO_OPT
-set_sleep_enabled(bool enabled) {
+IMU_Status_t
+mpu6050_set_sleep_enabled(bool enabled) {
     if(i2c_write_bit(&i2c, MPU6050_RA_PWR_MGMT_1, MPU6050_PWR1_SLEEP_BIT, 
       enabled)) {
         return IMU_COMM_BUS_ERROR;
       }
 
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
@@ -290,9 +288,9 @@ set_sleep_enabled(bool enabled) {
  * Reads accelerometer (3 axes), temperature, and gyroscope (3 axes) in one
  * DMA transfer. Blocks until transfer completes or timeout.
  * 
- * @return IMU_Fails_t IMU_Ok on success, error code otherwise
+ * @return IMU_Status_t IMU_OK on success, error code otherwise
  */
-IMU_Fails_t NO_OPT
+IMU_Status_t
 mpu6050_read_all_dma(void) {
     /* Start DMA read of all 14 bytes starting from ACCEL_XOUT_H */
     I2C_Fails_t status = i2c_read_reg_dma(&i2c, MPU6050_RA_ACCEL_XOUT_H,
@@ -305,7 +303,7 @@ mpu6050_read_all_dma(void) {
     /* Wait for DMA transfer to complete (timeout 100ms) */
     if (xSemaphoreTake(i2c_transfer_sem, pdMS_TO_TICKS(100)) != pdTRUE) {
         i2c_abort(&i2c);
-        return IMU_Read_Timeout;
+        return IMU_READ_TIMEOUT;
     }
     
     /* Check transfer result */
@@ -313,41 +311,41 @@ mpu6050_read_all_dma(void) {
         return IMU_COMM_BUS_ERROR;
     }
     
-    return IMU_Ok;
+    return IMU_OK;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_acceleration_x(void) {
+int16_t mpu6050_get_acceleration_x(void) {
     return cached_acc_x;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_acceleration_y(void) {
+int16_t mpu6050_get_acceleration_y(void) {
     return cached_acc_y;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_acceleration_z(void) {
+int16_t mpu6050_get_acceleration_z(void) {
     return cached_acc_z;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_rotation_x(void) {
+int16_t mpu6050_get_rotation_x(void) {
     return cached_gyro_x;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_rotation_y(void) {
+int16_t mpu6050_get_rotation_y(void) {
     return cached_gyro_y;
 }
 
 // -----------------------------------------------------------------------------
 
-int16_t get_rotation_z(void) {
+int16_t mpu6050_get_rotation_z(void) {
     return cached_gyro_z;
 }

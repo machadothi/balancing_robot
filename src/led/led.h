@@ -15,7 +15,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Public Functions
@@ -40,6 +40,6 @@ void led_task(void *args);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* LED_H */
+#endif // LED_H

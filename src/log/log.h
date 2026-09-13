@@ -12,7 +12,7 @@
  *     .send = uart_puts
  * };
  * log_init(&driver);
- * log_message(INFO, IMU_TASK, "Sensor initialized");
+ * log_message(LOG_INFO, IMU_TASK, "Sensor initialized");
  * @endcode
  * 
  * @author Thiago Cunha
@@ -24,7 +24,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Type Definitions
@@ -58,14 +58,6 @@ typedef enum {
     LOG_FATAL,      /**< Fatal errors */
     LOG_OFF         /**< Disable all logging */
 } LogLevel_t;
-
-/* Legacy level names for backward compatibility */
-#define DEBUG   LOG_DEBUG
-#define INFO    LOG_INFO
-#define WARN    LOG_WARN
-#define ERROR   LOG_ERROR
-#define FATAL   LOG_FATAL
-#define OFF     LOG_OFF
 
 /**
  * @brief Log driver configuration
@@ -115,6 +107,6 @@ void log_message_with_int(LogLevel_t level, LogModule_t module,
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* LOG_H */
+#endif // LOG_H

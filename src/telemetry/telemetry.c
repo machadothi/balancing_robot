@@ -10,7 +10,7 @@
 #include <queue.h>
 
 #include "config.h"
-#include "cmd/at_cmd.h"
+#include "util/fmt.h"
 #include "drivers/uart.h"
 #include "telemetry/telemetry.h"
 
@@ -58,14 +58,14 @@ void telemetry_task(void *args) {
             "seq: %lu | t: %lu | acc_deg: %s | kalman: %s | comp: %s | tilt: %s"
             " | p: %s | i: %s | d: %s | out: %s | drops: %lu\r\n",
             (unsigned long)item.seq, (unsigned long)r->tick_ms,
-            at_format_fixed(v[0], sizeof(v[0]), r->acc_deg, 2),
-            at_format_fixed(v[1], sizeof(v[1]), r->kalman, 2),
-            at_format_fixed(v[2], sizeof(v[2]), r->comp, 2),
-            at_format_fixed(v[3], sizeof(v[3]), r->tilt, 2),
-            at_format_fixed(v[4], sizeof(v[4]), r->p, 2),
-            at_format_fixed(v[5], sizeof(v[5]), r->i, 2),
-            at_format_fixed(v[6], sizeof(v[6]), r->d, 2),
-            at_format_fixed(v[7], sizeof(v[7]), r->out, 2),
+            fmt_fixed(v[0], sizeof(v[0]), r->acc_deg, 2),
+            fmt_fixed(v[1], sizeof(v[1]), r->kalman, 2),
+            fmt_fixed(v[2], sizeof(v[2]), r->comp, 2),
+            fmt_fixed(v[3], sizeof(v[3]), r->tilt, 2),
+            fmt_fixed(v[4], sizeof(v[4]), r->p, 2),
+            fmt_fixed(v[5], sizeof(v[5]), r->i, 2),
+            fmt_fixed(v[6], sizeof(v[6]), r->d, 2),
+            fmt_fixed(v[7], sizeof(v[7]), r->out, 2),
             (unsigned long)dropped);
 
         if (len > 0 && (size_t)len < sizeof(line)) {

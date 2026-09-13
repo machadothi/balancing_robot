@@ -166,7 +166,6 @@ Options are CMake cache variables. They are written to
 | `FREERTOS_TICK_RATE_HZ` | `1000` | FreeRTOS tick rate |
 | `FREERTOS_TOTAL_HEAP_SIZE` | `12288` (f103), `32768` (f407) | FreeRTOS heap (bytes) |
 | `UART_ECHO_ENABLED` | `ON` | Echo each command line on the USB console |
-| `I2C_DMA_ENABLED` | `ON` | I2C DMA transfers (required for IMU) |
 | `I2C_BUS_RECOVERY` | `ON` | I2C bus recovery |
 | `AT_CMD_HELP_ENABLED` | `OFF` | `AT+HELP` command |
 | `AT_CMD_ALL_QUERY` | `OFF` | `AT+ALL?` bulk query |
@@ -277,8 +276,7 @@ xdg-open build-f103/docs/html/index.html
 ```
 
 The target only exists when CMake finds `doxygen`. The configuration template
-is [doxygen/Doxyfile.in](doxygen/Doxyfile.in); it documents `src/` (without the
-vendored FreeRTOS) using the selected board's include paths and MCU family
+is [doxygen/Doxyfile.in](doxygen/Doxyfile.in); it documents `src/` using the selected board's include paths and MCU family
 define.
 
 ## Project Structure

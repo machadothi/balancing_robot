@@ -22,9 +22,6 @@
 
 #include <stddef.h>
 
-#include <FreeRTOS.h>
-#include <task.h>
-
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/timer.h>
@@ -264,24 +261,4 @@ void motor1_reset_encoder(void) {
 
 void motor2_reset_encoder(void) {
     timer_set_counter(motors[1].port->enc_timer, 0);
-}
-
-/* ==========================================================================
- * Demo Task
- * ========================================================================== */
-
-void motor_demo_task(void *args) {
-    (void)args;
-
-    motor_init();
-
-    /* Set both motors forward at 50% speed */
-    motor1_set_direction(true);
-    motor2_set_direction(true);
-    motor1_set_speed(128);
-    motor2_set_speed(128);
-
-    for (;;) {
-        vTaskDelay(pdMS_TO_TICKS(1000));
-    }
 }

@@ -7,12 +7,12 @@ the calibration and sampling choices that affect the controller.
 
 | What | Where |
 |------|-------|
-| Sensor initialisation | [`initialize()`](../src/imu/mpu6050.c#L98) |
-| Burst read and parsing | [`mpu6050_read_all_dma()`](../src/imu/mpu6050.c#L296), [`mpu6050_dma_callback()`](../src/imu/mpu6050.c#L72) |
-| Scaling and calibration | [`read_imu_data()`](../src/imu/imu.c#L79) |
-| Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L29) |
+| Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L96) |
+| Burst read and parsing | [`mpu6050_read_all_dma()`](../src/imu/mpu6050.c#L294), [`mpu6050_dma_callback()`](../src/imu/mpu6050.c#L70) |
+| Scaling and calibration | [`read_imu_data()`](../src/imu/imu.c#L78) |
+| Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
 | Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L63) |
-| Sampling task | [`imu_task()`](../src/imu/imu.c#L110) |
+| Sampling task | [`imu_task()`](../src/imu/imu.c#L109) |
 | Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L118) |
 
 ## Configuration

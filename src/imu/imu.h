@@ -17,7 +17,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 #include <stdint.h>
 #include <FreeRTOS.h>
@@ -31,15 +31,11 @@ extern "C" {
 
 #ifndef IMU_SAMPLE_RATE_MS
 #define IMU_SAMPLE_RATE_MS  10
-#endif
+#endif // !IMU_SAMPLE_RATE_MS
 
 #ifndef IMU_SAMPLE_RATE_S
 #define IMU_SAMPLE_RATE_S   (IMU_SAMPLE_RATE_MS / 1000.0f)
-#endif
-
-/* Legacy defines for backward compatibility */
-#define SAMPLE_RATE_MS      IMU_SAMPLE_RATE_MS
-#define SAMPLE_RATE_S       IMU_SAMPLE_RATE_S
+#endif // !IMU_SAMPLE_RATE_S
 
 /* ==========================================================================
  * Type Definitions
@@ -55,12 +51,6 @@ typedef enum {
     IMU_READ_TIMEOUT,       /**< Read operation timed out */
     IMU_BUSY_TIMEOUT        /**< Device busy timeout */
 } IMU_Status_t;
-
-/* Legacy enum names for backward compatibility */
-#define IMU_Ok              IMU_OK
-#define IMU_Config_Error    IMU_CONFIG_ERROR
-#define IMU_Read_Timeout    IMU_READ_TIMEOUT
-#define IMU_Busy_Timeout    IMU_BUSY_TIMEOUT
 
 /**
  * @brief IMU driver interface (function pointers)
@@ -94,10 +84,6 @@ typedef struct {
     float gyro_y;   /**< Y angular rate (°/s) */
     float gyro_z;   /**< Z angular rate (°/s) */
 } IMU_Data_t;
-
-/* Legacy type aliases */
-typedef IMU_Status_t IMU_Fails_t;
-typedef IMU_Driver_t IMU_t;
 
 /* ==========================================================================
  * Public Variables
@@ -179,7 +165,7 @@ int16_t imu_gyro_z(IMU_Driver_t *imu);
  * 
  * FreeRTOS task that:
  * 1. Initializes the IMU hardware
- * 2. Reads sensor data at SAMPLE_RATE_MS intervals
+ * 2. Reads sensor data at IMU_SAMPLE_RATE_MS intervals
  * 3. Converts raw values to physical units
  * 4. Sends data to the imu_content queue
  * 
@@ -189,6 +175,6 @@ void imu_task(void *args);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* IMU_H */
+#endif // IMU_H

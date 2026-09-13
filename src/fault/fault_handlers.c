@@ -34,7 +34,7 @@ static void fault_puts(const char *s) {
         usart_send_blocking(BOARD_UART, *s++);
     }
 }
-#endif
+#endif // FAULT_HANDLERS_VERBOSE
 
 /**
  * @brief Cut motor drive before anything else
@@ -75,7 +75,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     fault_puts("\r\n");
 #else
     (void)pcTaskName;
-#endif
+#endif // FAULT_HANDLERS_VERBOSE
     
     /* Fast blink: stack overflow */
     fault_blink_forever(100000);
@@ -86,7 +86,7 @@ void hard_fault_handler(void) {
 
 #if FAULT_HANDLERS_VERBOSE
     fault_puts("\r\n!!! HARD FAULT !!!\r\n");
-#endif
+#endif // FAULT_HANDLERS_VERBOSE
     
     /* Very fast blink: hard fault */
     fault_blink_forever(50000);
@@ -97,7 +97,7 @@ void vApplicationMallocFailedHook(void) {
 
 #if FAULT_HANDLERS_VERBOSE
     fault_puts("\r\n!!! MALLOC FAILED !!!\r\n");
-#endif
+#endif // FAULT_HANDLERS_VERBOSE
     
     /* Medium blink: malloc failure */
     fault_blink_forever(200000);

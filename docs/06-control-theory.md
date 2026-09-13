@@ -13,7 +13,7 @@ walks through the code line by line.
 | Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L43) |
 | Control law | [`pid_compute()`](../src/robot/robot.c#L169) |
 | Actuation (mixing, saturation, deadband) | [`apply_motor_control()`](../src/robot/robot.c#L211) |
-| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L137) |
+| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L136) |
 | Unused hooks for an outer loop | `target_velocity` in [at_cmd.h](../src/cmd/at_cmd.h), [`motor1_get_encoder()`](../src/motor/motor.h) |
 
 ## The closed loop

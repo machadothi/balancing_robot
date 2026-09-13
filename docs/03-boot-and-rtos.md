@@ -13,7 +13,7 @@ the locking scheme.
 | Task creation | [`app_tasks_init()`](../src/app/app_init.c#L79) |
 | Stack sizes, priorities | [config.h](../src/config.h#L110) |
 | Kernel configuration | [FreeRTOSConfig.h](../src/FreeRTOSConfig.h#L92) |
-| libopencm3 ↔ FreeRTOS handler glue | [src/rtos/opencm3.c](../src/rtos/opencm3.c) |
+| libopencm3 ↔ FreeRTOS handler glue | [src/rtos_glue/opencm3.c](../src/rtos_glue/opencm3.c) |
 | Fault and RTOS hooks | [fault_handlers.c](../src/fault/fault_handlers.c) |
 
 ## Boot sequence
@@ -45,7 +45,7 @@ Points worth noting:
   kernel.
 - **Handler glue.** libopencm3 owns the vector table and calls
   `sv_call_handler`, `pend_sv_handler` and `sys_tick_handler`;
-  [opencm3.c](../src/rtos/opencm3.c) forwards them to the FreeRTOS port.
+  [opencm3.c](../src/rtos_glue/opencm3.c) forwards them to the FreeRTOS port.
 
 ## Tasks
 
@@ -98,8 +98,8 @@ flowchart LR
 
 | Object | Type | Created in | Producer → consumer |
 |--------|------|------------|---------------------|
-| `imu_content` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite` | [imu.c](../src/imu/imu.c#L34) | `imu_task` → `robot_task` |
-| `i2c_transfer_sem` | Binary semaphore | [mpu6050.c](../src/imu/mpu6050.c#L106) | DMA callback (ISR) → `imu_task` |
+| `imu_content` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite` | [imu.c](../src/imu/imu.c#L33) | `imu_task` → `robot_task` |
+| `i2c_transfer_sem` | Binary semaphore | [mpu6050.c](../src/imu/mpu6050.c#L104) | DMA callback (ISR) → `imu_task` |
 | `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
 | TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |
 | Telemetry queue | Queue, 32 / 16 × record | [telemetry.c](../src/telemetry/telemetry.c) | `robot_task` → `telemetry_task` |
@@ -127,7 +127,7 @@ control loop and the AT console. Both sides take `state_mutex`:
 - **`robot_task`** locks once per sample around the state update, PID and motor
   commands, and never while blocked on its queue.
 - **The AT parser** locks only around a set/execute callback, or to take a
-  snapshot for a query ([`at_cmd_set_lock()`](../src/cmd/at_cmd.c#L107)).
+  snapshot for a query ([`at_cmd_set_lock()`](../src/cmd/at_cmd.c#L108)).
   Responses are printed **after** unlocking. Printing can wait for UART buffer
   space, and holding the lock while waiting would stall the control loop.
 - **Priority inheritance.** When `robot_task` (prio 4) waits for the mutex held
@@ -155,7 +155,7 @@ FreeRTOS divides that range in two with `configMAX_SYSCALL_INTERRUPT_PRIORITY`
 | Interrupt | NVIC priority | Calls FreeRTOS? | Set in |
 |-----------|---------------|-----------------|--------|
 | F103 encoder EXTI9_5 | 0x80 | No (counter increment only) | [motor.c](../src/motor/motor.c#L140) |
-| I2C event/error, DMA TX/RX | 0xB0 | Yes (`xSemaphoreGiveFromISR`) | [`i2c_init_dma(&i2c, 11)`](../src/imu/mpu6050.c#L123) |
+| I2C event/error, DMA TX/RX | 0xB0 | Yes (`xSemaphoreGiveFromISR`) | [`i2c_init_dma(&i2c, 11)`](../src/imu/mpu6050.c#L121) |
 | Console USART | 0xC0 | Yes (`xQueueSendFromISR`) | [uart.c](../src/drivers/uart.c#L130) |
 | SysTick, PendSV (kernel) | 0xF0 | — | `configKERNEL_INTERRUPT_PRIORITY` |
 
@@ -191,7 +191,7 @@ whole number of ticks.
 `vTaskDelayUntil` only works if `last` persists across iterations. The IMU task
 used to reinitialise it inside the loop, silently turning it into
 `vTaskDelay`; it is now read once before the loop
-([imu.c](../src/imu/imu.c#L129)).
+([imu.c](../src/imu/imu.c#L128)).
 
 ### One control period
 

@@ -10,7 +10,7 @@ sample becomes a motor command. Later chapters zoom into each block.
 | Entry point | [`main()`](../src/main.c#L26) |
 | Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L51), [`app_tasks_init()`](../src/app/app_init.c#L79) |
 | Per-board peripherals | [src/board/f103/board_config.h](../src/board/f103/board_config.h), [src/board/f407/board_config.h](../src/board/f407/board_config.h) |
-| Sensing | [`imu_task()`](../src/imu/imu.c#L110) |
+| Sensing | [`imu_task()`](../src/imu/imu.c#L109) |
 | Control | [`robot_task()`](../src/robot/robot.c#L362) |
 
 ## Hardware
@@ -41,7 +41,7 @@ The firmware builds for two boards from the same tree:
 | Motor driver | External TB6612FNG: direction pins + 1 PWM per motor | On-board H-bridges: 2 PWM inputs per motor |
 | Encoders | Rising edges on EXTI (count only, no direction) | Quadrature, counted by hardware timers |
 | Console | USART2 on PA2/PA3 via a USB-serial adapter | USART1 via the on-board Type-C USB-serial port |
-| FreeRTOS | V9, vendored in `src/rtos` | V10.4.3 LTS, `lib/FreeRTOS-Kernel` submodule |
+| FreeRTOS | V10.4.3 LTS submodule, `ARM_CM3` port | V10.4.3 LTS submodule, `ARM_CM4F` port |
 | Wiring | [pin-connections-f103](hardware/pin-connections-f103.md) | [pin-connections-f407](hardware/pin-connections-f407.md) |
 
 ## Firmware layers
@@ -99,7 +99,7 @@ sequenceDiagram
     end
 ```
 
-1. [`imu_task`](../src/imu/imu.c#L110) wakes on a fixed 10 ms schedule and
+1. [`imu_task`](../src/imu/imu.c#L109) wakes on a fixed 10 ms schedule and
    starts a DMA read of all 14 sensor bytes; it sleeps on a semaphore until the
    DMA interrupt signals completion.
 2. It converts raw counts to g and °/s and overwrites the single-slot
@@ -125,7 +125,9 @@ sequenceDiagram
 | `src/motor/` | `motor.c` (Blue Pill, TB6612), `motor_hiwonder.c` (F407 board) |
 | `src/cmd/` | AT command parser |
 | `src/fault/` | Hard fault, stack overflow and malloc failure handlers |
-| `src/rtos/` | FreeRTOS V9 (F103 build) and the libopencm3 ↔ FreeRTOS handler glue |
+| `src/telemetry/` | USB telemetry logger |
+| `src/util/` | Shared helpers (fixed-point formatting) |
+| `src/rtos_glue/` | libopencm3 ↔ FreeRTOS handler glue |
 | `src/*.ld` | Linker scripts per MCU |
 | `cmake/` | Toolchain file and per-board CMake settings |
 | `lib/` | libopencm3 and FreeRTOS-Kernel submodules |

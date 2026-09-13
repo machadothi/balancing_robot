@@ -13,7 +13,6 @@
 #include <task.h>
 
 #include "config.h"
-#include "drivers/uart.h"
 #include "imu/mpu6050.h"
 #include "log/log.h"
 #include "imu/imu.h"
@@ -112,7 +111,7 @@ void imu_task(void *args) {
     
     log_message(LOG_DEBUG, IMU_TASK, "Starting IMU task");
 
-    imu_driver = get_mpu6050_imu();
+    imu_driver = mpu6050_get_driver();
     
     IMU_Data_t imu_data;
     IMU_Status_t status = imu_init(imu_driver);

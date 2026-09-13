@@ -85,7 +85,7 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 - [ ] [test/filter_comparison.py](test/filter_comparison.py): reuse `at_console.py` (port and
       baud options, sends `AT+STREAM=1` itself) and update its docstring to the
       current `acc_deg | kalman | comp` format.
-- [ ] Host unit tests for the pure C modules (filters, PID, `at_format_fixed()`,
+- [ ] Host unit tests for the pure C modules (filters, PID, `fmt_fixed()`,
       AT parsing), complementing the hardware tests in `test/`.
 - [ ] CI: build both presets (plus `-DATTITUDE_FILTER=kalman` and all AT flags ON)
       with warnings as errors.

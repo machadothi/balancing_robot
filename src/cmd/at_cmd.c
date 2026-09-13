@@ -23,14 +23,15 @@
 #include "cmd/at_cmd.h"
 #include "drivers/uart.h"
 #include "config.h"
+#include "util/fmt.h"
 
 /* ==========================================================================
  * Float Formatting Helpers (stack-efficient when LOG_ENABLED=0)
  * ========================================================================== */
 
-/* Integer-printf formatting via at_format_fixed(): float printf needs ~400 bytes
+/* Integer-printf formatting via fmt_fixed(): float printf needs ~400 bytes
  * more stack. Each compound literal is its own buffer, alive for the whole call. */
-#define FORMAT_FIXED(val, decimals)  at_format_fixed((char[16]){0}, 16, (val), (decimals))
+#define FORMAT_FIXED(val, decimals)  fmt_fixed((char[16]){0}, 16, (val), (decimals))
 #define FORMAT_FLOAT_1(val)     "%s", FORMAT_FIXED(val, 1)
 #define FORMAT_FLOAT_2(val)     "%s", FORMAT_FIXED(val, 2)
 #define FORMAT_FLOAT_3(val)     "%s", FORMAT_FIXED(val, 3)
@@ -80,7 +81,7 @@ static void at_handle_set(const AT_Command_t *cmd);
 static void at_handle_execute(const AT_Command_t *cmd);
 #if AT_CMD_HELP_ENABLED
 static void at_show_help(void);
-#endif
+#endif // AT_CMD_HELP_ENABLED
 static void str_to_upper(char *s);
 
 /* ==========================================================================
@@ -135,35 +136,6 @@ static AT_Result_t at_call_exec(const char *cmd) {
     AT_Result_t result = exec_callback(cmd);
     at_unlock();
     return result;
-}
-
-const char *at_format_fixed(char *buf, size_t len, float value, int decimals) {
-    static const int32_t scales[] = { 1, 10, 100, 1000, 10000 };
-
-    if (decimals < 0) {
-        decimals = 0;
-    } else if (decimals > 4) {
-        decimals = 4;
-    }
-
-    float scaled = value * (float)scales[decimals];
-    if (!isfinite(scaled) || fabsf(scaled) > 2.0e9f) {
-        snprintf(buf, len, "%s", isnan(value) ? "nan" : "ovf");
-        return buf;
-    }
-
-    int32_t fixed = (int32_t)lroundf(scaled);
-    uint32_t magnitude = (fixed < 0) ? (uint32_t)(-(int64_t)fixed) : (uint32_t)fixed;
-    const char *sign = (fixed < 0) ? "-" : "";
-    uint32_t scale = (uint32_t)scales[decimals];
-
-    if (decimals == 0) {
-        snprintf(buf, len, "%s%lu", sign, (unsigned long)magnitude);
-    } else {
-        snprintf(buf, len, "%s%lu.%0*lu", sign, (unsigned long)(magnitude / scale),
-                 decimals, (unsigned long)(magnitude % scale));
-    }
-    return buf;
 }
 
 /* ==========================================================================
@@ -450,7 +422,7 @@ static void at_handle_query(const AT_Command_t *cmd) {
             FORMAT_FIXED(state->gyro_y, 3), FORMAT_FIXED(state->gyro_z, 3),
             FORMAT_FIXED(state->angle, 2));
     }
-#endif /* AT_CMD_ALL_QUERY */
+#endif // AT_CMD_ALL_QUERY
     else {
         at_cmd_respond_error(AT_ERROR_UNKNOWN_CMD);
     }
@@ -619,7 +591,7 @@ static void at_show_help(void) {
     at_println("  AT+STATUS?      Robot status");
 #if AT_CMD_ALL_QUERY
     at_println("  AT+ALL?         All sensor data");
-#endif
+#endif // AT_CMD_ALL_QUERY
     at_println("  AT+ACC_X?       X acceleration");
     at_println("  AT+ACC_Y?       Y acceleration");
     at_println("  AT+ACC_Z?       Z acceleration");
@@ -646,4 +618,4 @@ static void at_show_help(void) {
     at_println("  AT+HELP         This help");
     at_cmd_respond_ok();
 }
-#endif /* AT_CMD_HELP_ENABLED */
+#endif // AT_CMD_HELP_ENABLED

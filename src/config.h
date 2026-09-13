@@ -17,7 +17,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Hardware Configuration
@@ -108,8 +108,6 @@ extern "C" {
 #define TASK_STACK_UART_RX      384     /**< UART RX task stack size (AT cmd + float printf) */
 #define TASK_STACK_IMU          192     /**< IMU task stack size */
 #define TASK_STACK_ROBOT        256     /**< Robot control task stack size (filters, PID) */
-#define TASK_STACK_MOTOR        128     /**< Motor demo task stack size */
-#define TASK_STACK_AT_CMD       128     /**< AT command task stack size */
 
 /* Task names (for debugging) */
 #define TASK_NAME_LED           "LED"
@@ -117,8 +115,6 @@ extern "C" {
 #define TASK_NAME_UART_RX       "UART_RX"
 #define TASK_NAME_IMU           "IMU"
 #define TASK_NAME_ROBOT         "ROBOT"
-#define TASK_NAME_MOTOR         "MOTOR"
-#define TASK_NAME_AT_CMD        "AT_CMD"
 
 /* Priorities (configMAX_PRIORITIES = 5): the sensing/control chain must never
  * wait behind console I/O, and the heartbeat runs only when nothing else does */
@@ -142,6 +138,6 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* CONFIG_H */
+#endif // CONFIG_H

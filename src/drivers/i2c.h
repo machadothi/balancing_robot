@@ -27,7 +27,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Types
@@ -417,6 +417,6 @@ void i2c_dma_rx_isr(I2C_Control_t *dev);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* DRIVERS_I2C_H */
+#endif // DRIVERS_I2C_H

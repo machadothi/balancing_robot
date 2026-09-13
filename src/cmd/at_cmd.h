@@ -56,7 +56,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 #include <stddef.h>
 #include <stdint.h>
@@ -208,20 +208,6 @@ void at_cmd_exec_callback(AT_ExecCallback_t callback);
  */
 void at_cmd_set_lock(AT_LockCallback_t lock, AT_LockCallback_t unlock);
 
-/**
- * @brief Format a float with fixed decimals using integer printf only
- *
- * Float printf needs far more stack. Rounds once on the scaled value, so the
- * sign of small negatives and carries (1.96 → "2.0") are correct.
- *
- * @param buf       Output buffer (16 bytes is enough)
- * @param len       Buffer size
- * @param value     Value to format
- * @param decimals  Digits after the point, 0 to 4
- * @return buf
- */
-const char *at_format_fixed(char *buf, size_t len, float value, int decimals);
-
 /* ==========================================================================
  * Command Processing
  * ========================================================================== */
@@ -263,6 +249,6 @@ void at_cmd_respond_data(const char *cmd, const char *fmt, ...)
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* AT_CMD_H */
+#endif // AT_CMD_H

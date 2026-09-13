@@ -39,4 +39,4 @@ void app_tasks_init(void);
  */
 void app_print_banner(void);
 
-#endif /* APP_INIT_H */
+#endif // APP_INIT_H

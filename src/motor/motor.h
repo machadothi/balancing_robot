@@ -39,7 +39,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -187,18 +187,8 @@ void motor1_reset_encoder(void);
  */
 void motor2_reset_encoder(void);
 
-/* ==========================================================================
- * Demo / Test
- * ========================================================================== */
-
-/**
- * @brief Motor demonstration task
- * @param args  Task arguments (unused)
- */
-void motor_demo_task(void *args);
-
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* MOTOR_H */
+#endif // MOTOR_H

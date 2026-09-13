@@ -22,7 +22,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -250,6 +250,6 @@ uint32_t pwm_get_frequency(const PWM_Timer_t *pwm);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* PWM_H */
+#endif // PWM_H

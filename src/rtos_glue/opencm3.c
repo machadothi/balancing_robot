@@ -3,8 +3,6 @@
  * To use libopencm3 with FreeRTOS on Cortex-M3 platform, we must
  * define three interlude routines.
  */
-/* Angle brackets: a quoted include would pick this directory's V9 headers
- * even for boards built against lib/FreeRTOS-Kernel. */
 #include <FreeRTOS.h>
 #include <task.h>
 #include <libopencm3/stm32/rcc.h>

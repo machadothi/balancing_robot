@@ -14,7 +14,7 @@
 
 #ifdef __cplusplus
 extern "C" {
-#endif
+#endif // __cplusplus
 
 /* ==========================================================================
  * Public Functions
@@ -35,6 +35,6 @@ void robot_task(void *args);
 
 #ifdef __cplusplus
 }
-#endif
+#endif // __cplusplus
 
-#endif /* ROBOT_H */
+#endif // ROBOT_H

@@ -53,7 +53,7 @@ embedded engineers:
 
 | Path | Contents |
 |------|----------|
-| `src/` | Firmware: `app`, `board`, `drivers`, `imu`, `filter`, `robot`, `motor`, `cmd`, `fault`, `rtos` |
+| `src/` | Firmware: `app`, `board`, `drivers`, `imu`, `filter`, `robot`, `motor`, `cmd`, `telemetry`, `fault`, `util`, `rtos_glue` |
 | `cmake/` | Toolchain file and per-board settings (`cmake/boards/`) |
 | `CMakePresets.json` | One configure/build preset per board |
 | `lib/` | libopencm3 and FreeRTOS-Kernel submodules |

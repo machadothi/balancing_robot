@@ -15,10 +15,10 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
 | What | Where |
 |------|-------|
-| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L210) |
-| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L379) |
+| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L182) |
+| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L351) |
 | Set commands (`AT+X=v`), range checks | `at_handle_set()` in [at_cmd.c](../src/cmd/at_cmd.c) |
-| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L577) |
+| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L549) |
 | What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L247), [`at_exec_handler()`](../src/robot/robot.c#L298) |
 | Build flags | `AT_CMD_HELP_ENABLED`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `UART_ECHO_ENABLED` ([02](02-build-and-configuration.md#build-options)) |
 

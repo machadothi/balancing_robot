@@ -24,9 +24,7 @@
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/i2c.h>
-#if I2C_DMA_ENABLED
 #include <libopencm3/stm32/dma.h>
-#endif
 #include <libopencm3/cm3/nvic.h>
 
 #include <FreeRTOS.h>
@@ -49,7 +47,6 @@
 /** Upper bound for the BTF poll in the DMA TX ISR (~100 µs at 100 kHz) */
 #define I2C_ISR_BTF_SPINS   100000U
 
-#if I2C_DMA_ENABLED
 #if defined(STM32F1)
 #define I2C_DMA_PSIZE_8BIT  DMA_CCR_PSIZE_8BIT
 #define I2C_DMA_MSIZE_8BIT  DMA_CCR_MSIZE_8BIT
@@ -80,9 +77,7 @@ static void i2c_dma_enable(uint8_t stream) {
     dma_enable_stream(BOARD_I2C_DMA, stream);
 }
 #endif // defined(STM32F1)
-#endif // I2C_DMA_ENABLED
 
-#define NO_OPT __attribute__((optimize("O0")))
 #define systicks    xTaskGetTickCount
 
 /* Temp buffer for register address in async operations */
@@ -208,9 +203,9 @@ void i2c_bus_recovery(void) {
     /* Reconfigure as I2C alternate function */
     gpio_compat_af_output(I2C_PORT, I2C_SCL_PIN, BOARD_I2C_AF, true);
 }
-#endif
+#endif // I2C_BUS_RECOVERY
 
-void NO_OPT i2c_setup_peripheral(void) {
+void i2c_setup_peripheral(void) {
     rcc_periph_clock_enable(BOARD_I2C_PORT_RCC);
     rcc_periph_clock_enable(BOARD_I2C_RCC);
     
@@ -223,18 +218,18 @@ void NO_OPT i2c_setup_peripheral(void) {
 #if I2C_BUS_RECOVERY
     /* Recover bus if stuck */
     i2c_bus_recovery();
-#endif
+#endif // I2C_BUS_RECOVERY
 }
 
 // -----------------------------------------------------------------------------
 
-I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c, 
+I2C_Fails_t i2c_configure(I2C_Control_t *dev, uint32_t i2c, 
                                  uint8_t address, uint32_t timeout) {
     dev->device = i2c;
     dev->addr = address;
     dev->timeout = timeout;
 
-    log_message(INFO, I2C_BUS, "Setting up I2C.");
+    log_message(LOG_INFO, I2C_BUS, "Setting up I2C.");
 
     /* 
      * STM32F1 I2C BUSY flag errata workaround:
@@ -288,14 +283,14 @@ I2C_Fails_t NO_OPT i2c_configure(I2C_Control_t *dev, uint32_t i2c,
 
     /* Final check */
     if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
-        log_message(ERROR, I2C_BUS, "I2C bus busy after configure");
+        log_message(LOG_ERROR, I2C_BUS, "I2C bus busy after configure");
         return I2C_Busy_Timeout;
     }
 
     return I2C_Ok;
 }
 
-I2C_Fails_t NO_OPT i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, 
+I2C_Fails_t i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr, 
                                  uint8_t bitNum, uint8_t *data) {
     uint8_t b = 0;
 
@@ -308,7 +303,7 @@ I2C_Fails_t NO_OPT i2c_read_bit(I2C_Control_t *dev, uint8_t regAddr,
     return I2C_Ok;
 }
 
-I2C_Fails_t NO_OPT i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, 
+I2C_Fails_t i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr, 
                                   uint8_t bitNum, uint8_t data) {
     uint8_t b = 0;
 
@@ -321,7 +316,7 @@ I2C_Fails_t NO_OPT i2c_write_bit(I2C_Control_t *dev, uint8_t regAddr,
     return i2c_write_byte(dev, regAddr, b);
 }
 
-I2C_Fails_t NO_OPT i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, 
+I2C_Fails_t i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr, 
                                    uint8_t bitStart, uint8_t length, uint8_t data) {
     uint8_t b = 0;
 
@@ -339,7 +334,7 @@ I2C_Fails_t NO_OPT i2c_write_bits(I2C_Control_t *dev, uint8_t regAddr,
     return i2c_write_byte(dev, regAddr, b);
 }
 
-I2C_Fails_t NO_OPT i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
+I2C_Fails_t i2c_write_byte(I2C_Control_t *dev, uint8_t regAddr, uint8_t data) {
     const uint8_t content[2] = {regAddr, data};
     return i2c_transfer(dev, content, 2, NULL, 0);
 }
@@ -382,14 +377,14 @@ static I2C_Fails_t i2c_wait_sr1(I2C_Control_t *dev, uint32_t flag, TickType_t t0
 
 // -----------------------------------------------------------------------------
 
-static I2C_Fails_t NO_OPT
+static I2C_Fails_t
 i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 {
     TickType_t t0 = systicks();
 
     while ((I2C_SR2(dev->device) & I2C_SR2_BUSY)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(ERROR, I2C_BUS,"I2C BUSY TIMEOUT!");
+            log_message(LOG_ERROR, I2C_BUS,"I2C BUSY TIMEOUT!");
             return I2C_Busy_Timeout;
         }
     }
@@ -399,7 +394,7 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
     /* Wait for the end of the start condition, master mode selected, 
         and BUSY bit set */
     if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
-        log_message(ERROR, I2C_BUS, "I2C START TIMEOUT!");
+        log_message(LOG_ERROR, I2C_BUS, "I2C START TIMEOUT!");
         i2c_send_stop(dev->device);
         return I2C_Busy_Timeout;
     }
@@ -409,7 +404,7 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
+            log_message(LOG_ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
         }
     }
@@ -421,7 +416,7 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
         i2c_send_data(dev->device, data[i]);
         while (!(I2C_SR1(dev->device) & (I2C_SR1_BTF))) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(ERROR, I2C_BUS,"I2C WRITE TIMEOUT!");
+                log_message(LOG_ERROR, I2C_BUS,"I2C WRITE TIMEOUT!");
                 return I2C_Write_Timeout;
             }
         }
@@ -432,7 +427,7 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 
 // -----------------------------------------------------------------------------
 
-static I2C_Fails_t NO_OPT
+static I2C_Fails_t
 i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
 {
     TickType_t t0 = systicks();
@@ -441,7 +436,7 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     i2c_enable_ack(dev->device);
 
     if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
-        log_message(ERROR, I2C_BUS, "I2C START TIMEOUT!");
+        log_message(LOG_ERROR, I2C_BUS, "I2C START TIMEOUT!");
         i2c_send_stop(dev->device);
         return I2C_Busy_Timeout;
     }
@@ -451,7 +446,7 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
+            log_message(LOG_ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
         }
     }
@@ -468,7 +463,7 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     if (n == 2) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
+                log_message(LOG_ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
             }
         }
@@ -480,7 +475,7 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     for (size_t i = 0; i < n; ++i) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
+                log_message(LOG_ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
             }
         }
@@ -497,14 +492,14 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     return I2C_Ok;
 }
 
-static I2C_Fails_t NO_OPT i2c_transfer(I2C_Control_t *dev, const uint8_t *w, 
+static I2C_Fails_t i2c_transfer(I2C_Control_t *dev, const uint8_t *w, 
                                         size_t wn, uint8_t *r, size_t rn) {
     I2C_Fails_t status = I2C_Ok;
 
     if (wn) {
         status = i2c_write(dev, w, wn);
         if (status != I2C_Ok) {
-            log_message(ERROR, I2C_BUS, i2c_fail_to_string(status));
+            log_message(LOG_ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     }
@@ -512,7 +507,7 @@ static I2C_Fails_t NO_OPT i2c_transfer(I2C_Control_t *dev, const uint8_t *w,
     if (rn) {
         status = i2c_read(dev, r, rn);
         if (status != I2C_Ok) {
-            log_message(ERROR, I2C_BUS, i2c_fail_to_string(status));
+            log_message(LOG_ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     } else {
@@ -572,7 +567,7 @@ void i2c_init_it(I2C_Control_t *dev, uint8_t priority) {
         nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
-    log_message(INFO, I2C_BUS, "I2C interrupt mode initialized");
+    log_message(LOG_INFO, I2C_BUS, "I2C interrupt mode initialized");
 }
 
 I2C_Fails_t i2c_write_it(I2C_Control_t *dev, const uint8_t *data, size_t len,
@@ -692,7 +687,6 @@ I2C_Fails_t i2c_write_reg_it(I2C_Control_t *dev, uint8_t regAddr,
  * DMA-Based Implementation
  * ========================================================================== */
 
-#if I2C_DMA_ENABLED
 
 void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
     /* Initialize async state */
@@ -715,7 +709,7 @@ void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
         nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
-    log_message(INFO, I2C_BUS, "I2C DMA mode initialized");
+    log_message(LOG_INFO, I2C_BUS, "I2C DMA mode initialized");
 }
 
 /**
@@ -1223,6 +1217,5 @@ void i2c_dma_rx_isr(I2C_Control_t *dev) {
     }
 }
 
-#endif /* I2C_DMA_ENABLED */
 
 // i2c.c

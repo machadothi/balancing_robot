@@ -134,4 +134,4 @@ void log_message_with_int(LogLevel_t level, LogModule_t module,
     (void)level; (void)module; (void)message; (void)value;
 }
 
-#endif /* LOG_ENABLED */
+#endif // LOG_ENABLED

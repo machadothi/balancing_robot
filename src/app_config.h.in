@@ -21,7 +21,6 @@
 
 /* Feature flags */
 #cmakedefine01 UART_ECHO_ENABLED
-#cmakedefine01 I2C_DMA_ENABLED
 #cmakedefine01 I2C_BUS_RECOVERY
 #cmakedefine01 AT_CMD_HELP_ENABLED
 #cmakedefine01 AT_CMD_ALL_QUERY
