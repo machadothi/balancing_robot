@@ -1,6 +1,10 @@
 {
   "version": 3,
-  "cmakeMinimumRequired": { "major": 3, "minor": 21, "patch": 0 },
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
   "configurePresets": [
     {
       "name": "base",
@@ -13,17 +17,49 @@
       "name": "f103",
       "inherits": "base",
       "displayName": "Blue Pill (STM32F103C8T6)",
-      "cacheVariables": { "BOARD": "f103" }
+      "cacheVariables": {
+        "BOARD": "f103"
+      }
     },
     {
       "name": "f407",
       "inherits": "base",
       "displayName": "Hiwonder ROS Robot Control Board (STM32F407VET6)",
-      "cacheVariables": { "BOARD": "f407" }
+      "cacheVariables": {
+        "BOARD": "f407"
+      }
+    },
+    {
+      "name": "host",
+      "displayName": "Host unit tests (native compiler)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build-host",
+      "cacheVariables": {
+        "ROBOT_HOST_TESTS": "ON"
+      }
     }
   ],
   "buildPresets": [
-    { "name": "f103", "configurePreset": "f103" },
-    { "name": "f407", "configurePreset": "f407" }
+    {
+      "name": "f103",
+      "configurePreset": "f103"
+    },
+    {
+      "name": "f407",
+      "configurePreset": "f407"
+    },
+    {
+      "name": "host",
+      "configurePreset": "host"
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "host",
+      "configurePreset": "host",
+      "output": {
+        "outputOnFailure": true
+      }
+    }
   ]
 }

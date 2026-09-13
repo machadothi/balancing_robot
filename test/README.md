@@ -89,3 +89,26 @@ Tests that use `AT+PIDON`/`AT+PIDOFF` need `AT_CMD_PID_TOGGLE=ON` (the default).
 | All sensor tests fail with `0,0,0` | IMU not initialised: check wiring, the console log, or `AT+ACC_X?` by hand |
 | `motors disabled themselves` | No IMU samples for 50 ms triggered the stall cut-off |
 | Low `test_loop_rate` | Control loop overrun, or telemetry dropped at a low baud rate |
+
+## Host unit tests (no hardware)
+
+[host/](host/) builds the hardware-independent modules with the native compiler,
+AddressSanitizer and UBSan, against small stand-ins for FreeRTOS and libopencm3
+([host/shim/](host/shim/)):
+
+```sh
+cmake --preset host && cmake --build --preset host && ctest --preset host
+```
+
+| Test | Covers |
+|------|--------|
+| [test_control.c](host/test_control.c) | PID worked example from [docs/08](../docs/08-pid-implementation.md), output and integral clamps, reset; mixer saturation and deadband |
+| [test_filters.c](host/test_filters.c) | Every `AttitudeFilter_t`: seeding, convergence, tracking a rotation, rejecting an accelerometer spike |
+| [test_fmt.c](host/test_fmt.c) | `fmt_fixed()` rounding and sign |
+| [test_at.c](host/test_at.c) | AT syntax, error codes, gains, motor states and `AT+HELP`: the protocol cases of `test_console.py` |
+
+A new pure C module gets a `host_test()` line in [host/CMakeLists.txt](host/CMakeLists.txt).
+
+`scripts/build_matrix.sh` builds both boards in feature combinations and checks
+that invalid ones are rejected. CI ([.github/workflows/ci.yml](../.github/workflows/ci.yml))
+runs the host tests, the matrix and `scripts/check_docs.py`.

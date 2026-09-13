@@ -85,15 +85,16 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 - [ ] [test/filter_comparison.py](test/filter_comparison.py): reuse `at_console.py` (port and
       baud options, sends `AT+STREAM=1` itself) and update its docstring to the
       current `acc_deg | kalman | comp` format.
-- [ ] Host unit tests for the pure C modules (filters, PID, `fmt_fixed()`,
-      AT parsing), complementing the hardware tests in `test/`.
-- [ ] CI: build both presets (plus `-DATTITUDE_FILTER=kalman` and all AT flags ON)
-      with warnings as errors.
+- [x] Host unit tests for the pure C modules (`ctest --preset host`, test/host/).
+- [x] CI: host tests, doc links and `scripts/build_matrix.sh` (.github/workflows/ci.yml).
+- [ ] Watch the first CI run on GitHub (libopencm3 cache key, toolchain version).
+- [ ] Host tests for `telemetry_submit()` drops/sequence and `uart_write()` ring
+      buffer wrap-around (need a queue shim).
 
 ## 7. Documentation
 
 - [ ] Preview all Mermaid diagrams on GitHub (not rendered locally yet).
-- [ ] Run `scripts/check_docs.py` in CI (`--fix` re-anchors `file#Lnn` links
+- [x] Run `scripts/check_docs.py` in CI (`--fix` re-anchors `file#Lnn` links
       after code moves; review the result, it matches symbols heuristically).
 - [ ] Install `doxygen graphviz` and check the `docs` target output.
 - [ ] Add a photo or schematic of the F407 robot wiring once it is built.

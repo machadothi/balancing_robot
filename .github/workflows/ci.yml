@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host-tests:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: cmake --preset host
+      - run: cmake --build --preset host -j
+      - run: ctest --preset host
+
+  docs:
+    name: Doc links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: python3 scripts/check_docs.py
+
+  firmware:
+    name: Firmware feature matrix
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install the ARM toolchain
+        run: sudo apt-get update && sudo apt-get install -y gcc-arm-none-eabi libnewlib-arm-none-eabi
+
+      - name: Cache libopencm3
+        id: cache-libopencm3
+        uses: actions/cache@v4
+        with:
+          path: lib/libopencm3/lib
+          key: libopencm3-${{ runner.os }}-${{ hashFiles('.git/modules/lib/libopencm3/HEAD') }}
+
+      - name: Build libopencm3
+        if: steps.cache-libopencm3.outputs.cache-hit != 'true'
+        run: make -C lib/libopencm3 -j"$(nproc)" TARGETS="stm32/f1 stm32/f4"
+
+      - run: scripts/build_matrix.sh
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: build-logs
+          path: build-matrix/*.log

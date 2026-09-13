@@ -40,6 +40,14 @@ set(LIBOPENCM3_DIR ${CMAKE_SOURCE_DIR}/lib/libopencm3)
 set(SRC_DIR ${CMAKE_SOURCE_DIR}/src)
 set(GENERATED_DIR ${CMAKE_BINARY_DIR}/generated)
 
+# Host unit tests (cmake --preset host): no board, no cross compiler
+option(ROBOT_HOST_TESTS "Build the host unit tests instead of the firmware" OFF)
+if(ROBOT_HOST_TESTS)
+    enable_testing()
+    add_subdirectory(test/host)
+    return()
+endif()
+
 # =============================================================================
 # Board Selection
 # =============================================================================
