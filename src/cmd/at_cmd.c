@@ -66,8 +66,8 @@ static AT_ExecCallback_t exec_callback = NULL;
 static AT_LockCallback_t lock_callback = NULL;
 static AT_LockCallback_t unlock_callback = NULL;
 
-/** Response buffer */
-static char response_buffer[AT_RESPONSE_BUFFER_SIZE];
+/** Port the command being processed came from; uart_rx_task runs commands one at a time */
+static UART_Port_t reply_port = UART_PORT_USB;
 
 /* ==========================================================================
  * Private Function Prototypes
@@ -170,33 +170,46 @@ const char *at_format_fixed(char *buf, size_t len, float value, int decimals) {
  * Response Functions
  * ========================================================================== */
 
+/**
+ * @brief Send the last line of a reply plus the prompt as one atomic write
+ *
+ * Separate writes would let a telemetry line land in the middle of a reply.
+ */
+static void at_reply(const char *text) {
+    char line[AT_RESPONSE_BUFFER_SIZE];
+    snprintf(line, sizeof(line), "%s\r\n" AT_PROMPT, text);
+    (void)uart_puts(reply_port, line);
+}
+
 void at_cmd_respond_ok(void) {
-    uart_println("OK");
-    uart_puts(AT_PROMPT);
+    at_reply("OK");
 }
 
 void at_cmd_respond_error(AT_Result_t error) {
-    uart_printf("ERROR:%d\r\n", (int)error);
-    uart_puts(AT_PROMPT);
+    char text[16];
+    snprintf(text, sizeof(text), "ERROR:%d", (int)error);
+    at_reply(text);
 }
 
 void at_cmd_respond_data(const char *cmd, const char *fmt, ...) {
-    uart_printf("+%s:", cmd);
-    
+    char text[AT_RESPONSE_BUFFER_SIZE];
+    int prefix = snprintf(text, sizeof(text), "+%s:", cmd);
+
     va_list args;
     va_start(args, fmt);
-    vsnprintf(response_buffer, sizeof(response_buffer), fmt, args);
+    vsnprintf(text + prefix, sizeof(text) - (size_t)prefix, fmt, args);
     va_end(args);
-    
-    uart_println(response_buffer);
-    uart_puts(AT_PROMPT);
+
+    at_reply(text);
 }
 
 /* ==========================================================================
  * Command Processing
  * ========================================================================== */
 
-void at_cmd_process(const char *line, uint16_t length) {
+void at_cmd_process(UART_Port_t port, const char *line, uint16_t length) {
+    reply_port = port;
+
     if (line == NULL || length == 0) {
         return;
     }
@@ -221,8 +234,7 @@ void at_cmd_process(const char *line, uint16_t length) {
     /* Check for AT prefix */
     if (strncmp(cmd_start, "AT", 2) != 0) {
         /* Not an AT command - show error */
-        uart_println("ERROR:Invalid command (must start with AT)");
-        uart_puts(AT_PROMPT);
+        at_reply("ERROR:Invalid command (must start with AT)");
         return;
     }
     
@@ -230,8 +242,7 @@ void at_cmd_process(const char *line, uint16_t length) {
     AT_Command_t cmd;
     if (!at_parse_command(cmd_start, &cmd)) {
         /* Extended commands must use AT+CMD format */
-        uart_println("ERROR:Invalid syntax (use AT+CMD?, AT+CMD=val, or AT+CMD)");
-        uart_puts(AT_PROMPT);
+        at_reply("ERROR:Invalid syntax (use AT+CMD?, AT+CMD=val, or AT+CMD)");
         return;
     }
     
@@ -594,56 +605,45 @@ static void at_handle_execute(const AT_Command_t *cmd) {
  * @brief Show help message
  */
 #if AT_CMD_HELP_ENABLED
+static void at_println(const char *text) {
+    char line[AT_RESPONSE_BUFFER_SIZE];
+    snprintf(line, sizeof(line), "%s\r\n", text);
+    (void)uart_puts(reply_port, line);
+}
+
 static void at_show_help(void) {
-    uart_println("");
-    uart_println("+HELP:AT Command Reference");
-    uart_println("  AT              Test connection");
-    uart_println("  AT+VERSION?     Firmware version");
-    uart_println("  AT+STATUS?      Robot status");
+    at_println("");
+    at_println("+HELP:AT Command Reference");
+    at_println("  AT              Test connection");
+    at_println("  AT+VERSION?     Firmware version");
+    at_println("  AT+STATUS?      Robot status");
 #if AT_CMD_ALL_QUERY
-    uart_println("  AT+ALL?         All sensor data");
+    at_println("  AT+ALL?         All sensor data");
 #endif
-    uart_println("  AT+ACC_X?       X acceleration");
-    uart_println("  AT+ACC_Y?       Y acceleration");
-    uart_println("  AT+ACC_Z?       Z acceleration");
-    uart_println("  AT+GYRO_X?      X rotation rate");
-    uart_println("  AT+GYRO_Y?      Y rotation rate");
-    uart_println("  AT+GYRO_Z?      Z rotation rate");
-    uart_println("  AT+ANGLE?       Tilt angle");
-    uart_println("  AT+VELOCITY?    Current velocity");
-    uart_println("  AT+VELOCITY=n   Set target (-100..100)");
-    uart_println("  AT+SPEED=l,r    Set wheel speeds (-100..100)");
-    uart_println("  AT+SPEED?       Get wheel speeds");
-    uart_println("  AT+TURN=n       Set turn rate (-100..100)");
-    uart_println("  AT+KP?/=n       PID proportional");
-    uart_println("  AT+KI?/=n       PID integral");
-    uart_println("  AT+KD?/=n       PID derivative");
-    uart_println("  AT+STREAM=0|1   Stream filter angles");
-    uart_println("  AT+ENABLE       Enable motors");
-    uart_println("  AT+DISABLE      Disable motors");
+    at_println("  AT+ACC_X?       X acceleration");
+    at_println("  AT+ACC_Y?       Y acceleration");
+    at_println("  AT+ACC_Z?       Z acceleration");
+    at_println("  AT+GYRO_X?      X rotation rate");
+    at_println("  AT+GYRO_Y?      Y rotation rate");
+    at_println("  AT+GYRO_Z?      Z rotation rate");
+    at_println("  AT+ANGLE?       Tilt angle");
+    at_println("  AT+VELOCITY?    Current velocity");
+    at_println("  AT+VELOCITY=n   Set target (-100..100)");
+    at_println("  AT+SPEED=l,r    Set wheel speeds (-100..100)");
+    at_println("  AT+SPEED?       Get wheel speeds");
+    at_println("  AT+TURN=n       Set turn rate (-100..100)");
+    at_println("  AT+KP?/=n       PID proportional");
+    at_println("  AT+KI?/=n       PID integral");
+    at_println("  AT+KD?/=n       PID derivative");
+    at_println("  AT+STREAM=0|1   Stream filter angles");
+    at_println("  AT+ENABLE       Enable motors");
+    at_println("  AT+DISABLE      Disable motors");
 #if AT_CMD_PID_TOGGLE
-    uart_println("  AT+PID/PIDON/PIDOFF  Toggle/enable/disable PID");
+    at_println("  AT+PID/PIDON/PIDOFF  Toggle/enable/disable PID");
 #endif // AT_CMD_PID_TOGGLE
-    uart_println("  AT+STOP         Emergency stop");
-    uart_println("  AT+RESET        System reset");
-    uart_println("  AT+HELP         This help");
+    at_println("  AT+STOP         Emergency stop");
+    at_println("  AT+RESET        System reset");
+    at_println("  AT+HELP         This help");
     at_cmd_respond_ok();
 }
 #endif /* AT_CMD_HELP_ENABLED */
-
-/* ==========================================================================
- * Task
- * ========================================================================== */
-
-void at_cmd_task(void *args) {
-    (void)args;
-    
-    /* Show initial prompt (at_cmd_init already called from main) */
-    uart_println("");
-    uart_println("AT Command Interface Ready");
-    uart_println("Type AT+HELP for commands");
-    uart_puts(AT_PROMPT);
-    
-    /* This task can be deleted - callback handles everything */
-    vTaskDelete(NULL);
-}

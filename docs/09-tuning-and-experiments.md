@@ -36,8 +36,8 @@ AT+ANGLE?
 
 If upright is far from 0°, the IMU is mounted at an angle; if the sign is
 reversed, the IMU is mounted facing the other way. Either way, fix
-[`calc_angle_from_accel()`](../src/robot/robot.c#L115) and the 90° offset in
-[`robot_task()`](../src/robot/robot.c#L367) before going further.
+[`calc_angle_from_accel()`](../src/robot/robot.c#L118) and the 90° offset in
+[`robot_task()`](../src/robot/robot.c#L362) before going further.
 
 ### 2. Gyro calibration
 
@@ -117,10 +117,12 @@ a starting point, not a result.
 | Balance state | `AT+STATUS?` (`BALANCED` = \|tilt\| < 5°) |
 | Current gains | `AT+KP?`, `AT+KI?`, `AT+KD?` |
 
-The stream does not include the PID output or PWM yet. Adding them to
-[`robot_stream_sample()`](../src/robot/robot.c#L159) is the most useful
-next instrumentation step for tuning; keep the line short, since the UART
-queue holds 256 characters.
+For tuning, the most useful signals are in the same stream: `tilt`, the PID
+terms `p`, `i`, `d` and the clamped `out`
+([record format](10-at-commands.md#stream-filter-data-for-testfilter_comparisonpy)).
+Capture a run and plot them to see which term dominates an oscillation. The
+`seq` and `drops` fields tell you whether the capture is complete. Per-wheel PWM
+is not logged yet.
 
 ## Automated checks
 

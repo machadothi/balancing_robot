@@ -15,11 +15,11 @@
 /* Application */
 #cmakedefine01 APP_BLINK_ONLY
 #define UART_BAUDRATE               @UART_BAUDRATE@
+#define BT_BAUDRATE                 @BT_BAUDRATE@
 #define IMU_SAMPLE_RATE_MS          @IMU_SAMPLE_RATE_MS@
 #cmakedefine01 ATTITUDE_FILTER_KALMAN
 
 /* Feature flags */
-#cmakedefine01 UART_PRINTF_ENABLED
 #cmakedefine01 UART_ECHO_ENABLED
 #cmakedefine01 I2C_DMA_ENABLED
 #cmakedefine01 I2C_BUS_RECOVERY

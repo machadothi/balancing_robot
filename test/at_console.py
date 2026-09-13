@@ -2,10 +2,12 @@
 Serial client for the robot's AT command console.
 
 Protocol, as implemented in src/cmd/at_cmd.c:
-  - commands end with CR; typed characters are echoed (UART_ECHO_ENABLED)
+  - commands end with CR; the USB console echoes each line (UART_ECHO_ENABLED),
+    the Bluetooth console does not
   - a response ends with "OK", "ERROR:<code>", "ERROR:<text>" or "+CMD:value"
   - "> " is printed after every response, without a newline
-  - AT+STREAM=1 interleaves "acc_deg: .. | kalman: .. | comp: .." lines
+  - AT+STREAM=1 adds telemetry lines on the USB console only:
+    "seq: .. | t: .. | acc_deg: .. | kalman: .. | comp: .. | tilt: .. | p: .. | i: .. | d: .. | out: .. | drops: .."
 """
 
 from __future__ import annotations
@@ -19,9 +21,7 @@ import serial
 PROMPT = "> "
 BANNER = "=== Balancing Robot"
 
-STREAM_RE = re.compile(
-    r"acc_deg:\s*(?P<acc_deg>\S+)\s*\|\s*kalman:\s*(?P<kalman>\S+)\s*\|\s*comp:\s*(?P<comp>\S+)"
-)
+TELEMETRY_PREFIX = "seq:"
 _ERROR_CODE_RE = re.compile(r"ERROR:(\d+)")
 
 
@@ -49,10 +49,21 @@ class Response:
 
 
 @dataclass
-class StreamSample:
+class TelemetryRecord:
+    seq: int
+    t: int
     acc_deg: float
     kalman: float
     comp: float
+    tilt: float
+    p: float
+    i: float
+    d: float
+    out: float
+    drops: int
+
+
+_INT_FIELDS = ("seq", "t", "drops")
 
 
 def _strip_prompts(line: str) -> str:
@@ -62,18 +73,41 @@ def _strip_prompts(line: str) -> str:
     return line.strip()
 
 
-def parse_stream(text: str) -> list[StreamSample]:
-    """Complete telemetry lines in `text`; the first and last line may be cut off."""
-    samples = []
-    for line in text.split("\n")[1:-1]:
-        match = STREAM_RE.fullmatch(_strip_prompts(line))
-        if not match:
-            continue
-        try:
-            samples.append(StreamSample(*(float(match[k]) for k in ("acc_deg", "kalman", "comp"))))
-        except ValueError:      # "ovf" from the firmware formatter
-            samples.append(StreamSample(float("nan"), float("nan"), float("nan")))
-    return samples
+def is_telemetry(line: str) -> bool:
+    return _strip_prompts(line).startswith(TELEMETRY_PREFIX)
+
+
+def _number(text: str) -> float:
+    try:
+        return float(text)
+    except ValueError:          # "ovf" from the firmware formatter
+        return float("nan")
+
+
+def parse_telemetry_line(line: str) -> TelemetryRecord | None:
+    """None for anything that is not one complete, well-formed record."""
+    fields = {}
+    for part in _strip_prompts(line).split("|"):
+        key, sep, value = part.partition(":")
+        if not sep:
+            return None
+        fields[key.strip()] = value.strip()
+    try:
+        return TelemetryRecord(**{
+            name: int(fields[name]) if name in _INT_FIELDS else _number(fields[name])
+            for name in TelemetryRecord.__dataclass_fields__
+        })
+    except (KeyError, ValueError):
+        return None
+
+
+def parse_stream(text: str) -> list[TelemetryRecord]:
+    """Records from complete lines in `text`; the first and last line may be cut off.
+
+    A corrupted line is skipped, so it shows up as a gap in the sequence numbers.
+    """
+    records = (parse_telemetry_line(line) for line in text.split("\n")[1:-1] if is_telemetry(line))
+    return [record for record in records if record is not None]
 
 
 class AtConsole:
@@ -129,7 +163,7 @@ class AtConsole:
             while "\n" in buffer:
                 raw, buffer = buffer.split("\n", 1)
                 line = _strip_prompts(raw)
-                if not line or line.upper() == command.upper() or STREAM_RE.fullmatch(line):
+                if not line or line.upper() == command.upper() or is_telemetry(line):
                     continue            # blank, echo of the command, or telemetry
                 lines.append(line)
                 if line == "OK":
@@ -174,8 +208,8 @@ class AtConsole:
 
     # -- telemetry -------------------------------------------------------------
 
-    def stream(self, seconds: float) -> list[StreamSample]:
-        """Collect AT+STREAM samples for `seconds`."""
+    def stream(self, seconds: float) -> list[TelemetryRecord]:
+        """Collect AT+STREAM records for `seconds` (USB console only)."""
         self.expect_ok("AT+STREAM=1")
         try:
             text = self.read_for(seconds)

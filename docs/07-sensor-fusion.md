@@ -8,11 +8,11 @@ the two filters in the firmware, and shows how to measure them on your robot.
 
 | What | Where |
 |------|-------|
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L115) |
-| Complementary filter | [`complementary_update()`](../src/filter/complementary.c#L32), `COMPLEMENTARY_ALPHA` in [config.h](../src/config.h#L75) |
-| Kalman filter | [`kalman_update()`](../src/filter/kalman.c#L34), `KALMAN_Q_ANGLE` / `KALMAN_R_MEASURE` in [config.h](../src/config.h#L67) |
-| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L367), `ATTITUDE_FILTER` CMake option |
-| Telemetry for analysis | `AT+STREAM`, [`robot_stream_sample()`](../src/robot/robot.c#L159), [test/filter_comparison.py](../test/filter_comparison.py) |
+| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L118) |
+| Complementary filter | [`complementary_update()`](../src/filter/complementary.c#L32), `COMPLEMENTARY_ALPHA` in [config.h](../src/config.h#L82) |
+| Kalman filter | [`kalman_update()`](../src/filter/kalman.c#L34), `KALMAN_Q_ANGLE` / `KALMAN_R_MEASURE` in [config.h](../src/config.h#L74) |
+| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L362), `ATTITUDE_FILTER` CMake option |
+| Telemetry for analysis | `AT+STREAM`, [telemetry.c](../src/telemetry/telemetry.c), [test/filter_comparison.py](../test/filter_comparison.py) |
 
 ## 1. Two sensors, two error models
 

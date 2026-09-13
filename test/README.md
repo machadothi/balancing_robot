@@ -33,6 +33,9 @@ pytest --port /dev/ttyUSB0 --motors
 # Everything, including tests that ask you to tilt the robot, unplug the IMU or let it balance
 pytest --port /dev/ttyUSB0 --motors --interactive
 
+# Over the F407 board's Bluetooth console (skips telemetry and banner tests)
+pytest --port /dev/rfcomm0 --bluetooth
+
 # One file or one test
 pytest test_console.py
 pytest -k fixed_point
@@ -47,6 +50,7 @@ summary.
 | `--baud` | `$ROBOT_BAUD` or `921600` | Must match the firmware's `UART_BAUDRATE` |
 | `--motors` | off | Run tests that drive the wheels |
 | `--interactive` | off | Run tests that need an operator |
+| `--bluetooth` | off | `--port` is the Bluetooth console: skip tests that need USB telemetry or the banner |
 | `--assert-dtr-rts` | off | Assert DTR/RTS when opening the port (see below) |
 
 ## What each file checks
@@ -55,7 +59,7 @@ summary.
 |------|---------------|--------|
 | [test_console.py](test_console.py) | Anywhere | `OK`/data/error replies, every error code, rejection of `nan`/garbage parameters, gain round-trip and `AT+DEFAULT`, fixed-point formatting |
 | [test_sensors.py](test_sensors.py) | Still | Gravity magnitude ≈ 1 g, gyro bias at rest, live (not frozen) data, filtered angle vs accelerometer |
-| [test_stream.py](test_stream.py) | Still | Telemetry rate = control loop rate (100 Hz), finite values, filters agree with the accelerometer, complementary filter smoother than raw |
+| [test_stream.py](test_stream.py) | Still | USB only. No lost records (`seq` gaps, firmware `drops`), record rate = loop rate (100 Hz), 10 ms period jitter, finite values, filters agree with the accelerometer, complementary filter smoother than raw |
 | [test_safety.py](test_safety.py) | Still | No watchdog reset idle or under load, ENABLE/STOP; with `--interactive`: tilt cut-off, IMU-loss cut-off; with both flags: balances for 3 s |
 | [test_motors.py](test_motors.py) | Lifted | Wheel direction patterns, `AT+SPEED?` reporting, `AT+STOP` zeroes speeds |
 
@@ -70,7 +74,7 @@ These constants mirror firmware settings; update them if you change those:
 | Test constant | Firmware setting |
 |---------------|------------------|
 | `DEFAULT_GAINS` in `test_console.py` | `ROBOT_DEFAULT_KP/KI/KD` in `src/robot/robot.c` |
-| `LOOP_RATE_HZ` in `test_stream.py` | `1000 / IMU_SAMPLE_RATE_MS` |
+| `SAMPLE_PERIOD_MS` in `test_stream.py` | `IMU_SAMPLE_RATE_MS` |
 | `--baud` | `UART_BAUDRATE` |
 
 Tests that use `AT+PIDON`/`AT+PIDOFF` need `AT_CMD_PID_TOGGLE=ON` (the default).

@@ -11,9 +11,9 @@ the calibration and sampling choices that affect the controller.
 | Burst read and parsing | [`mpu6050_read_all_dma()`](../src/imu/mpu6050.c#L296), [`mpu6050_dma_callback()`](../src/imu/mpu6050.c#L72) |
 | Scaling and calibration | [`read_imu_data()`](../src/imu/imu.c#L79) |
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L29) |
-| Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L56) |
+| Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L63) |
 | Sampling task | [`imu_task()`](../src/imu/imu.c#L110) |
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L115) |
+| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L118) |
 
 ## Configuration
 
@@ -81,7 +81,7 @@ MEMS gyros report a non-zero rate at rest (bias), which integrates into drift.
 The firmware adds a constant offset to `gyro_x` only.
 
 The value is **−0.69 °/s**, `GYRO_CALIBRATION_OFFSET` in
-[config.h](../src/config.h#L56). To calibrate, read `AT+GYRO_X?` with the
+[config.h](../src/config.h#L63). To calibrate, read `AT+GYRO_X?` with the
 robot still and adjust the config.h value by the negative of the reading
 ([09](09-tuning-and-experiments.md#2-gyro-calibration)).
 

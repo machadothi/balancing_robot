@@ -20,6 +20,12 @@ the linked [docs](docs/README.md) chapter.
 - [ ] **F407 bring-up** in order: LED blink → console on Type-C → `AT+ANGLE?` →
       motor direction per port → balancing
       ([09](docs/09-tuning-and-experiments.md#bring-up-checklist)).
+- [ ] F407 Bluetooth console: measure the Bluetooth header's supply voltage,
+      set the HC-05 to `BT_BAUDRATE`, then run
+      `pytest --port /dev/rfcomm0 --bluetooth`
+      ([10](docs/10-at-commands.md#bluetooth-console-f407-board)).
+- [ ] Log a long balancing run over USB and confirm `test_no_lost_records`
+      holds under real load on both boards.
 - [ ] Verify the `flash-serial` DTR/RTS boot sequence (`SERIAL_BOOT_SEQUENCE`)
       and update [02](docs/02-build-and-configuration.md) with the working value.
 - [ ] Back up the F407 vendor firmware before the first flash
@@ -66,13 +72,16 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 - [ ] Measure task stack usage (`INCLUDE_uxTaskGetStackHighWaterMark`) and size
       stacks from data.
 - [ ] Decide whether the watchdog should also supervise the UART tasks.
-- [ ] Replace `uart_printf`'s binary semaphore with a mutex (priority
-      inheritance).
+- [ ] Arbitrate the USB and Bluetooth consoles, and stop the robot when the
+      Bluetooth link drops (HC-05 STATE pin).
+- [ ] DMA transmission for the USB console if the per-byte TX interrupt load
+      matters on the Blue Pill.
 
 ## 6. Instrumentation and tests
 
-- [ ] Extend `AT+STREAM` with PID terms and PWM, keeping lines short
+- [ ] Add per-wheel PWM and encoder counts to the telemetry record
       ([09](docs/09-tuning-and-experiments.md#what-to-observe)).
+- [ ] Host script that captures telemetry to CSV and plots tilt and PID terms.
 - [ ] [test/filter_comparison.py](test/filter_comparison.py): reuse `at_console.py` (port and
       baud options, sends `AT+STREAM=1` itself) and update its docstring to the
       current `acc_deg | kalman | comp` format.

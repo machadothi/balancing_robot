@@ -23,8 +23,8 @@
 #include "robot/robot.h"
 #include "imu/imu.h"
 #include "filter/filter.h"
-#include "drivers/uart.h"
 #include "cmd/at_cmd.h"
+#include "telemetry/telemetry.h"
 #include "log/log.h"
 #include "motor/motor.h"
 
@@ -90,6 +90,9 @@ typedef struct {
     float prev_error;       /**< Previous error for derivative */
     float integral_limit;   /**< Anti-windup limit */
     float output;           /**< Last PID output */
+    float p_term;           /**< Last terms, for telemetry */
+    float i_term;
+    float d_term;
 } PID_State_t;
 
 static PID_State_t pid = {
@@ -143,6 +146,9 @@ static void pid_reset(void) {
     pid.integral = 0.0f;
     pid.prev_error = 0.0f;
     pid.output = 0.0f;
+    pid.p_term = 0.0f;
+    pid.i_term = 0.0f;
+    pid.d_term = 0.0f;
 }
 
 static void robot_lock(void) {
@@ -151,22 +157,6 @@ static void robot_lock(void) {
 
 static void robot_unlock(void) {
     xSemaphoreGive(state_mutex);
-}
-
-/**
- * @brief Print one telemetry line in the format test/filter_comparison.py parses
- */
-static void robot_stream_sample(float acc_angle, float kalman_angle, float comp_angle) {
-    char acc[16], kal[16], comp[16];
-    char line[96];
-
-    snprintf(line, sizeof(line), "acc_deg: %s | kalman: %s | comp: %s\r\n",
-             at_format_fixed(acc, sizeof(acc), acc_angle, 2),
-             at_format_fixed(kal, sizeof(kal), kalman_angle, 2),
-             at_format_fixed(comp, sizeof(comp), comp_angle, 2));
-
-    /* Drop the sample rather than block the control loop on a full UART queue */
-    (void)uart_try_puts(line);
 }
 
 /**
@@ -198,6 +188,9 @@ static float pid_compute(float angle, float dt) {
     pid.prev_error = error;
     
     /* Sum all terms */
+    pid.p_term = p_term;
+    pid.i_term = i_term;
+    pid.d_term = d_term;
     pid.output = p_term + i_term + d_term;
     
     /* Clamp output to motor range */
@@ -472,10 +465,22 @@ void robot_task(void *args) {
         }
 
         bool stream = stream_enabled;
+        Telemetry_Record_t record = {
+            .tick_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS),
+            .acc_deg = acc_angle,
+            .kalman = kalman_angle,
+            .comp = comp_angle,
+            .tilt = tilt_angle,
+            .p = pid.p_term,
+            .i = pid.i_term,
+            .d = pid.d_term,
+            .out = pid.output,
+        };
         robot_unlock();
 
+        /* Never blocks: formatting and UART output happen in telemetry_task */
         if (stream) {
-            robot_stream_sample(acc_angle, kalman_angle, comp_angle);
+            (void)telemetry_submit(&record);
         }
     }
 }

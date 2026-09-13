@@ -65,7 +65,8 @@ include(CMakeDependentOption)
 option(APP_BLINK_ONLY "Only run the LED heartbeat task (no drivers)"
     ${BOARD_DEFAULT_APP_BLINK_ONLY})
 
-set(UART_BAUDRATE 921600 CACHE STRING "UART baud rate")
+set(UART_BAUDRATE 921600 CACHE STRING "USB console baud rate (telemetry and AT commands)")
+set(BT_BAUDRATE 115200 CACHE STRING "Bluetooth console baud rate (boards with a Bluetooth port)")
 set(IMU_SAMPLE_RATE_MS 10 CACHE STRING "IMU sample period in ms")
 set(FREERTOS_TICK_RATE_HZ 1000 CACHE STRING "FreeRTOS tick rate in Hz")
 set(FREERTOS_TOTAL_HEAP_SIZE ${BOARD_DEFAULT_HEAP_SIZE} CACHE STRING
@@ -86,7 +87,7 @@ else()
     set(ATTITUDE_FILTER_KALMAN OFF)
 endif()
 
-foreach(value UART_BAUDRATE IMU_SAMPLE_RATE_MS FREERTOS_TICK_RATE_HZ FREERTOS_TOTAL_HEAP_SIZE)
+foreach(value UART_BAUDRATE BT_BAUDRATE IMU_SAMPLE_RATE_MS FREERTOS_TICK_RATE_HZ FREERTOS_TOTAL_HEAP_SIZE)
     if(NOT ${value} MATCHES "^[0-9]+$")
         message(FATAL_ERROR "${value} must be a positive integer, got '${${value}}'")
     endif()
@@ -102,8 +103,7 @@ if(NOT IMU_SAMPLE_PERIOD_REMAINDER EQUAL 0)
 endif()
 
 # Driver features: forced OFF when the drivers are not built
-cmake_dependent_option(UART_PRINTF_ENABLED "Enable uart_printf" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(UART_ECHO_ENABLED "Echo received UART characters" ON "NOT APP_BLINK_ONLY" OFF)
+cmake_dependent_option(UART_ECHO_ENABLED "Echo command lines on the USB console" ON "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(I2C_DMA_ENABLED "I2C DMA transfers (required for IMU)" ON "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(I2C_BUS_RECOVERY "I2C bus recovery" ON "NOT APP_BLINK_ONLY" OFF)
 cmake_dependent_option(AT_CMD_HELP_ENABLED "AT+HELP command" OFF "NOT APP_BLINK_ONLY" OFF)
@@ -218,6 +218,7 @@ if(NOT APP_BLINK_ONLY)
         ${SRC_DIR}/imu/mpu6050.c
         ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
+        ${SRC_DIR}/telemetry/telemetry.c
     )
 endif()
 

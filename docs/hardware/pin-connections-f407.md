@@ -15,6 +15,7 @@ Pin assignments come from the vendor firmware project
 |----------|------|------------|-------|
 | User LED | PE10 | GPIO | Active low; heartbeat |
 | Console | PA9 (TX), PA10 (RX) | USART1 | Type-C USB-serial; also the bootloader port (DTR = reset, RTS = BOOT0) |
+| Bluetooth console | PD5 (TX → module RXD), PD6 (RX ← module TXD) | USART2 | HC-05/HC-06 at `BT_BAUDRATE`; check the header's supply voltage before connecting |
 | MPU-6050 | PB10 (SCL), PB11 (SDA) | I2C2 | DMA1 stream 7 (TX) / stream 2 (RX), channel 7 |
 | motor1 | Port M1 | see below | `BOARD_MOTOR1_PORT` in `src/board/f407/board_config.h` |
 | motor2 | Port M2 | see below | `BOARD_MOTOR2_PORT` |
@@ -45,6 +46,5 @@ encoders are quadrature, read by a timer in encoder mode.
 | PWM servos | PA11, PA12, PC8, PC9 | GPIO outputs in vendor firmware |
 | Serial bus servo | PC6 (TX), PC7 (RX), PE7 (TX enable), PE8 (RX enable) | USART6 |
 | SBUS receiver | PD2 | UART5 RX, inverted through NPN transistor |
-| Bluetooth | PD5 (TX), PD6 (RX) | USART2 |
 | Host link | PD8 (TX), PD9 (RX) | USART3, 1 Mbit/s in vendor firmware |
 | USB host | PB14 (D+), PB15 (D-) | |

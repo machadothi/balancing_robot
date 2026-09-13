@@ -9,9 +9,9 @@ the locking scheme.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L50) |
-| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L77) |
-| Stack sizes, priorities | [config.h](../src/config.h#L103) |
+| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L51) |
+| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L79) |
+| Stack sizes, priorities | [config.h](../src/config.h#L110) |
 | Kernel configuration | [FreeRTOSConfig.h](../src/FreeRTOSConfig.h#L92) |
 | libopencm3 ↔ FreeRTOS handler glue | [src/rtos/opencm3.c](../src/rtos/opencm3.c) |
 | Fault and RTOS hooks | [fault_handlers.c](../src/fault/fault_handlers.c) |
@@ -36,7 +36,7 @@ flowchart TD
 Points worth noting:
 
 - **Everything before the scheduler runs without an RTOS.** The banner uses
-  `usart_send_blocking()` because the TX task does not exist yet. Queues can
+  `usart_send_blocking()` because `uart_write()` relies on the kernel. Queues can
   already be created (they only need the heap), and interrupts that post to
   them are safe once the objects exist, which is why `uart_init()` creates the
   queues *before* enabling the RX interrupt.
@@ -52,13 +52,13 @@ Points worth noting:
 | Task | Priority | Stack (words) | Runs | Blocks on |
 |------|----------|---------------|------|-----------|
 | `imu_task` | 4 (`TASK_PRIORITY_CONTROL`) | 192 | Every `IMU_SAMPLE_RATE_MS` (10 ms) | `vTaskDelayUntil`, DMA semaphore |
-| `robot_task` | 4 (`TASK_PRIORITY_CONTROL`) | 320 | Once per IMU sample | `imu_content` queue |
-| `uart_rx_task` | 2 (`TASK_PRIORITY_IO`) | 384 | Once per received line | `uart_rxq` queue |
-| `uart_tx_task` | 2 (`TASK_PRIORITY_IO`) | 128 | While characters are queued | `uart_txq` queue |
+| `robot_task` | 4 (`TASK_PRIORITY_CONTROL`) | 256 | Once per IMU sample | `imu_content` queue |
+| `uart_rx_task` | 2 (`TASK_PRIORITY_IO`) | 384 | Once per received line, any console port | `uart_rxq` queue |
+| `telemetry_task` | 2 (`TASK_PRIORITY_IO`) | 256 | Once per record while `AT+STREAM=1` | Telemetry queue, USB TX buffer space |
 | `led_task` | 1 (`TASK_PRIORITY_LED`) | 64 | Every 250 ms | `vTaskDelayUntil` |
 | Idle | 0 | 128 | When nothing else is ready | — |
 
-Stack sizes are in **words**: 320 words is 1280 bytes on a 32-bit MCU.
+Stack sizes are in **words**: 256 words is 1024 bytes on a 32-bit MCU.
 
 **Why these priorities.** Only the sensing/control chain has a deadline. With
 fixed-priority preemptive scheduling, a higher priority guarantees that a
@@ -73,34 +73,37 @@ blinking LED is also a coarse "the CPU is not saturated" indicator.
 flowchart LR
     subgraph ISRS["Interrupts"]
         DMAISR["I2C / DMA ISRs<br/>priority 0xB0"]
-        UARTISR["USART RX ISR<br/>priority 0xC0"]
+        UARTISR["USART ISRs, one per port<br/>priority 0xC0"]
     end
 
     IMU["imu_task<br/>prio 4"]
     ROBOT["robot_task<br/>prio 4"]
     RX["uart_rx_task<br/>prio 2"]
-    TX["uart_tx_task<br/>prio 2"]
+    TELEM["telemetry_task<br/>prio 2"]
     STATE[("robot_state<br/>+ state_mutex")]
-    TXQ[["uart_txq<br/>256 chars"]]
+    TLQ[["telemetry queue<br/>16 / 32 records"]]
+    RING[["TX ring buffer<br/>per port"]]
 
     DMAISR -->|"i2c_transfer_sem<br/>(binary semaphore)"| IMU
     IMU -->|"imu_content<br/>latest sample"| ROBOT
-    UARTISR -->|"uart_rxq<br/>8 lines"| RX
+    UARTISR -->|"uart_rxq<br/>lines tagged with port"| RX
     ROBOT <-->|"lock per sample"| STATE
     RX <-->|"lock per command"| STATE
-    RX -->|"responses"| TXQ
-    ROBOT -->|"AT+STREAM,<br/>never blocks"| TXQ
-    TXQ --> TX
+    ROBOT -->|"record,<br/>never blocks"| TLQ
+    TLQ --> TELEM
+    TELEM -->|"USB port,<br/>waits for space"| RING
+    RX -->|"reply to the<br/>command's port"| RING
+    RING -->|"TXE interrupt"| UARTISR
 ```
 
 | Object | Type | Created in | Producer → consumer |
 |--------|------|------------|---------------------|
 | `imu_content` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite` | [imu.c](../src/imu/imu.c#L34) | `imu_task` → `robot_task` |
 | `i2c_transfer_sem` | Binary semaphore | [mpu6050.c](../src/imu/mpu6050.c#L106) | DMA callback (ISR) → `imu_task` |
-| `uart_rxq` | Queue, 8 × `UART_Line_t` | [uart.c](../src/drivers/uart.c#L96) | RX ISR → `uart_rx_task` |
-| `uart_txq` | Queue, 256 × `char` | [uart.c](../src/drivers/uart.c#L95) | Any task → `uart_tx_task` |
-| `tx_mutex` | Binary semaphore | [uart.c](../src/drivers/uart.c#L99) | Serialises `uart_printf`'s shared buffer |
-| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L380) | `robot_task` ↔ AT handlers |
+| `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
+| TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |
+| Telemetry queue | Queue, 32 / 16 × record | [telemetry.c](../src/telemetry/telemetry.c) | `robot_task` → `telemetry_task` |
+| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L375) | `robot_task` ↔ AT handlers |
 
 ### Latest-sample mailbox
 
@@ -125,8 +128,8 @@ control loop and the AT console. Both sides take `state_mutex`:
   commands, and never while blocked on its queue.
 - **The AT parser** locks only around a set/execute callback, or to take a
   snapshot for a query ([`at_cmd_set_lock()`](../src/cmd/at_cmd.c#L107)).
-  Responses are printed **after** unlocking. Printing can block on a full
-  `uart_txq`, and holding the lock while blocked would stall the control loop.
+  Responses are printed **after** unlocking. Printing can wait for UART buffer
+  space, and holding the lock while waiting would stall the control loop.
 - **Priority inheritance.** When `robot_task` (prio 4) waits for the mutex held
   by `uart_rx_task` (prio 2), the kernel temporarily raises the holder to
   prio 4. Otherwise a medium-priority task could preempt the holder and delay
@@ -153,7 +156,7 @@ FreeRTOS divides that range in two with `configMAX_SYSCALL_INTERRUPT_PRIORITY`
 |-----------|---------------|-----------------|--------|
 | F103 encoder EXTI9_5 | 0x80 | No (counter increment only) | [motor.c](../src/motor/motor.c#L140) |
 | I2C event/error, DMA TX/RX | 0xB0 | Yes (`xSemaphoreGiveFromISR`) | [`i2c_init_dma(&i2c, 11)`](../src/imu/mpu6050.c#L123) |
-| Console USART | 0xC0 | Yes (`xQueueSendFromISR`) | [uart.c](../src/drivers/uart.c#L107) |
+| Console USART | 0xC0 | Yes (`xQueueSendFromISR`) | [uart.c](../src/drivers/uart.c#L130) |
 | SysTick, PendSV (kernel) | 0xF0 | — | `configKERNEL_INTERRUPT_PRIORITY` |
 
 The I2C/DMA interrupts used to be at 0x50, above the limit, while calling
@@ -231,5 +234,5 @@ is on, and blink the board LED at a rate that identifies the fault
   the sample timeout instead, and the console tasks are not supervised.
 - Stack sizes are estimates; enable `INCLUDE_uxTaskGetStackHighWaterMark` to
   measure real usage.
-- `uart_printf` serialises with a binary semaphore, which has no priority
-  inheritance; it is only called from priority-2 tasks today.
+- Commands from the USB and Bluetooth consoles are not arbitrated: the last
+  command wins, and a dropped Bluetooth link does not stop the robot.

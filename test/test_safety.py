@@ -9,11 +9,13 @@ import pytest
 from at_console import BANNER
 
 
+@pytest.mark.usb_only
 def test_no_reset_while_idle(robot):
     received = robot.read_for(5.0)
     assert BANNER not in received, "startup banner printed again: the board reset (watchdog?)"
 
 
+@pytest.mark.usb_only
 def test_no_reset_under_telemetry_load(robot):
     robot.expect_ok("AT+STREAM=1")
     try:

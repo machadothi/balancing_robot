@@ -21,6 +21,18 @@
 #define BOARD_UART_RX_PIN        GPIO10
 #define BOARD_UART_AF            GPIO_AF7
 
+/* Bluetooth AT console (HC-05/HC-06 module): USART2 on the Bluetooth header
+ * (PD5 = TX to the module's RXD, PD6 = RX from the module's TXD) */
+#define BOARD_BT_UART            USART2
+#define BOARD_BT_UART_RCC        RCC_USART2
+#define BOARD_BT_UART_IRQ        NVIC_USART2_IRQ
+#define BOARD_BT_UART_ISR        usart2_isr
+#define BOARD_BT_UART_PORT       GPIOD
+#define BOARD_BT_UART_PORT_RCC   RCC_GPIOD
+#define BOARD_BT_UART_TX_PIN     GPIO5
+#define BOARD_BT_UART_RX_PIN     GPIO6
+#define BOARD_BT_UART_AF         GPIO_AF7
+
 /* On-board MPU-6050: I2C2 (PB10 = SCL, PB11 = SDA) */
 #define BOARD_I2C                I2C2
 #define BOARD_I2C_RCC            RCC_I2C2

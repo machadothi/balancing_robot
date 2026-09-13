@@ -27,7 +27,14 @@ extern "C" {
  *  @brief UART communication settings
  *  @{
  */
-#define UART_TX_QUEUE_SIZE      256     /**< UART transmit queue size (bytes) */
+#if defined(STM32F1)
+#define UART_USB_TX_BUFFER_SIZE 1024    /**< USB console TX ring buffer (bytes, power of two) */
+#define TELEMETRY_QUEUE_SIZE    16      /**< Records buffered for the telemetry task */
+#else
+#define UART_USB_TX_BUFFER_SIZE 4096
+#define TELEMETRY_QUEUE_SIZE    32
+#endif // defined(STM32F1)
+#define UART_BT_TX_BUFFER_SIZE  512     /**< Bluetooth console TX ring buffer (boards with BOARD_BT_UART) */
 /** @} */
 
 /** @defgroup I2C_Config I2C Configuration
@@ -97,16 +104,16 @@ extern "C" {
 
 /* Stack sizes (in words, not bytes) */
 #define TASK_STACK_LED          64      /**< LED task stack size */
-#define TASK_STACK_UART         128     /**< UART task stack size */
+#define TASK_STACK_TELEMETRY    256     /**< Telemetry task stack size (line formatting) */
 #define TASK_STACK_UART_RX      384     /**< UART RX task stack size (AT cmd + float printf) */
 #define TASK_STACK_IMU          192     /**< IMU task stack size */
-#define TASK_STACK_ROBOT        320     /**< Robot control task stack size (includes telemetry snprintf) */
+#define TASK_STACK_ROBOT        256     /**< Robot control task stack size (filters, PID) */
 #define TASK_STACK_MOTOR        128     /**< Motor demo task stack size */
 #define TASK_STACK_AT_CMD       128     /**< AT command task stack size */
 
 /* Task names (for debugging) */
 #define TASK_NAME_LED           "LED"
-#define TASK_NAME_UART          "UART"
+#define TASK_NAME_TELEMETRY     "TELEM"
 #define TASK_NAME_UART_RX       "UART_RX"
 #define TASK_NAME_IMU           "IMU"
 #define TASK_NAME_ROBOT         "ROBOT"
@@ -116,7 +123,7 @@ extern "C" {
 /* Priorities (configMAX_PRIORITIES = 5): the sensing/control chain must never
  * wait behind console I/O, and the heartbeat runs only when nothing else does */
 #define TASK_PRIORITY_CONTROL   4       /**< IMU and robot control tasks */
-#define TASK_PRIORITY_IO        2       /**< UART RX (AT commands) and TX tasks */
+#define TASK_PRIORITY_IO        2       /**< UART RX (AT commands) and telemetry tasks */
 #define TASK_PRIORITY_LED       1       /**< Heartbeat LED */
 /** @} */
 

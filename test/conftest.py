@@ -23,17 +23,24 @@ def pytest_addoption(parser):
                     help="run tests that drive the wheels (lift the robot first)")
     group.addoption("--interactive", action="store_true",
                     help="run tests that ask you to move the robot or unplug the IMU")
+    group.addoption("--bluetooth", action="store_true",
+                    help="--port is the Bluetooth console: skip tests that need the USB "
+                         "telemetry stream or startup banner")
 
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "motors: drives the wheels; needs --motors")
     config.addinivalue_line("markers", "interactive: needs an operator; needs --interactive")
+    config.addinivalue_line("markers", "usb_only: needs the USB console; skipped with --bluetooth")
 
 
 def pytest_collection_modifyitems(config, items):
     skip_motors = pytest.mark.skip(reason="drives the wheels: lift the robot and pass --motors")
     skip_operator = pytest.mark.skip(reason="needs an operator: pass --interactive")
+    skip_usb = pytest.mark.skip(reason="telemetry and banner are only sent on the USB console")
     for item in items:
+        if "usb_only" in item.keywords and config.getoption("--bluetooth"):
+            item.add_marker(skip_usb)
         if "motors" in item.keywords and not config.getoption("--motors"):
             item.add_marker(skip_motors)
         if "interactive" in item.keywords and not config.getoption("--interactive"):

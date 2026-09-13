@@ -159,13 +159,13 @@ Options are CMake cache variables. They are written to
 |--------|---------|-------------|
 | `BOARD` | `f103` | Target board: `f103` or `f407` |
 | `APP_BLINK_ONLY` | `OFF` | Only run the LED heartbeat task |
-| `UART_BAUDRATE` | `921600` | UART baud rate |
+| `UART_BAUDRATE` | `921600` | USB console baud rate (telemetry and AT commands) |
+| `BT_BAUDRATE` | `115200` | Bluetooth console baud rate (F407 board); must match the module |
 | `IMU_SAMPLE_RATE_MS` | `10` | IMU and control loop period (ms); must be a whole number of ticks |
 | `ATTITUDE_FILTER` | `complementary` | Tilt estimator used by the controller: `complementary` or `kalman` ([07](07-sensor-fusion.md)) |
 | `FREERTOS_TICK_RATE_HZ` | `1000` | FreeRTOS tick rate |
-| `FREERTOS_TOTAL_HEAP_SIZE` | `10240` (f103), `32768` (f407) | FreeRTOS heap (bytes) |
-| `UART_PRINTF_ENABLED` | `ON` | `uart_printf` support |
-| `UART_ECHO_ENABLED` | `ON` | Echo received characters |
+| `FREERTOS_TOTAL_HEAP_SIZE` | `12288` (f103), `32768` (f407) | FreeRTOS heap (bytes) |
+| `UART_ECHO_ENABLED` | `ON` | Echo each command line on the USB console |
 | `I2C_DMA_ENABLED` | `ON` | I2C DMA transfers (required for IMU) |
 | `I2C_BUS_RECOVERY` | `ON` | I2C bus recovery |
 | `AT_CMD_HELP_ENABLED` | `OFF` | `AT+HELP` command |
@@ -176,7 +176,7 @@ Options are CMake cache variables. They are written to
 | `WATCHDOG_ENABLED` | `ON` | Independent watchdog (500 ms) refreshed by the control task |
 
 With `APP_BLINK_ONLY=ON` the driver options (everything from
-`UART_PRINTF_ENABLED` down) are forced `OFF`.
+`UART_ECHO_ENABLED` down) are forced `OFF`.
 
 Ways to change options:
 
@@ -238,12 +238,18 @@ tested on the board yet.
 
 ## Serial Monitor
 
-The project outputs debug data at 921600 baud via UART2 (PA2) on the Blue
-Pill, or the Type-C USB-serial port (USART1) on the F407 board:
+The USB console runs at `UART_BAUDRATE` (921600): USART2 (PA2/PA3) through a
+USB-serial adapter on the Blue Pill, or the Type-C USB-serial port (USART1) on
+the F407 board. It accepts AT commands and carries telemetry after
+`AT+STREAM=1`:
 
 ```bash
 picocom -b 921600 /dev/ttyUSB0
 ```
+
+The F407 board also has a Bluetooth AT console on its Bluetooth header
+(USART2, `BT_BAUDRATE`); wiring and module setup are in
+[10 — AT Commands](10-at-commands.md#bluetooth-console-f407-board).
 
 ## Clean Builds
 

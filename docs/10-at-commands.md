@@ -1,19 +1,25 @@
 # 10 — AT Command Reference
 
-The console accepts AT commands over the board's console UART: USART2 on the
-Blue Pill, the Type-C USB-serial port (USART1) on the F407 board. Commands are
-case-insensitive and are executed by the UART RX task under the robot state
-lock (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
+AT commands are accepted on every console port:
+
+| Console | Blue Pill | F407 board | Carries |
+|---------|-----------|------------|---------|
+| USB | USART2 via a USB-serial adapter | Type-C USB-serial port (USART1) | AT commands, telemetry, startup banner, echo |
+| Bluetooth | — | Bluetooth header (USART2) | AT commands only, no echo |
+
+Commands are case-insensitive, run one at a time in the UART RX task under the
+robot state lock, and each reply goes back to the console the command came
+from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
 ## Where in the code
 
 | What | Where |
 |------|-------|
-| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L199) |
-| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L368) |
+| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L210) |
+| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L379) |
 | Set commands (`AT+X=v`), range checks | `at_handle_set()` in [at_cmd.c](../src/cmd/at_cmd.c) |
-| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L566) |
-| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L254), [`at_exec_handler()`](../src/robot/robot.c#L305) |
+| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L577) |
+| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L247), [`at_exec_handler()`](../src/robot/robot.c#L298) |
 | Build flags | `AT_CMD_HELP_ENABLED`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `UART_ECHO_ENABLED` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Syntax
@@ -25,8 +31,10 @@ lock (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 | `AT+CMD=value` | Set | `AT+KP=20` → `OK` |
 | `AT+CMD` | Execute | `AT+ENABLE` → `OK` |
 
-Lines end with CR or LF. Typed characters are echoed (`UART_ECHO_ENABLED`),
-and `> ` is printed when the console is ready for the next command.
+Lines end with CR or LF, and `> ` is printed when the console is ready for the
+next command. The USB console echoes each command line when it is received
+(`UART_ECHO_ENABLED`), not character by character: enable local echo in your
+terminal to see what you type.
 
 ### Responses and error codes
 
@@ -69,7 +77,7 @@ one response are consistent with each other.
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
 | `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Stored in `target_velocity`, not used by the control law |
-| `AT+STREAM=0\|1` | 0 or 1 | Print `acc_deg: … \| kalman: … \| comp: …` every sample |
+| `AT+STREAM=0\|1` | 0 or 1 | Telemetry record every sample, on the USB console (from either console) |
 
 ## Execute commands
 
@@ -146,14 +154,44 @@ OK
 ```
 AT+STREAM=1
 OK
-acc_deg: 90.84 | kalman: 90.61 | comp: 90.58
-acc_deg: 90.77 | kalman: 90.66 | comp: 90.59
+seq: 1041 | t: 10410 | acc_deg: 90.84 | kalman: 90.61 | comp: 90.58 | tilt: 0.58 | p: -14.50 | i: -0.03 | d: 2.10 | out: -12.43 | drops: 0
+seq: 1042 | t: 10420 | acc_deg: 90.77 | kalman: 90.66 | comp: 90.59 | tilt: 0.59 | p: -14.75 | i: -0.03 | d: -2.50 | out: -17.28 | drops: 0
 ```
 
-Streamed angles are raw filter outputs, so upright reads about 90° (see
-[05 — Sensing and IMU](05-sensing-and-imu.md)). Lines are dropped rather than
-delaying the control loop when the UART queue is full, and may interleave with
-command responses. Send `AT+STREAM=0` before typing other commands.
+| Field | Meaning |
+|-------|---------|
+| `seq` | Record number; a gap means a lost record |
+| `t` | Milliseconds since boot when the sample was processed |
+| `acc_deg`, `kalman`, `comp` | Accelerometer angle and both filter outputs, raw (upright ≈ 90°, see [05](05-sensing-and-imu.md)) |
+| `tilt` | Angle used by the controller (0 = upright) |
+| `p`, `i`, `d`, `out` | PID terms and clamped output, in PWM counts; 0 while not balancing |
+| `drops` | Records the firmware dropped because the logger fell behind, since boot |
+
+Telemetry always goes to the USB console, whichever console enabled it. Whole
+lines are written, so records never corrupt command replies, but they do appear
+between them. [test/filter_comparison.py](../test/filter_comparison.py) reads
+the `acc_deg`, `kalman` and `comp` fields.
+
+## Bluetooth console (F407 board)
+
+An HC-05 or HC-06 module (for example on a ZS-040 breakout) on the board's
+Bluetooth header gives a wireless AT console alongside USB.
+
+1. **Supply.** The ZS-040 needs 3.6–6 V on VCC. Measure the header's supply pin
+   first; if it provides only 3.3 V, power the module from a 5 V pin instead.
+2. **Wiring.** Module TXD → PD6, module RXD → PD5, GND → GND. The logic is 3.3 V,
+   no level shifting needed.
+3. **Baud rate.** Set the module to `BT_BAUDRATE` (115200 by default):
+   - HC-05: hold its button while powering up (AT mode, 38400 baud, CR+LF line
+     endings) and send `AT+UART=115200,0,0`.
+   - HC-06: send `AT+BAUD8` at 9600 baud with no line ending.
+4. **Connect.** Pair (PIN usually 1234). On Linux:
+   `sudo rfcomm bind 0 <MAC>`, then open `/dev/rfcomm0`; its baud setting is
+   ignored. Classic Bluetooth serial (SPP) works with Android terminal apps but
+   not with iPhones.
+
+The Bluetooth console does not echo and never receives telemetry. Run the
+hardware tests over it with `pytest --port /dev/rfcomm0 --bluetooth`.
 
 ## Limitations
 
@@ -161,3 +199,6 @@ command responses. Send `AT+STREAM=0` before typing other commands.
 - `VELOCITY`/`TARGET` have no effect: there is no outer velocity loop yet
   ([06 — Control Theory](06-control-theory.md#6-cascade-control-the-next-step)).
 - `AT+SPEED?` reports the last commanded values, not measured wheel speeds.
+- The two consoles are equal: the last command wins, and losing the Bluetooth
+  link does not stop the robot. Keep a USB `AT+STOP` ready while driving over
+  Bluetooth.

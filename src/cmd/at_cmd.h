@@ -62,6 +62,8 @@ extern "C" {
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "drivers/uart.h"
+
 /* ==========================================================================
  * Type Definitions
  * ========================================================================== */
@@ -233,7 +235,7 @@ const char *at_format_fixed(char *buf, size_t len, float value, int decimals);
  * @param line      Command line (without line terminator)
  * @param length    Line length
  */
-void at_cmd_process(const char *line, uint16_t length);
+void at_cmd_process(UART_Port_t port, const char *line, uint16_t length);
 
 /**
  * @brief Send an OK response
@@ -258,19 +260,6 @@ void at_cmd_respond_error(AT_Result_t error);
  */
 void at_cmd_respond_data(const char *cmd, const char *fmt, ...)
     __attribute__((format(printf, 2, 3)));
-
-/* ==========================================================================
- * AT Command Task
- * ========================================================================== */
-
-/**
- * @brief AT command processing task
- * 
- * Handles command processing in task context.
- * 
- * @param args  Task arguments (unused)
- */
-void at_cmd_task(void *args);
 
 #ifdef __cplusplus
 }

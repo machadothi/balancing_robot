@@ -1,5 +1,5 @@
 """
-AT+STREAM telemetry: control loop rate and filter behaviour. Hold the robot still.
+USB telemetry (AT+STREAM): completeness, timing and filter behaviour. Hold the robot still.
 """
 
 import math
@@ -9,40 +9,64 @@ import pytest
 
 from at_console import parse_stream
 
-# 1000 / IMU_SAMPLE_RATE_MS: the control loop prints one line per sample
-LOOP_RATE_HZ = 100
-DURATION_S = 3.0
+pytestmark = pytest.mark.usb_only
+
+# IMU_SAMPLE_RATE_MS: the control loop submits one record per sample
+SAMPLE_PERIOD_MS = 10
+LOOP_RATE_HZ = 1000 / SAMPLE_PERIOD_MS
+DURATION_S = 5.0
+
+FLOAT_FIELDS = ("acc_deg", "kalman", "comp", "tilt", "p", "i", "d", "out")
 
 
 @pytest.fixture(scope="module")
-def samples(robot):
+def records(robot):
     collected = robot.stream(DURATION_S)
-    if not collected:
-        pytest.fail("AT+STREAM=1 produced no samples: is the IMU delivering data?")
+    if len(collected) < 2:
+        pytest.fail(f"AT+STREAM=1 produced {len(collected)} records: is the IMU delivering data?")
     return collected
 
 
-def test_loop_rate(samples):
-    rate = len(samples) / DURATION_S
-    # Lines are dropped rather than delaying the loop, so a low rate can also mean
-    # the UART queue overflowed (e.g. a much lower UART_BAUDRATE)
-    assert 0.85 * LOOP_RATE_HZ <= rate <= 1.05 * LOOP_RATE_HZ, f"{rate:.1f} samples/s"
+def test_no_lost_records(records):
+    gaps = [(a.seq, b.seq) for a, b in zip(records, records[1:]) if b.seq != a.seq + 1]
+    assert not gaps, (
+        f"{len(gaps)} gaps in {len(records)} records, first {gaps[0][0]} -> {gaps[0][1]}; "
+        f"firmware drop counter {records[0].drops} -> {records[-1].drops} "
+        "(unchanged means the loss was on the link or the host)"
+    )
 
 
-def test_values_are_finite(samples):
-    bad = [s for s in samples if not all(map(math.isfinite, (s.acc_deg, s.kalman, s.comp)))]
-    assert not bad, f"{len(bad)} samples with nan/overflow, first: {bad[0] if bad else None}"
+def test_firmware_dropped_nothing(records):
+    assert records[-1].drops == records[0].drops, \
+        f"telemetry queue overflowed: drops {records[0].drops} -> {records[-1].drops}"
+
+
+def test_loop_rate(records):
+    rate = len(records) / DURATION_S
+    assert 0.9 * LOOP_RATE_HZ <= rate <= 1.05 * LOOP_RATE_HZ, f"{rate:.1f} records/s"
+
+
+def test_sample_period(records):
+    periods = [b.t - a.t for a, b in zip(records, records[1:])]
+    assert statistics.fmean(periods) == pytest.approx(SAMPLE_PERIOD_MS, rel=0.02)
+    assert SAMPLE_PERIOD_MS - 2 <= min(periods) and max(periods) <= SAMPLE_PERIOD_MS + 2, \
+        f"period jitter {min(periods)}..{max(periods)} ms"
+
+
+def test_values_are_finite(records):
+    bad = [r for r in records if not all(math.isfinite(getattr(r, f)) for f in FLOAT_FIELDS)]
+    assert not bad, f"{len(bad)} records with nan/overflow, first: {bad[0] if bad else None}"
 
 
 @pytest.mark.parametrize("name", ["kalman", "comp"])
-def test_filters_agree_with_accelerometer_at_rest(samples, name):
-    offset = statistics.fmean(getattr(s, name) - s.acc_deg for s in samples)
+def test_filters_agree_with_accelerometer_at_rest(records, name):
+    offset = statistics.fmean(getattr(r, name) - r.acc_deg for r in records)
     assert abs(offset) < 2.0, f"{name} is {offset:+.2f}° away from the accelerometer"
 
 
-def test_complementary_is_smoother_than_accelerometer(samples):
-    acc = statistics.pstdev(s.acc_deg for s in samples)
-    comp = statistics.pstdev(s.comp for s in samples)
+def test_complementary_is_smoother_than_accelerometer(records):
+    acc = statistics.pstdev(r.acc_deg for r in records)
+    comp = statistics.pstdev(r.comp for r in records)
     assert comp <= acc, f"std: complementary {comp:.3f}° vs accelerometer {acc:.3f}°"
 
 

@@ -1,27 +1,21 @@
 /**
  * @file uart.c
- * @brief UART Communication Driver Implementation
- * 
- * Full-duplex UART with interrupt-driven RX and queue-based TX.
- * 
- * RX Flow:
- *   1. Character received -> console UART RX interrupt fires
- *   2. ISR stores character in ring buffer
- *   3. On CR/LF, complete line is queued to uart_rxq
- *   4. uart_rx_task processes lines and invokes callback
- * 
- * TX Flow:
- *   1. Application calls uart_puts/uart_printf
- *   2. Characters queued to uart_txq
- *   3. uart_tx_task sends characters via USART
- * 
+ * @brief Multi-port UART driver implementation
+ *
+ * TX: writers copy into a per-port ring buffer and enable the TXE interrupt;
+ *     the ISR sends one byte per interrupt and disables TXE when empty.
+ *     Writers are serialised by suspending the scheduler during the copy
+ *     (interrupts stay enabled); only the head update and the TXE enable are
+ *     done in a critical section, so the ISR never misses new data.
+ *
+ * RX: the ISR assembles lines per port and posts complete ones, tagged with
+ *     their port, to a single queue served by uart_rx_task.
+ *
  * @author Thiago Cunha
  * @date 2024
  */
 
 #include <string.h>
-#include <stdarg.h>
-#include <stdio.h>
 
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
@@ -31,7 +25,6 @@
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
-#include <semphr.h>
 
 #include "config.h"
 #include "board_config.h"
@@ -42,300 +35,242 @@
  * Private Definitions
  * ========================================================================== */
 
-#if UART_PRINTF_ENABLED
-/** Printf buffer size */
-#define UART_PRINTF_BUFFER_SIZE     256
-#endif
+#define UART_PUTS_TIMEOUT_MS    1000
 
-/* ==========================================================================
- * Private Variables
- * ========================================================================== */
+/** Below the I2C/DMA interrupts, still allowed to call FreeRTOS FromISR APIs */
+#define UART_IRQ_PRIORITY       0xC0
 
-/** TX queue */
-QueueHandle_t uart_txq = NULL;
+typedef struct {
+    uint32_t usart;
+    enum rcc_periph_clken usart_rcc;
+    uint8_t irq;
+    uint32_t gpio;
+    enum rcc_periph_clken gpio_rcc;
+    uint16_t tx_pin;
+    uint16_t rx_pin;
+    uint8_t af;
+    uint32_t baudrate;
+    bool echo;                  /**< Echo each received line before dispatching it */
+    char *tx_buf;
+    uint16_t tx_size;           /**< Power of two */
+} UART_PortConfig_t;
 
-/** RX line queue */
-QueueHandle_t uart_rxq = NULL;
+typedef struct {
+    volatile uint16_t tx_head;  /**< Written by tasks */
+    volatile uint16_t tx_tail;  /**< Written by the ISR */
+    char rx_line[UART_RX_LINE_SIZE];
+    uint16_t rx_pos;
+} UART_PortState_t;
 
-/** RX callback function */
+typedef struct {
+    UART_Port_t port;
+    uint16_t length;
+    char data[UART_RX_LINE_SIZE];
+} UART_Line_t;
+
+static char usb_tx_buf[UART_USB_TX_BUFFER_SIZE];
+#ifdef BOARD_BT_UART
+static char bt_tx_buf[UART_BT_TX_BUFFER_SIZE];
+#endif // BOARD_BT_UART
+
+static const UART_PortConfig_t port_config[UART_PORT_COUNT] = {
+    [UART_PORT_USB] = {
+        BOARD_UART, BOARD_UART_RCC, BOARD_UART_IRQ,
+        BOARD_UART_PORT, BOARD_UART_PORT_RCC, BOARD_UART_TX_PIN, BOARD_UART_RX_PIN,
+        BOARD_UART_AF, UART_BAUDRATE, UART_ECHO_ENABLED,
+        usb_tx_buf, sizeof(usb_tx_buf),
+    },
+#ifdef BOARD_BT_UART
+    [UART_PORT_BT] = {
+        BOARD_BT_UART, BOARD_BT_UART_RCC, BOARD_BT_UART_IRQ,
+        BOARD_BT_UART_PORT, BOARD_BT_UART_PORT_RCC, BOARD_BT_UART_TX_PIN, BOARD_BT_UART_RX_PIN,
+        BOARD_BT_UART_AF, BT_BAUDRATE, false,
+        bt_tx_buf, sizeof(bt_tx_buf),
+    },
+#endif // BOARD_BT_UART
+};
+
+static UART_PortState_t port_state[UART_PORT_COUNT];
+
+static QueueHandle_t uart_rxq = NULL;
+
 static UART_RxCallback_t rx_callback = NULL;
-
-/** RX line buffer (used in ISR) */
-static volatile char rx_line_buffer[UART_RX_LINE_SIZE];
-static volatile uint16_t rx_line_pos = 0;
-
-/** TX mutex for thread-safe printf */
-static SemaphoreHandle_t tx_mutex = NULL;
 
 /* ==========================================================================
  * Initialization
  * ========================================================================== */
 
 void uart_init(void) {
-    /* Enable clocks */
-    rcc_periph_clock_enable(BOARD_UART_PORT_RCC);
-    rcc_periph_clock_enable(BOARD_UART_RCC);
-#if defined(STM32F1)
-    rcc_periph_clock_enable(RCC_AFIO);
-#endif // defined(STM32F1)
-
-    /* Configure TX and RX pins */
-    gpio_compat_af_output(BOARD_UART_PORT, BOARD_UART_TX_PIN, BOARD_UART_AF, false);
-    gpio_compat_af_input(BOARD_UART_PORT, BOARD_UART_RX_PIN, BOARD_UART_AF);
-
-    /* Configure USART */
-    usart_set_baudrate(BOARD_UART, UART_BAUDRATE);
-    usart_set_databits(BOARD_UART, 8);
-    usart_set_stopbits(BOARD_UART, USART_STOPBITS_1);
-    usart_set_parity(BOARD_UART, USART_PARITY_NONE);
-    usart_set_flow_control(BOARD_UART, USART_FLOWCONTROL_NONE);
-    usart_set_mode(BOARD_UART, USART_MODE_TX_RX);
-
-    /* Create queues BEFORE enabling interrupts */
-    uart_txq = xQueueCreate(UART_TX_QUEUE_SIZE, sizeof(char));
+    /* Create the queue before any RX interrupt can post to it */
     uart_rxq = xQueueCreate(UART_RX_QUEUE_SIZE, sizeof(UART_Line_t));
 
-    /* Create TX mutex */
-    tx_mutex = xSemaphoreCreateBinary();
-    xSemaphoreGive(tx_mutex);  /* Start in unlocked state */
+    for (int p = 0; p < UART_PORT_COUNT; p++) {
+        const UART_PortConfig_t *cfg = &port_config[p];
 
-    /* Enable USART first (needed for TX) */
-    usart_enable(BOARD_UART);
+        configASSERT((cfg->tx_size & (cfg->tx_size - 1U)) == 0U);
 
-    /* Enable RX interrupt AFTER queues are created */
-    usart_enable_rx_interrupt(BOARD_UART);
-    nvic_set_priority(BOARD_UART_IRQ, 0xC0);  /* Lower priority than DMA */
-    nvic_enable_irq(BOARD_UART_IRQ);
-}
+        rcc_periph_clock_enable(cfg->gpio_rcc);
+        rcc_periph_clock_enable(cfg->usart_rcc);
+#if defined(STM32F1)
+        rcc_periph_clock_enable(RCC_AFIO);
+#endif // defined(STM32F1)
 
-void uart_peripheral_setup(void) {
-    /* Legacy function - now calls full init */
-    uart_init();
+        gpio_compat_af_output(cfg->gpio, cfg->tx_pin, cfg->af, false);
+        gpio_compat_af_input(cfg->gpio, cfg->rx_pin, cfg->af);
+
+        usart_set_baudrate(cfg->usart, cfg->baudrate);
+        usart_set_databits(cfg->usart, 8);
+        usart_set_stopbits(cfg->usart, USART_STOPBITS_1);
+        usart_set_parity(cfg->usart, USART_PARITY_NONE);
+        usart_set_flow_control(cfg->usart, USART_FLOWCONTROL_NONE);
+        usart_set_mode(cfg->usart, USART_MODE_TX_RX);
+        usart_enable(cfg->usart);
+
+        usart_enable_rx_interrupt(cfg->usart);
+        nvic_set_priority(cfg->irq, UART_IRQ_PRIORITY);
+        nvic_enable_irq(cfg->irq);
+    }
 }
 
 /* ==========================================================================
- * Transmit Functions
+ * Transmit
  * ========================================================================== */
 
-UART_Status_t uart_putc(char ch) {
-    if (uart_txq == NULL) {
-        return UART_NOT_INITIALIZED;
-    }
-    
-    if (xQueueSend(uart_txq, &ch, pdMS_TO_TICKS(100)) != pdPASS) {
-        return UART_TIMEOUT;
-    }
-    
-    return UART_OK;
-}
-
-UART_Status_t uart_puts(const char *s) {
-    if (uart_txq == NULL || s == NULL) {
-        return UART_NOT_INITIALIZED;
-    }
-    
-    while (*s) {
-        xQueueSend(uart_txq, s, portMAX_DELAY);
-        s++;
-    }
-    
-    return UART_OK;
-}
-
-UART_Status_t uart_try_puts(const char *s) {
-    if (uart_txq == NULL || s == NULL) {
-        return UART_NOT_INITIALIZED;
+UART_Status_t uart_write(UART_Port_t port, const char *data, size_t len, TickType_t timeout) {
+    if (port >= UART_PORT_COUNT || data == NULL) {
+        return UART_ERROR;
     }
 
-    if (uxQueueSpacesAvailable(uart_txq) < strlen(s)) {
+    const UART_PortConfig_t *cfg = &port_config[port];
+    UART_PortState_t *st = &port_state[port];
+    const uint16_t mask = (uint16_t)(cfg->tx_size - 1U);
+
+    /* One slot always stays empty to tell a full buffer from an empty one */
+    if (len > mask) {
         return UART_OVERFLOW;
     }
 
-    while (*s) {
-        if (xQueueSend(uart_txq, s, 0) != pdPASS) {
+    const TickType_t start = xTaskGetTickCount();
+
+    for (;;) {
+        bool queued = false;
+
+        vTaskSuspendAll();
+        uint16_t head = st->tx_head;
+        uint16_t used = (uint16_t)(head - st->tx_tail) & mask;
+
+        if ((size_t)(mask - used) >= len) {
+            for (size_t i = 0; i < len; i++) {
+                cfg->tx_buf[(head + i) & mask] = data[i];
+            }
+            taskENTER_CRITICAL();
+            st->tx_head = (uint16_t)((head + len) & mask);
+            usart_enable_tx_interrupt(cfg->usart);
+            taskEXIT_CRITICAL();
+            queued = true;
+        }
+        (void)xTaskResumeAll();
+
+        if (queued) {
+            return UART_OK;
+        }
+        if (timeout == 0) {
             return UART_OVERFLOW;
         }
-        s++;
+        if (timeout != portMAX_DELAY && (xTaskGetTickCount() - start) >= timeout) {
+            return UART_TIMEOUT;
+        }
+        vTaskDelay(1);
     }
-
-    return UART_OK;
 }
 
-UART_Status_t uart_write(const uint8_t *data, size_t len) {
-    if (uart_txq == NULL || data == NULL) {
-        return UART_NOT_INITIALIZED;
+UART_Status_t uart_puts(UART_Port_t port, const char *s) {
+    if (s == NULL) {
+        return UART_ERROR;
     }
-    
-    for (size_t i = 0; i < len; i++) {
-        xQueueSend(uart_txq, &data[i], portMAX_DELAY);
-    }
-    
-    return UART_OK;
+    return uart_write(port, s, strlen(s), pdMS_TO_TICKS(UART_PUTS_TIMEOUT_MS));
 }
 
-int uart_printf(const char *fmt, ...) {
-#if UART_PRINTF_ENABLED
-    if (uart_txq == NULL || tx_mutex == NULL) {
-        return -1;
+UART_Status_t uart_try_puts(UART_Port_t port, const char *s) {
+    if (s == NULL) {
+        return UART_ERROR;
     }
-    
-    static char buffer[UART_PRINTF_BUFFER_SIZE];
-    
-    /* Take mutex for thread-safe access to buffer */
-    if (xSemaphoreTake(tx_mutex, pdMS_TO_TICKS(100)) != pdPASS) {
-        return -1;
-    }
-    
-    va_list args;
-    va_start(args, fmt);
-    int len = vsnprintf(buffer, sizeof(buffer), fmt, args);
-    va_end(args);
-    
-    if (len > 0) {
-        uart_puts(buffer);
-    }
-    
-    xSemaphoreGive(tx_mutex);
-    
-    return len;
-#else
-    (void)fmt;
-    return 0;
-#endif
-}
-
-void uart_println(const char *s) {
-    if (s != NULL) {
-        uart_puts(s);
-    }
-    uart_puts("\r\n");
+    return uart_write(port, s, strlen(s), 0);
 }
 
 /* ==========================================================================
- * Receive Functions
+ * Receive
  * ========================================================================== */
-
-bool uart_rx_available(void) {
-    if (uart_rxq == NULL) {
-        return false;
-    }
-    return uxQueueMessagesWaiting(uart_rxq) > 0;
-}
-
-UART_Status_t uart_getline(char *line, size_t max_len, uint32_t timeout_ms) {
-    if (uart_rxq == NULL || line == NULL) {
-        return UART_NOT_INITIALIZED;
-    }
-    
-    UART_Line_t rx_line;
-    TickType_t timeout = (timeout_ms == 0) ? 0 : pdMS_TO_TICKS(timeout_ms);
-    
-    if (xQueueReceive(uart_rxq, &rx_line, timeout) != pdPASS) {
-        return UART_TIMEOUT;
-    }
-    
-    /* Copy to user buffer */
-    size_t copy_len = (rx_line.length < max_len - 1) ? rx_line.length : max_len - 1;
-    memcpy(line, rx_line.data, copy_len);
-    line[copy_len] = '\0';
-    
-    return UART_OK;
-}
 
 void uart_set_rx_callback(UART_RxCallback_t callback) {
     rx_callback = callback;
+}
+
+void uart_rx_task(void *args) {
+    (void)args;
+    UART_Line_t line;
+    char echo[UART_RX_LINE_SIZE + 2];
+
+    for (;;) {
+        if (xQueueReceive(uart_rxq, &line, portMAX_DELAY) != pdPASS) {
+            continue;
+        }
+
+        /* Echoed as a whole line, not per character from the ISR: a lone
+         * character could otherwise land inside a telemetry line */
+        if (port_config[line.port].echo) {
+            memcpy(echo, line.data, line.length);
+            memcpy(echo + line.length, "\r\n", 2);
+            (void)uart_write(line.port, echo, line.length + 2U,
+                             pdMS_TO_TICKS(UART_PUTS_TIMEOUT_MS));
+        }
+
+        if (rx_callback != NULL) {
+            rx_callback(line.port, line.data, line.length);
+        }
+    }
 }
 
 /* ==========================================================================
  * Interrupt Handler
  * ========================================================================== */
 
-void uart_rx_isr(void) {
+void uart_isr(UART_Port_t port) {
+    const UART_PortConfig_t *cfg = &port_config[port];
+    UART_PortState_t *st = &port_state[port];
+    const uint32_t usart = cfg->usart;
     BaseType_t higher_priority_woken = pdFALSE;
-    
-    /* Check if data is available */
-    if (usart_get_flag(BOARD_UART, USART_SR_RXNE)) {
-        char ch = (char)usart_recv(BOARD_UART);
-        
-#if UART_ECHO_ENABLED
-        /* Echo received character */
-        while (!usart_get_flag(BOARD_UART, USART_SR_TXE));
-        usart_send(BOARD_UART, ch);
-#endif
-        
-        /* Handle line terminator */
+
+    /* RXNE is also set on overrun; reading the data register clears both */
+    if (usart_get_flag(usart, USART_SR_RXNE)) {
+        char ch = (char)usart_recv(usart);
+
         if (ch == '\r' || ch == '\n') {
-#if UART_ECHO_ENABLED
-            /* Echo newline */
-            while (!usart_get_flag(BOARD_UART, USART_SR_TXE));
-            usart_send(BOARD_UART, '\n');
-#endif
-            
-            if (rx_line_pos > 0) {
-                /* Complete line received - queue it */
-                UART_Line_t line;
-                line.length = rx_line_pos;
-                memcpy(line.data, (const char *)rx_line_buffer, rx_line_pos);
-                line.data[rx_line_pos] = '\0';
-                
-                xQueueSendFromISR(uart_rxq, &line, &higher_priority_woken);
-                rx_line_pos = 0;
+            if (st->rx_pos > 0) {
+                UART_Line_t line = { .port = port, .length = st->rx_pos };
+                memcpy(line.data, st->rx_line, st->rx_pos);
+                line.data[st->rx_pos] = '\0';
+                (void)xQueueSendFromISR(uart_rxq, &line, &higher_priority_woken);
+                st->rx_pos = 0;
             }
-        }
-        /* Handle backspace */
-        else if (ch == '\b' || ch == 0x7F) {
-            if (rx_line_pos > 0) {
-                rx_line_pos--;
+        } else if (ch == '\b' || ch == 0x7F) {
+            if (st->rx_pos > 0) {
+                st->rx_pos--;
             }
-        }
-        /* Normal character */
-        else if (rx_line_pos < UART_RX_LINE_SIZE - 1) {
-            rx_line_buffer[rx_line_pos++] = ch;
+        } else if (st->rx_pos < UART_RX_LINE_SIZE - 1) {
+            st->rx_line[st->rx_pos++] = ch;
         }
     }
-    
-    /* Clear overrun error if set */
-    if (usart_get_flag(BOARD_UART, USART_SR_ORE)) {
-        (void)usart_recv(BOARD_UART);  /* Clear by reading */
+
+    if ((USART_CR1(usart) & USART_CR1_TXEIE) && usart_get_flag(usart, USART_SR_TXE)) {
+        const uint16_t tail = st->tx_tail;
+        if (tail != st->tx_head) {
+            usart_send(usart, (uint16_t)(uint8_t)cfg->tx_buf[tail]);
+            st->tx_tail = (uint16_t)((tail + 1U) & (cfg->tx_size - 1U));
+        } else {
+            usart_disable_tx_interrupt(usart);
+        }
     }
-    
+
     portYIELD_FROM_ISR(higher_priority_woken);
-}
-
-/* ==========================================================================
- * Tasks
- * ========================================================================== */
-
-void uart_tx_task(void *args) {
-    (void)args;
-    char ch;
-
-    for (;;) {
-        if (xQueueReceive(uart_txq, &ch, pdMS_TO_TICKS(500)) == pdPASS) {
-            while (!usart_get_flag(BOARD_UART, USART_SR_TXE)) {
-                taskYIELD();
-            }
-            usart_send(BOARD_UART, ch);
-        }
-    }
-}
-
-void uart_rx_task(void *args) {
-    (void)args;
-    UART_Line_t line;
-
-    for (;;) {
-        /* Wait for a complete line */
-        if (xQueueReceive(uart_rxq, &line, portMAX_DELAY) == pdPASS) {
-            /* Invoke callback if registered */
-            if (rx_callback != NULL) {
-                rx_callback(line.data, line.length);
-            }
-        }
-    }
-}
-
-void uart_task(void *args) {
-    /* Legacy task - now just TX */
-    uart_tx_task(args);
 }

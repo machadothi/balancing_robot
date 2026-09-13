@@ -23,16 +23,17 @@
 #include "imu/mpu6050.h"
 #include "log/log.h"
 #include "robot/robot.h"
+#include "telemetry/telemetry.h"
 
 /* ==========================================================================
  * Private Functions
  * ========================================================================== */
 
 /**
- * @brief Log output wrapper for uart_puts
+ * @brief Log output wrapper: logs go to the USB console
  */
 static void log_uart_send(const char *message) {
-    uart_puts(message);
+    uart_puts(UART_PORT_USB, message);
 }
 
 /* ==========================================================================
@@ -66,8 +67,9 @@ void app_hardware_init(void) {
     };
     log_init(&log_driver);
 
-    /* Initialize IMU queue before creating tasks */
+    /* Create queues before creating tasks */
     imu_queue_init();
+    telemetry_init();
 
     /* Initialize AT command parser (registers RX callback) */
     at_cmd_init();
@@ -80,12 +82,12 @@ void app_tasks_init(void) {
         NULL, TASK_PRIORITY_LED, NULL);
 
 #if !APP_BLINK_ONLY
-    /* UART TX task */
-    xTaskCreate(uart_tx_task, TASK_NAME_UART, TASK_STACK_UART,
+    /* UART RX task (AT commands from every console port) */
+    xTaskCreate(uart_rx_task, TASK_NAME_UART_RX, TASK_STACK_UART_RX,
         NULL, TASK_PRIORITY_IO, NULL);
 
-    /* UART RX task (processes AT commands) */
-    xTaskCreate(uart_rx_task, TASK_NAME_UART_RX, TASK_STACK_UART_RX,
+    /* Telemetry logger (USB console) */
+    xTaskCreate(telemetry_task, TASK_NAME_TELEMETRY, TASK_STACK_TELEMETRY,
         NULL, TASK_PRIORITY_IO, NULL);
 
     /* IMU reading task */
