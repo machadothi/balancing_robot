@@ -22,6 +22,8 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include "config.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
@@ -67,6 +69,8 @@ typedef struct {
     void (*send)(const char *message);  /**< Output function */
 } LogDriver_t;
 
+#if LOGGING
+
 /* ==========================================================================
  * Public Functions
  * ========================================================================== */
@@ -104,6 +108,17 @@ void log_message_with_error(LogLevel_t level, LogModule_t module,
  */
 void log_message_with_int(LogLevel_t level, LogModule_t module, 
     const char *message, int value);
+
+#else
+
+/* Logging off: calls compile to nothing, arguments are not evaluated
+ * (except the driver, so its definition does not look unused) */
+#define log_init(driver)                                    ((void)(driver))
+#define log_message(level, module, message)                 ((void)0)
+#define log_message_with_error(level, module, message, error) ((void)0)
+#define log_message_with_int(level, module, message, value) ((void)0)
+
+#endif // LOGGING
 
 #ifdef __cplusplus
 }

@@ -18,22 +18,15 @@
 #include "drivers/uart.h"
 
 /* ==========================================================================
- * External I2C Control Reference
- * ========================================================================== */
-
-/* The I2C control structure is defined in mpu6050.c */
-extern I2C_Control_t i2c;
-
-/* ==========================================================================
  * I2C Event and Error Interrupt Handlers
  * ========================================================================== */
 
 void BOARD_I2C_EV_ISR(void) {
-    i2c_ev_isr(&i2c);
+    i2c_ev_isr(&i2c_board_bus);
 }
 
 void BOARD_I2C_ER_ISR(void) {
-    i2c_er_isr(&i2c);
+    i2c_er_isr(&i2c_board_bus);
 }
 
 /* ==========================================================================
@@ -41,11 +34,11 @@ void BOARD_I2C_ER_ISR(void) {
  * ========================================================================== */
 
 void BOARD_I2C_DMA_TX_ISR(void) {
-    i2c_dma_tx_isr(&i2c);
+    i2c_dma_tx_isr(&i2c_board_bus);
 }
 
 void BOARD_I2C_DMA_RX_ISR(void) {
-    i2c_dma_rx_isr(&i2c);
+    i2c_dma_rx_isr(&i2c_board_bus);
 }
 
 /* ==========================================================================

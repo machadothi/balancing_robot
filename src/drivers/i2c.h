@@ -118,6 +118,9 @@ typedef struct I2C_Control {
     volatile I2C_Fails_t error;     /**< Last error code */
 } I2C_Control_t;
 
+/** The board's sensor bus: used by the MPU-6050 driver and the I2C interrupts */
+extern I2C_Control_t i2c_board_bus;
+
 /* ==========================================================================
  * Public Functions
  * ========================================================================== */

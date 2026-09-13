@@ -33,7 +33,6 @@
 #include "board_config.h"
 #include "i2c.h"
 #include "drivers/gpio_compat.h"
-#include "log/log.h"
 
 /* ==========================================================================
  * Configuration
@@ -46,6 +45,8 @@
 
 /** Upper bound for the BTF poll in the DMA TX ISR (~100 µs at 100 kHz) */
 #define I2C_ISR_BTF_SPINS   100000U
+
+I2C_Control_t i2c_board_bus;
 
 #if defined(STM32F1)
 #define I2C_DMA_PSIZE_8BIT  DMA_CCR_PSIZE_8BIT
@@ -120,11 +121,6 @@ const char* i2c_error_string(I2C_Fails_t fail) {
         default:
             return "UNKNOWN_ERROR";
     }
-}
-
-/* Keep old name for internal use */
-static const char* i2c_fail_to_string(I2C_Fails_t fail) {
-    return i2c_error_string(fail);
 }
 
 
@@ -229,7 +225,6 @@ I2C_Fails_t i2c_configure(I2C_Control_t *dev, uint32_t i2c,
     dev->addr = address;
     dev->timeout = timeout;
 
-    log_message(LOG_INFO, I2C_BUS, "Setting up I2C.");
 
     /* 
      * STM32F1 I2C BUSY flag errata workaround:
@@ -283,7 +278,6 @@ I2C_Fails_t i2c_configure(I2C_Control_t *dev, uint32_t i2c,
 
     /* Final check */
     if ((I2C_SR2(i2c) & I2C_SR2_BUSY)) {
-        log_message(LOG_ERROR, I2C_BUS, "I2C bus busy after configure");
         return I2C_Busy_Timeout;
     }
 
@@ -384,7 +378,6 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
 
     while ((I2C_SR2(dev->device) & I2C_SR2_BUSY)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(LOG_ERROR, I2C_BUS,"I2C BUSY TIMEOUT!");
             return I2C_Busy_Timeout;
         }
     }
@@ -394,7 +387,6 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
     /* Wait for the end of the start condition, master mode selected, 
         and BUSY bit set */
     if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
-        log_message(LOG_ERROR, I2C_BUS, "I2C START TIMEOUT!");
         i2c_send_stop(dev->device);
         return I2C_Busy_Timeout;
     }
@@ -404,7 +396,6 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(LOG_ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
         }
     }
@@ -416,7 +407,6 @@ i2c_write(I2C_Control_t *dev, const uint8_t *data, size_t n)
         i2c_send_data(dev->device, data[i]);
         while (!(I2C_SR1(dev->device) & (I2C_SR1_BTF))) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(LOG_ERROR, I2C_BUS,"I2C WRITE TIMEOUT!");
                 return I2C_Write_Timeout;
             }
         }
@@ -436,7 +426,6 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     i2c_enable_ack(dev->device);
 
     if (i2c_wait_sr1(dev, I2C_SR1_SB, t0, I2C_Busy_Timeout) != I2C_Ok) {
-        log_message(LOG_ERROR, I2C_BUS, "I2C START TIMEOUT!");
         i2c_send_stop(dev->device);
         return I2C_Busy_Timeout;
     }
@@ -446,7 +435,6 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     /* Waiting for address is transferred. */
     while (!(I2C_SR1(dev->device) & I2C_SR1_ADDR)) {
         if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-            log_message(LOG_ERROR, I2C_BUS,"I2C ADDRESS ACK TIMEOUT!");
             return I2C_Addr_Timeout;
         }
     }
@@ -463,7 +451,6 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     if (n == 2) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(LOG_ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
             }
         }
@@ -475,7 +462,6 @@ i2c_read(I2C_Control_t *dev, uint8_t *res, size_t n)
     for (size_t i = 0; i < n; ++i) {
         while (!(I2C_SR1(dev->device) & I2C_SR1_RxNE)) {
             if ( diff_ticks(t0,systicks()) > dev->timeout ) {
-                log_message(LOG_ERROR, I2C_BUS,"I2C RxNE TIMEOUT!");
                 return I2C_Read_Timeout;
             }
         }
@@ -499,7 +485,6 @@ static I2C_Fails_t i2c_transfer(I2C_Control_t *dev, const uint8_t *w,
     if (wn) {
         status = i2c_write(dev, w, wn);
         if (status != I2C_Ok) {
-            log_message(LOG_ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     }
@@ -507,7 +492,6 @@ static I2C_Fails_t i2c_transfer(I2C_Control_t *dev, const uint8_t *w,
     if (rn) {
         status = i2c_read(dev, r, rn);
         if (status != I2C_Ok) {
-            log_message(LOG_ERROR, I2C_BUS, i2c_fail_to_string(status));
             return status;
         }
     } else {
@@ -567,7 +551,6 @@ void i2c_init_it(I2C_Control_t *dev, uint8_t priority) {
         nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
-    log_message(LOG_INFO, I2C_BUS, "I2C interrupt mode initialized");
 }
 
 I2C_Fails_t i2c_write_it(I2C_Control_t *dev, const uint8_t *data, size_t len,
@@ -709,7 +692,6 @@ void i2c_init_dma(I2C_Control_t *dev, uint8_t priority) {
         nvic_enable_irq(BOARD_I2C_ER_IRQ);
     }
     
-    log_message(LOG_INFO, I2C_BUS, "I2C DMA mode initialized");
 }
 
 /**

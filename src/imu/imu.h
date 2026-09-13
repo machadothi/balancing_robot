@@ -1,13 +1,11 @@
 /**
  * @file imu.h
- * @brief Generic IMU (Inertial Measurement Unit) interface
- * 
- * Provides a hardware-agnostic interface for IMU sensors.
- * Currently supports MPU6050, but designed to be extensible.
- * 
- * The IMU task reads sensor data at a fixed rate and sends it
- * to a FreeRTOS queue for processing by other tasks.
- * 
+ * @brief IMU service: sensor-agnostic sampling task and latest-sample mailbox
+ *
+ * A sensor driver exports an IMU_Ops_t that returns one sample in physical
+ * units. The IMU task reads it at IMU_SAMPLE_RATE_MS and publishes the newest
+ * sample; consumers wait for it with imu_wait_sample() and never see the queue.
+ *
  * @author Thiago Cunha
  * @date 2024
  */
@@ -19,9 +17,10 @@
 extern "C" {
 #endif // __cplusplus
 
+#include <stdbool.h>
 #include <stdint.h>
+
 #include <FreeRTOS.h>
-#include <queue.h>
 
 #include "config.h"
 
@@ -53,27 +52,9 @@ typedef enum {
 } IMU_Status_t;
 
 /**
- * @brief IMU driver interface (function pointers)
- * 
- * Allows different IMU implementations to be used interchangeably.
- */
-typedef struct {
-    IMU_Status_t (*init)(void);     /**< Initialize the IMU */
-    uint8_t (*id)(void);            /**< Get device ID */
-    IMU_Status_t (*read_all)(void); /**< Read all sensors via DMA (bulk read) */
-    int16_t (*acc_x)(void);         /**< Read X accelerometer (raw) */
-    int16_t (*acc_y)(void);         /**< Read Y accelerometer (raw) */
-    int16_t (*acc_z)(void);         /**< Read Z accelerometer (raw) */
-    int16_t (*gyro_x)(void);        /**< Read X gyroscope (raw) */
-    int16_t (*gyro_y)(void);        /**< Read Y gyroscope (raw) */
-    int16_t (*gyro_z)(void);        /**< Read Z gyroscope (raw) */
-} IMU_Driver_t;
-
-/**
- * @brief Processed IMU data structure
- * 
- * Contains calibrated sensor values in physical units:
- * - Accelerometer: g (1g = 9.81 m/s²)
+ * @brief One sample in physical units
+ *
+ * - Accelerometer: g (1 g = 9.81 m/s²)
  * - Gyroscope: degrees/second
  */
 typedef struct {
@@ -85,91 +66,40 @@ typedef struct {
     float gyro_z;   /**< Z angular rate (°/s) */
 } IMU_Data_t;
 
-/* ==========================================================================
- * Public Variables
- * ========================================================================== */
-
-/** Queue for passing IMU data to consumer tasks */
-extern QueueHandle_t imu_content;
+/**
+ * @brief What a sensor driver provides
+ *
+ * Adding a sensor means implementing these two functions; nothing above the
+ * IMU service changes.
+ */
+typedef struct {
+    const char *name;                       /**< Sensor name, for diagnostics */
+    IMU_Status_t (*init)(void);             /**< Bring up the bus and configure the sensor */
+    IMU_Status_t (*read)(IMU_Data_t *out);  /**< One sample, scaled, uncalibrated */
+} IMU_Ops_t;
 
 /* ==========================================================================
  * Public Functions
  * ========================================================================== */
 
-/**
- * @brief Initialize IMU data queue
- * 
- * Must be called before starting the IMU task.
- * Creates a FreeRTOS queue for IMU data.
- */
+/** Create the sample mailbox; call before the scheduler starts */
 void imu_queue_init(void);
 
 /**
- * @brief Initialize IMU hardware
- * @param imu Pointer to IMU driver interface
- * @return IMU_OK on success, error code otherwise
+ * @brief Wait for the newest sample
+ * @param out      Filled with the sample on success
+ * @param timeout  Longest wait, in ticks
+ * @return false if no sample arrived within the timeout
  */
-IMU_Status_t imu_init(IMU_Driver_t *imu);
+bool imu_wait_sample(IMU_Data_t *out, TickType_t timeout);
 
 /**
- * @brief Get IMU device ID
- * @param imu Pointer to IMU driver interface
- * @return Device ID byte
- */
-uint8_t imu_id(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw X accelerometer value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit accelerometer value
- */
-int16_t imu_acc_x(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw Y accelerometer value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit accelerometer value
- */
-int16_t imu_acc_y(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw Z accelerometer value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit accelerometer value
- */
-int16_t imu_acc_z(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw X gyroscope value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit gyroscope value
- */
-int16_t imu_gyro_x(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw Y gyroscope value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit gyroscope value
- */
-int16_t imu_gyro_y(IMU_Driver_t *imu);
-
-/**
- * @brief Read raw Z gyroscope value
- * @param imu Pointer to IMU driver interface
- * @return Raw 16-bit gyroscope value
- */
-int16_t imu_gyro_z(IMU_Driver_t *imu);
-
-/**
- * @brief IMU data acquisition task
- * 
- * FreeRTOS task that:
- * 1. Initializes the IMU hardware
- * 2. Reads sensor data at IMU_SAMPLE_RATE_MS intervals
- * 3. Converts raw values to physical units
- * 4. Sends data to the imu_content queue
- * 
- * @param args Task arguments (unused)
+ * @brief IMU acquisition task
+ *
+ * Initializes the sensor (retrying every second), then reads it every
+ * IMU_SAMPLE_RATE_MS, applies the gyro calibration and publishes the sample.
+ * A failed read publishes nothing, so consumers time out instead of acting
+ * on a repeated old sample.
  */
 void imu_task(void *args);
 
