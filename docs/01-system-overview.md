@@ -8,10 +8,10 @@ sample becomes a motor command. Later chapters zoom into each block.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L51), [`app_tasks_init()`](../src/app/app_init.c#L79) |
+| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L63), [`app_tasks_init()`](../src/app/app_init.c#L99) |
 | Per-board peripherals | [src/board/f103/board_config.h](../src/board/f103/board_config.h), [src/board/f407/board_config.h](../src/board/f407/board_config.h) |
-| Sensing | [`imu_task()`](../src/imu/imu.c#L109) |
-| Control | [`robot_task()`](../src/robot/robot.c#L372) |
+| Sensing | [`imu_task()`](../src/imu/imu.c#L40) |
+| Control | [`robot_task()`](../src/robot/robot.c#L158) |
 
 ## Hardware
 
@@ -83,7 +83,7 @@ flowchart TB
 sequenceDiagram
     participant IMU as imu_task (prio 4)
     participant DMA as I2C + DMA ISRs
-    participant Q as imu_content queue
+    participant Q as IMU sample mailbox
     participant R as robot_task (prio 4)
     participant M as Motor driver
 
@@ -99,12 +99,12 @@ sequenceDiagram
     end
 ```
 
-1. [`imu_task`](../src/imu/imu.c#L109) wakes on a fixed 10 ms schedule and
+1. [`imu_task`](../src/imu/imu.c#L40) wakes on a fixed 10 ms schedule and
    starts a DMA read of all 14 sensor bytes; it sleeps on a semaphore until the
    DMA interrupt signals completion.
 2. It converts raw counts to g and °/s and overwrites the single-slot
-   `imu_content` queue, so the controller always sees the newest sample.
-3. [`robot_task`](../src/robot/robot.c#L372) blocks on that queue, so its
+   sample mailbox, so the controller always sees the newest sample.
+3. [`robot_task`](../src/robot/robot.c#L158) blocks in `imu_wait_sample()`, so its
    rate is set by the IMU task. It computes the accelerometer angle, runs both
    filters ([07](07-sensor-fusion.md)) and picks one.
 4. Holding the state mutex, it runs the PID ([08](08-pid-implementation.md)),

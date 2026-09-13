@@ -7,13 +7,14 @@ the calibration and sampling choices that affect the controller.
 
 | What | Where |
 |------|-------|
-| Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L96) |
-| Burst read and parsing | [`mpu6050_read_all_dma()`](../src/imu/mpu6050.c#L294), [`mpu6050_dma_callback()`](../src/imu/mpu6050.c#L70) |
-| Scaling and calibration | [`read_imu_data()`](../src/imu/imu.c#L78) |
+| Sensor interface | [`IMU_Ops_t`](../src/imu/imu.h#L79), implemented by [`mpu6050_ops`](../src/imu/mpu6050.c#L171) |
+| Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) |
+| Burst read, parsing and scaling | [`mpu6050_read()`](../src/imu/mpu6050.c#L142), [`transfer_callback()`](../src/imu/mpu6050.c#L79) |
+| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L40) |
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
 | Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L63) |
-| Sampling task | [`imu_task()`](../src/imu/imu.c#L109) |
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L122) |
+| Sampling task | [`imu_task()`](../src/imu/imu.c#L40) |
+| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L136) |
 
 ## Configuration
 
@@ -36,7 +37,7 @@ flowchart LR
     REG["14 bytes from 0x3B<br/>ACCEL_XOUT_H…GYRO_ZOUT_L"] --> PARSE["Big-endian → int16<br/>(DMA callback, ISR)"]
     PARSE --> SCALE["÷ 16384 → g<br/>÷ 131 → °/s"]
     SCALE --> CAL["gyro_x += GYRO_CALIBRATION_OFFSET"]
-    CAL --> QUEUE[["imu_content queue"]]
+    CAL --> QUEUE[["sample mailbox<br/>imu_wait_sample()"]]
     QUEUE --> ACC["θ_acc = atan2(a_y, −a_x)"]
     QUEUE --> GYR["ω = gyro_x"]
     ACC --> FUSION["Filter (07)"]

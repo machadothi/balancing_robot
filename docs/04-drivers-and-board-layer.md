@@ -13,7 +13,7 @@ UART, PWM and encoder paths work in detail.
 | Per-board build selection | [cmake/boards/](../cmake/boards) |
 | GPIO API compatibility | [gpio_compat.h](../src/drivers/gpio_compat.h) |
 | Interrupt handler wiring | [interrupts.c](../src/interrupts.c) |
-| I2C (polling, IT, DMA) | [i2c.c](../src/drivers/i2c.c): [`i2c_read_reg_dma()`](../src/drivers/i2c.c#L903), [`i2c_dma_rx_isr()`](../src/drivers/i2c.c#L1181) |
+| I2C (polling, IT, DMA) | [i2c.c](../src/drivers/i2c.c): [`i2c_read_reg_dma()`](../src/drivers/i2c.c#L885), [`i2c_dma_rx_isr()`](../src/drivers/i2c.c#L1163) |
 | UART consoles (USB, Bluetooth) | [uart.c](../src/drivers/uart.c): `uart_write()`, `uart_isr()`, `uart_rx_task()` |
 | Telemetry logger | [telemetry.c](../src/telemetry/telemetry.c) |
 | PWM | [`pwm_timer_init()`](../src/drivers/pwm.c#L141) |
@@ -87,12 +87,12 @@ sequenceDiagram
     participant HW as I2C + DMA hardware
     participant ISR as DMA RX ISR
 
-    T->>D: mpu6050_read_all_dma()
+    T->>D: mpu6050_ops.read(&sample)
     D->>I: i2c_read_reg_dma(ACCEL_XOUT_H, 14 bytes, callback)
     I->>HW: configure DMA RX stream, DMAEN, LAST
     I->>HW: START, address+W, register, repeated START, address+R
     Note over I,HW: framing is polled in task context, with a timeout
-    D->>D: xSemaphoreTake(i2c_transfer_sem, 100 ms)
+    D->>D: xSemaphoreTake(transfer_done, 100 ms)
     HW-->>HW: DMA stores 14 bytes, I2C NACKs the last
     HW->>ISR: transfer complete
     ISR->>HW: disable stream, STOP, clear DMAEN / LAST
@@ -213,9 +213,10 @@ its outputs stay off until the main output enable (MOE) bit is set.
 | Enable | STBY pin | None (standby = both inputs 0) |
 | Encoders | Rising edges on EXTI5/6: count only | Quadrature in timer encoder mode (TIM2–5), ×4 counting with direction |
 
-Both drivers implement the same `motor.h` API (`motorN_set_direction`,
-`motorN_set_speed`, `motor_standby` …), so `robot.c` is unaware of the
-difference. The Hiwonder driver always clears the opposite input before
+Both drivers implement the same `motor.h` API (`motor_set(MOTOR_LEFT, -120)`,
+`motor_get_encoder()`, `motor_standby()` …), so `robot.c` is unaware of the
+difference. `motor_set()` takes a signed command and applies direction and duty
+together, so a wheel never runs briefly with a new direction at the old speed. The Hiwonder driver always clears the opposite input before
 driving one, so a direction change can never drive both inputs at once.
 
 ## Porting to a new board

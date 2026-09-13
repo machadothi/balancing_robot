@@ -93,7 +93,7 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 ## 7. Documentation
 
 - [ ] Preview all Mermaid diagrams on GitHub (not rendered locally yet).
-- [ ] Move the docs link/anchor checker into `scripts/` and run it in CI, since
-      `file#Lnn` links drift with every code change.
+- [ ] Run `scripts/check_docs.py` in CI (`--fix` re-anchors `file#Lnn` links
+      after code moves; review the result, it matches symbols heuristically).
 - [ ] Install `doxygen graphviz` and check the `docs` target output.
 - [ ] Add a photo or schematic of the F407 robot wiring once it is built.

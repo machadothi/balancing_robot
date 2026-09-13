@@ -1,8 +1,9 @@
 # 08 — PID Implementation
 
 The balance controller exactly as coded: every term, limit and safety check in
-[`pid_compute()`](../src/robot/robot.c#L175) and
-[`apply_motor_control()`](../src/robot/robot.c#L217), why each is there, and
+[`pid_update()`](../src/control/pid.c#L27),
+[`mixer_mix()`](../src/control/mixer.c#L20) and
+[`robot_balance_step()`](../src/robot/robot.c#L141), why each is there, and
 what to improve. The theory is in [06](06-control-theory.md).
 
 ## Where in the code
@@ -11,10 +12,10 @@ what to improve. The theory is in [06](06-control-theory.md).
 |------|-------|
 | Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
 | Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L45) |
-| Integral limit | [`integral_limit`](../src/robot/robot.c#L105) |
-| Control law | [`pid_compute()`](../src/robot/robot.c#L175) |
-| Mixing and actuation | [`apply_motor_control()`](../src/robot/robot.c#L217) |
-| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L372), [`at_exec_handler()`](../src/robot/robot.c#L307) |
+| Integral limit | [`integral_limit`](../src/robot/robot.c#L67) |
+| Control law | [`pid_update()`](../src/control/pid.c#L27), state in [`PID_t`](../src/control/pid.h) |
+| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L20), [`robot_balance_step()`](../src/robot/robot.c#L141) |
+| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L158), [robot_commands.c](../src/robot/robot_commands.c) |
 
 ## Signal chain
 
@@ -31,7 +32,7 @@ flowchart LR
     SAT1 --> MIX["left = u + turn<br/>right = u − turn"]
     MIX --> SAT2["|·| clamped to 255<br/>sign → direction"]
     SAT2 --> DB["Deadband: 1…19 → 20"]
-    DB --> PWM["motorN_set_direction()<br/>motorN_set_speed()"]
+    DB --> PWM["motor_set(id, ±command)"]
 ```
 
 ## The control law
@@ -39,16 +40,16 @@ flowchart LR
 ```c
 float error = BALANCE_SETPOINT - angle;
 
-float p_term = robot_state.kp * error;
+/* pid_update(&robot.pid, error, IMU_SAMPLE_RATE_S) */
+pid->p_term = pid->kp * error;
 
-pid.integral += error * dt;                   /* clamped to ±integral_limit */
-float i_term = robot_state.ki * pid.integral;
+pid->integral = clamp(pid->integral + error * dt, pid->integral_limit);
+pid->i_term = pid->ki * pid->integral;
 
-float derivative = (error - pid.prev_error) / dt;
-float d_term = robot_state.kd * derivative;
-pid.prev_error = error;
+pid->d_term = pid->kd * (error - pid->prev_error) / dt;
+pid->prev_error = error;
 
-pid.output = p_term + i_term + d_term;        /* clamped to ±MOTOR_MAX_PWM */
+pid->output = clamp(pid->p_term + pid->i_term + pid->d_term, pid->output_limit);
 ```
 
 In discrete-time form, with sample index k and T = `IMU_SAMPLE_RATE_S`:
@@ -111,7 +112,7 @@ Kd = 0.8, every sample. The symptom is motor buzz as Kd rises.
 directly, and it is already calibrated in `imu_data.gyro_x`:
 
 ```c
-float d_term = -robot_state.kd * imu_data.gyro_x;   /* suggested improvement */
+pid->d_term = -pid->kd * imu_data.gyro_x;   /* suggested improvement */
 ```
 
 This removes the differentiation noise and one sample of delay. Alternatively,
@@ -122,15 +123,17 @@ low-pass the difference quotient with a time constant of a few samples.
 ### Saturation and mixing
 
 ```c
-float left_output  = output + robot_state.turn_rate;
-float right_output = output - robot_state.turn_rate;
+/* mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX, MOTOR_DEADBAND) */
+.left  = mixer_wheel(output + turn, limit, deadband),
+.right = mixer_wheel(output - turn, limit, deadband),
 
-uint8_t left_pwm = (uint8_t)fminf(fabsf(left_output), (float)MOTOR_MAX_PWM);
+/* in mixer_wheel(): saturate before narrowing */
+int16_t magnitude = (int16_t)fminf(fabsf(value), (float)limit);
 ```
 
 The PID output is clamped to ±255 before mixing. Adding a turn rate (±100) can
 push a wheel command past 255 again, so each wheel is saturated **before**
-narrowing to `uint8_t`. Without that second clamp, a command of 300 wrapped to
+narrowing to an integer. Without that second clamp, a command of 300 wrapped to
 44: near full power became low power exactly when the robot needed the most
 torque.
 
@@ -143,8 +146,8 @@ the PWM duty. Positive output means drive forward, towards a positive
 ### Deadband compensation
 
 ```c
-if (left_pwm > 0 && left_pwm < MOTOR_DEADBAND) {
-    left_pwm = MOTOR_DEADBAND;
+if (magnitude > 0 && magnitude < deadband) {
+    magnitude = deadband;
 }
 ```
 

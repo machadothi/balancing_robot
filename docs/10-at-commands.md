@@ -15,11 +15,11 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
 | What | Where |
 |------|-------|
-| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L182) |
-| Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L351) |
-| Set commands (`AT+X=v`), range checks | `at_handle_set()` in [at_cmd.c](../src/cmd/at_cmd.c) |
-| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L551) |
-| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L254), [`at_exec_handler()`](../src/robot/robot.c#L307) |
+| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L219) |
+| Command definition, registration | [`AT_Command_Def_t`](../src/cmd/at_cmd.h), [`at_cmd_register()`](../src/cmd/at_cmd.c#L327) |
+| Robot commands | [robot_commands.c](../src/robot/robot_commands.c) |
+| `AT+STREAM` | [telemetry.c](../src/telemetry/telemetry.c) |
+| `AT+VERSION`, `AT+RESET`, `AT+HELP` | [`at_cmd_init()`](../src/cmd/at_cmd.c#L336) |
 | Build flags | `AT_CMD_HELP`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `CONSOLE_ECHO` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Syntax
@@ -96,6 +96,36 @@ one response are consistent with each other.
 The robot starts with motors in standby: nothing moves until `AT+ENABLE`.
 Balancing also stops by itself when |tilt| exceeds 45° or when the IMU delivers
 no sample for 50 ms; send `AT+ENABLE` again once the cause is gone.
+
+## Adding a command
+
+The parser does not know any command. A module owns a table and registers it
+once, before the scheduler starts or at the top of its task:
+
+```c
+static AT_Result_t set_kp(const float *values) {   /* values arrive range-checked */
+    robot_lock();
+    robot.pid.kp = values[0];
+    robot_unlock();
+    return AT_OK;
+}
+
+static const AT_Command_Def_t robot_commands[] = {
+    { .name = "KP", .query = query_kp, .set = set_kp, .params = 1,
+      .min = 0.0f, .max = FLT_MAX, .help = AT_HELP("PID proportional gain") },
+};
+
+at_cmd_register(robot_commands, sizeof(robot_commands) / sizeof(robot_commands[0]));
+```
+
+- **`query`** formats the value for `AT+KP?`; the parser adds `+KP:` and `OK`.
+- **`set`** gets `params` numbers, already parsed and checked against
+  `min`/`max` (`.integer = true` also rejects fractions); `ERROR:4` otherwise.
+- **`exec`** runs for `AT+KP` without arguments.
+- A missing handler makes that form `ERROR:2`. `AT_HELP()` compiles the text
+  away unless `AT_CMD_HELP=ON`.
+- Handlers run in `uart_rx_task` and take their module's lock themselves:
+  copy under the lock, format after unlocking.
 
 ## Examples
 

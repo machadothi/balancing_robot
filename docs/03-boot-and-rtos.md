@@ -9,8 +9,8 @@ the locking scheme.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L51) |
-| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L79) |
+| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L63) |
+| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L99) |
 | Stack sizes, priorities | [config.h](../src/config.h#L110) |
 | Kernel configuration | [FreeRTOSConfig.h](../src/FreeRTOSConfig.h#L92) |
 | libopencm3 ↔ FreeRTOS handler glue | [src/rtos_glue/opencm3.c](../src/rtos_glue/opencm3.c) |
@@ -52,7 +52,7 @@ Points worth noting:
 | Task | Priority | Stack (words) | Runs | Blocks on |
 |------|----------|---------------|------|-----------|
 | `imu_task` | 4 (`TASK_PRIORITY_CONTROL`) | 192 | Every `IMU_SAMPLE_RATE_MS` (10 ms) | `vTaskDelayUntil`, DMA semaphore |
-| `robot_task` | 4 (`TASK_PRIORITY_CONTROL`) | 256 | Once per IMU sample | `imu_content` queue |
+| `robot_task` | 4 (`TASK_PRIORITY_CONTROL`) | 256 | Once per IMU sample | IMU sample mailbox (`imu_wait_sample()`) |
 | `uart_rx_task` | 2 (`TASK_PRIORITY_IO`) | 384 | Once per received line, any console port | `uart_rxq` queue |
 | `telemetry_task` | 2 (`TASK_PRIORITY_IO`) | 256 | Once per record while `AT+STREAM=1` | Telemetry queue, USB TX buffer space |
 | `led_task` | 1 (`TASK_PRIORITY_LED`) | 64 | Every 250 ms | `vTaskDelayUntil` |
@@ -80,12 +80,12 @@ flowchart LR
     ROBOT["robot_task<br/>prio 4"]
     RX["uart_rx_task<br/>prio 2"]
     TELEM["telemetry_task<br/>prio 2"]
-    STATE[("robot_state<br/>+ state_mutex")]
+    STATE[("robot<br/>+ state_mutex")]
     TLQ[["telemetry queue<br/>16 / 32 records"]]
     RING[["TX ring buffer<br/>per port"]]
 
-    DMAISR -->|"i2c_transfer_sem<br/>(binary semaphore)"| IMU
-    IMU -->|"imu_content<br/>latest sample"| ROBOT
+    DMAISR -->|"transfer_done<br/>(binary semaphore)"| IMU
+    IMU -->|"sample mailbox<br/>latest sample"| ROBOT
     UARTISR -->|"uart_rxq<br/>lines tagged with port"| RX
     ROBOT <-->|"lock per sample"| STATE
     RX <-->|"lock per command"| STATE
@@ -98,16 +98,16 @@ flowchart LR
 
 | Object | Type | Created in | Producer → consumer |
 |--------|------|------------|---------------------|
-| `imu_content` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite` | [imu.c](../src/imu/imu.c#L33) | `imu_task` → `robot_task` |
-| `i2c_transfer_sem` | Binary semaphore | [mpu6050.c](../src/imu/mpu6050.c#L104) | DMA callback (ISR) → `imu_task` |
+| `samples` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite`, read through `imu_wait_sample()` | [`imu_queue_init()`](../src/imu/imu.c#L32) | `imu_task` → `robot_task` |
+| `transfer_done` | Binary semaphore | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) | DMA callback (ISR) → `imu_task` |
 | `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
 | TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |
 | Telemetry queue | Queue, 32 / 16 × record | [telemetry.c](../src/telemetry/telemetry.c) | `robot_task` → `telemetry_task` |
-| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L390) | `robot_task` ↔ AT handlers |
+| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L178) | `robot_task` ↔ AT handlers |
 
 ### Latest-sample mailbox
 
-`imu_content` holds exactly one sample, and the IMU task overwrites it. A
+The sample queue holds exactly one sample, and the IMU task overwrites it. A
 control loop must act on the newest measurement: with a deeper queue, any delay
 in `robot_task` would make it work through a backlog of old samples, adding
 latency exactly when the loop is already late.
@@ -121,13 +121,13 @@ Two failure rules go with it:
 
 ### The state lock
 
-`robot_state` holds the sensor values, gains and flags shared between the
+`robot` ([robot_internal.h](../src/robot/robot_internal.h)) holds the sensor values, PID and flags shared between the
 control loop and the AT console. Both sides take `state_mutex`:
 
 - **`robot_task`** locks once per sample around the state update, PID and motor
   commands, and never while blocked on its queue.
-- **The AT parser** locks only around a set/execute callback, or to take a
-  snapshot for a query ([`at_cmd_set_lock()`](../src/cmd/at_cmd.c#L108)).
+- **The AT handlers** ([robot_commands.c](../src/robot/robot_commands.c)) take the
+  lock themselves, only to change state or to copy a value for a query.
   Responses are printed **after** unlocking. Printing can wait for UART buffer
   space, and holding the lock while waiting would stall the control loop.
 - **Priority inheritance.** When `robot_task` (prio 4) waits for the mutex held
@@ -135,9 +135,9 @@ control loop and the AT console. Both sides take `state_mutex`:
   prio 4. Otherwise a medium-priority task could preempt the holder and delay
   the control loop indefinitely: the classic priority inversion. This is why
   it is a mutex (`configUSE_MUTEXES 1`) and not a binary semaphore.
-- **Layering.** The parser receives lock/unlock function pointers from the
-  robot module instead of including `robot.h`, so `cmd/` stays independent of
-  `robot/`.
+- **Layering.** The parser knows nothing about the robot: modules register
+  command tables with `at_cmd_register()`, and each handler owns its locking,
+  so `cmd/` stays independent of `robot/` and `telemetry/`.
 
 ## Interrupt priorities
 
@@ -191,7 +191,7 @@ whole number of ticks.
 `vTaskDelayUntil` only works if `last` persists across iterations. The IMU task
 used to reinitialise it inside the loop, silently turning it into
 `vTaskDelay`; it is now read once before the loop
-([imu.c](../src/imu/imu.c#L128)).
+([imu.c](../src/imu/imu.c#L51)).
 
 ### One control period
 

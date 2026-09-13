@@ -1,7 +1,7 @@
 # 06 — Control Theory: Balancing an Inverted Pendulum
 
 This chapter builds the model the firmware is controlling, explains why the
-PID in [`pid_compute()`](../src/robot/robot.c#L175) can stabilise it, what
+PID in [`pid_update()`](../src/control/pid.c#L27) can stabilise it, what
 sampling and delay do to that argument, and where a state-space controller
 would take it next. [08 — PID Implementation](08-pid-implementation.md) then
 walks through the code line by line.
@@ -10,19 +10,19 @@ walks through the code line by line.
 
 | Concept | Where |
 |---------|-------|
-| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L45) |
-| Control law | [`pid_compute()`](../src/robot/robot.c#L175) |
-| Actuation (mixing, saturation, deadband) | [`apply_motor_control()`](../src/robot/robot.c#L217) |
-| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L136) |
-| Unused hooks for an outer loop | `target_velocity` in [at_cmd.h](../src/cmd/at_cmd.h), [`motor1_get_encoder()`](../src/motor/motor.h) |
+| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L47) |
+| Control law | [`pid_update()`](../src/control/pid.c#L27) |
+| Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L20) |
+| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L61) |
+| Unused hooks for an outer loop | `target_velocity` in [robot_internal.h](../src/robot/robot_internal.h), [`motor_get_encoder()`](../src/motor/motor.h) |
 
 ## The closed loop
 
 ```mermaid
 flowchart LR
     REF["θ_ref = 0°"] --> SUM(("Σ"))
-    SUM -->|"e"| PID["PID<br/>pid_compute()"]
-    PID -->|"u ∈ [−255, 255]"| MIX["Mixer + deadband<br/>apply_motor_control()"]
+    SUM -->|"e"| PID["PID<br/>pid_update()"]
+    PID -->|"u ∈ [−255, 255]"| MIX["Mixer + deadband<br/>mixer_mix()"]
     MIX -->|"PWM duty"| MOT["DC motors<br/>+ wheels"]
     MOT -->|"wheel acceleration a"| BODY["Pendulum body"]
     BODY -->|"θ"| IMU["MPU-6050"]
