@@ -1,20 +1,20 @@
 # 08 — PID Implementation
 
 The balance controller exactly as coded: every term, limit and safety check in
-[`pid_compute()`](../src/robot/robot.c#L169) and
-[`apply_motor_control()`](../src/robot/robot.c#L211), why each is there, and
+[`pid_compute()`](../src/robot/robot.c#L175) and
+[`apply_motor_control()`](../src/robot/robot.c#L217), why each is there, and
 what to improve. The theory is in [06](06-control-theory.md).
 
 ## Where in the code
 
 | What | Where |
 |------|-------|
-| Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L38) |
-| Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L43) |
-| Integral limit | [`integral_limit`](../src/robot/robot.c#L101) |
-| Control law | [`pid_compute()`](../src/robot/robot.c#L169) |
-| Mixing and actuation | [`apply_motor_control()`](../src/robot/robot.c#L211) |
-| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L362), [`at_exec_handler()`](../src/robot/robot.c#L298) |
+| Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
+| Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L45) |
+| Integral limit | [`integral_limit`](../src/robot/robot.c#L105) |
+| Control law | [`pid_compute()`](../src/robot/robot.c#L175) |
+| Mixing and actuation | [`apply_motor_control()`](../src/robot/robot.c#L217) |
+| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L372), [`at_exec_handler()`](../src/robot/robot.c#L307) |
 
 ## Signal chain
 

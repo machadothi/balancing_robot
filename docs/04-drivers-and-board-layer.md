@@ -137,8 +137,8 @@ Design notes:
 ## UART
 
 The driver serves every console port the board defines: `UART_PORT_USB` on
-both boards, plus `UART_PORT_BT` (USART2 on PD5/PD6) on the F407 board, whose
-`board_config.h` defines `BOARD_BT_UART`. The USB console carries telemetry and
+both boards, plus `UART_PORT_BT` (USART2 on PD5/PD6) on the F407 board, when `CONSOLE_BT` is on (the board file declares the port
+with `BOARD_HAS_BT_UART`; its pins are in `board_config.h`). The USB console carries telemetry and
 AT commands at `UART_BAUDRATE`; the Bluetooth console carries AT commands only,
 at `BT_BAUDRATE`.
 
@@ -171,7 +171,7 @@ flowchart LR
   never run concurrently, and each reply goes back to the port the command
   came from.
 - **Echo is per line.** `uart_rx_task` echoes the complete line before
-  dispatching it (USB only, `UART_ECHO_ENABLED`). Echoing single characters from
+  dispatching it (USB only, `CONSOLE_ECHO`). Echoing single characters from
   the ISR could insert them into a telemetry line.
 - **Overruns.** At 921600 baud a byte arrives every 11 µs. An interrupt delayed
   longer (for example by a kernel critical section) loses a received character;

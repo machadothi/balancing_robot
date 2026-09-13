@@ -133,7 +133,8 @@ extern "C" {
  */
 #define DEBUG_BUFFER_SIZE       150     /**< Debug output buffer size */
 #define LOG_BUFFER_SIZE         256     /**< Log message buffer size */
-#define WATCHDOG_TIMEOUT_MS     500     /**< Independent watchdog timeout (WATCHDOG_ENABLED) */
+#define WATCHDOG_TIMEOUT_MS     500     /**< Independent watchdog timeout (WATCHDOG) */
+#define AUTO_ENABLE_HOLD_MS     3000    /**< Upright time before AUTO_ENABLE starts balancing */
 /** @} */
 
 #ifdef __cplusplus

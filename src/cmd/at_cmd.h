@@ -40,7 +40,7 @@
  *   AT+RESET               - Software reset
  *   AT+SAVE / AT+LOAD      - Not implemented yet (return ERROR)
  *   AT+DEFAULT             - Restore default gains
- *   AT+HELP                - List available commands (AT_CMD_HELP_ENABLED)
+ *   AT+HELP                - List available commands (AT_CMD_HELP)
  * 
  * Response Format:
  *   OK                     - Command successful (no data)

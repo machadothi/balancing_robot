@@ -2,8 +2,8 @@
  * @file uart.h
  * @brief Multi-port UART driver: interrupt-driven ring buffer TX, line-based RX
  *
- * Ports come from board_config.h: UART_PORT_USB is the console on every board,
- * UART_PORT_BT exists only on boards that define BOARD_BT_UART.
+ * Ports follow the features: UART_PORT_USB exists with CONSOLE_USB,
+ * UART_PORT_BT with CONSOLE_BT. Their pins come from board_config.h.
  *
  * Writes are atomic: a string is queued whole or not at all, so lines written
  * by different tasks (telemetry, AT replies) never interleave mid-line.
@@ -21,6 +21,7 @@
 
 #include <FreeRTOS.h>
 
+#include "config.h"
 #include "board_config.h"
 
 #ifdef __cplusplus
@@ -42,10 +43,12 @@ extern "C" {
  * ========================================================================== */
 
 typedef enum {
-    UART_PORT_USB = 0,      /**< Console: telemetry and full AT access */
-#ifdef BOARD_BT_UART
+#if CONSOLE_USB
+    UART_PORT_USB,          /**< Console: telemetry and full AT access */
+#endif // CONSOLE_USB
+#if CONSOLE_BT
     UART_PORT_BT,           /**< Bluetooth module: AT commands only */
-#endif // BOARD_BT_UART
+#endif // CONSOLE_BT
     UART_PORT_COUNT
 } UART_Port_t;
 

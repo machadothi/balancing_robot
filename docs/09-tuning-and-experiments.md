@@ -9,9 +9,9 @@ step is in [06 — Control Theory](06-control-theory.md); the commands are in
 
 | What | Where |
 |------|-------|
-| Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L38) |
+| Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
 | Gyro calibration | `GYRO_CALIBRATION_OFFSET` ([05](05-sensing-and-imu.md)) |
-| Deadband, saturation, fall cut-off | [robot.c constants](../src/robot/robot.c#L43) |
+| Deadband, saturation, fall cut-off | [robot.c constants](../src/robot/robot.c#L45) |
 | Filter choice | `ATTITUDE_FILTER` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Before you start
@@ -36,8 +36,8 @@ AT+ANGLE?
 
 If upright is far from 0°, the IMU is mounted at an angle; if the sign is
 reversed, the IMU is mounted facing the other way. Either way, fix
-[`calc_angle_from_accel()`](../src/robot/robot.c#L118) and the 90° offset in
-[`robot_task()`](../src/robot/robot.c#L362) before going further.
+[`calc_angle_from_accel()`](../src/robot/robot.c#L122) and the 90° offset in
+[`robot_task()`](../src/robot/robot.c#L372) before going further.
 
 ### 2. Gyro calibration
 

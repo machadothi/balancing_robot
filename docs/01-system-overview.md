@@ -11,7 +11,7 @@ sample becomes a motor command. Later chapters zoom into each block.
 | Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L51), [`app_tasks_init()`](../src/app/app_init.c#L79) |
 | Per-board peripherals | [src/board/f103/board_config.h](../src/board/f103/board_config.h), [src/board/f407/board_config.h](../src/board/f407/board_config.h) |
 | Sensing | [`imu_task()`](../src/imu/imu.c#L109) |
-| Control | [`robot_task()`](../src/robot/robot.c#L362) |
+| Control | [`robot_task()`](../src/robot/robot.c#L372) |
 
 ## Hardware
 
@@ -104,7 +104,7 @@ sequenceDiagram
    DMA interrupt signals completion.
 2. It converts raw counts to g and °/s and overwrites the single-slot
    `imu_content` queue, so the controller always sees the newest sample.
-3. [`robot_task`](../src/robot/robot.c#L362) blocks on that queue, so its
+3. [`robot_task`](../src/robot/robot.c#L372) blocks on that queue, so its
    rate is set by the IMU task. It computes the accelerometer angle, runs both
    filters ([07](07-sensor-fusion.md)) and picks one.
 4. Holding the state mutex, it runs the PID ([08](08-pid-implementation.md)),

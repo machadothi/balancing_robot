@@ -18,9 +18,9 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 | Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L182) |
 | Queries (`AT+X?`) | [`at_handle_query()`](../src/cmd/at_cmd.c#L351) |
 | Set commands (`AT+X=v`), range checks | `at_handle_set()` in [at_cmd.c](../src/cmd/at_cmd.c) |
-| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L549) |
-| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L247), [`at_exec_handler()`](../src/robot/robot.c#L298) |
-| Build flags | `AT_CMD_HELP_ENABLED`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `UART_ECHO_ENABLED` ([02](02-build-and-configuration.md#build-options)) |
+| Execute commands (`AT+X`) | [`at_handle_execute()`](../src/cmd/at_cmd.c#L551) |
+| What set/execute commands do | [`at_set_handler()`](../src/robot/robot.c#L254), [`at_exec_handler()`](../src/robot/robot.c#L307) |
+| Build flags | `AT_CMD_HELP`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `CONSOLE_ECHO` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Syntax
 
@@ -33,7 +33,7 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
 Lines end with CR or LF, and `> ` is printed when the console is ready for the
 next command. The USB console echoes each command line when it is received
-(`UART_ECHO_ENABLED`), not character by character: enable local echo in your
+(`CONSOLE_ECHO`), not character by character: enable local echo in your
 terminal to see what you type.
 
 ### Responses and error codes
@@ -91,7 +91,7 @@ one response are consistent with each other.
 | `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET` |
 | `AT+RESET` | Reply `OK`, wait 100 ms, then reset the MCU |
 | `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
-| `AT+HELP` | Command summary, only with `AT_CMD_HELP_ENABLED=ON` (default OFF) |
+| `AT+HELP` | Command summary, only with `AT_CMD_HELP=ON` (default OFF) |
 
 The robot starts with motors in standby: nothing moves until `AT+ENABLE`.
 Balancing also stops by itself when |tilt| exceeds 45° or when the IMU delivers
@@ -128,7 +128,7 @@ AT+KP?
 ```
 
 Gains are lost on reset: write the final values into `ROBOT_DEFAULT_KP/KI/KD`
-in [robot.c](../src/robot/robot.c#L38). The procedure is in
+in [robot.c](../src/robot/robot.c#L40). The procedure is in
 [09 — Tuning and Experiments](09-tuning-and-experiments.md).
 
 ### Direct wheel control
@@ -175,7 +175,8 @@ the `acc_deg`, `kalman` and `comp` fields.
 ## Bluetooth console (F407 board)
 
 An HC-05 or HC-06 module (for example on a ZS-040 breakout) on the board's
-Bluetooth header gives a wireless AT console alongside USB.
+Bluetooth header gives a wireless AT console alongside USB. It is built when
+`CONSOLE_BT` is on, the default on this board ([02](02-build-and-configuration.md#features)).
 
 1. **Supply.** The ZS-040 needs 3.6–6 V on VCC. Measure the header's supply pin
    first; if it provides only 3.3 V, power the module from a 5 V pin instead.

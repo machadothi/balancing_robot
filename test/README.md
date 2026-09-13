@@ -50,7 +50,7 @@ summary.
 | `--baud` | `$ROBOT_BAUD` or `921600` | Must match the firmware's `UART_BAUDRATE` |
 | `--motors` | off | Run tests that drive the wheels |
 | `--interactive` | off | Run tests that need an operator |
-| `--bluetooth` | off | `--port` is the Bluetooth console: skip tests that need USB telemetry or the banner |
+| `--bluetooth` | off | `--port` is the Bluetooth console (firmware built with `CONSOLE_BT=ON`): skip tests that need USB telemetry or the banner |
 | `--assert-dtr-rts` | off | Assert DTR/RTS when opening the port (see below) |
 
 ## What each file checks

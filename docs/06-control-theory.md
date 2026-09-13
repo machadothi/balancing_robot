@@ -1,7 +1,7 @@
 # 06 — Control Theory: Balancing an Inverted Pendulum
 
 This chapter builds the model the firmware is controlling, explains why the
-PID in [`pid_compute()`](../src/robot/robot.c#L169) can stabilise it, what
+PID in [`pid_compute()`](../src/robot/robot.c#L175) can stabilise it, what
 sampling and delay do to that argument, and where a state-space controller
 would take it next. [08 — PID Implementation](08-pid-implementation.md) then
 walks through the code line by line.
@@ -10,9 +10,9 @@ walks through the code line by line.
 
 | Concept | Where |
 |---------|-------|
-| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L43) |
-| Control law | [`pid_compute()`](../src/robot/robot.c#L169) |
-| Actuation (mixing, saturation, deadband) | [`apply_motor_control()`](../src/robot/robot.c#L211) |
+| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L45) |
+| Control law | [`pid_compute()`](../src/robot/robot.c#L175) |
+| Actuation (mixing, saturation, deadband) | [`apply_motor_control()`](../src/robot/robot.c#L217) |
 | Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L136) |
 | Unused hooks for an outer loop | `target_velocity` in [at_cmd.h](../src/cmd/at_cmd.h), [`motor1_get_encoder()`](../src/motor/motor.h) |
 
@@ -151,7 +151,7 @@ acceleration. A DC motor produces torque
   The effective loop gain falls, which is one reason a robot that balances in
   place struggles once it is moving fast.
 - **Static friction** creates a dead zone: small duty cycles produce no motion.
-  `MOTOR_DEADBAND` in [robot.c](../src/robot/robot.c#L49) lifts any non-zero
+  `MOTOR_DEADBAND` in [robot.c](../src/robot/robot.c#L51) lifts any non-zero
   command to a minimum PWM of 20/255 (8 %).
 - **Saturation**: duty is limited to ±255. A disturbance that needs more
   acceleration than full voltage provides cannot be recovered, whatever the

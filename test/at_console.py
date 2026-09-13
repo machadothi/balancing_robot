@@ -2,7 +2,7 @@
 Serial client for the robot's AT command console.
 
 Protocol, as implemented in src/cmd/at_cmd.c:
-  - commands end with CR; the USB console echoes each line (UART_ECHO_ENABLED),
+  - commands end with CR; the USB console echoes each line (CONSOLE_ECHO),
     the Bluetooth console does not
   - a response ends with "OK", "ERROR:<code>", "ERROR:<text>" or "+CMD:value"
   - "> " is printed after every response, without a newline

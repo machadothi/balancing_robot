@@ -8,7 +8,9 @@ submodules.
 
 | What | Where |
 |------|-------|
-| Top-level build, option validation | [CMakeLists.txt](../CMakeLists.txt) |
+| Top-level build, option and feature declarations | [CMakeLists.txt](../CMakeLists.txt) |
+| Configuration values | [prj.conf](../prj.conf) |
+| `.conf` parser, option and feature registry | [cmake/features.cmake](../cmake/features.cmake) |
 | Per-board settings | [cmake/boards/](../cmake/boards) |
 | Presets | [CMakePresets.json](../CMakePresets.json) |
 | Generated header template | [src/app_config.h.in](../src/app_config.h.in) |
@@ -124,79 +126,118 @@ and M2; change `BOARD_MOTOR1_PORT` / `BOARD_MOTOR2_PORT` there to use others.
 ```mermaid
 flowchart LR
     PRESET["CMakePresets.json<br/>preset f103 / f407"] -->|"BOARD, toolchain, build dir"| CML["CMakeLists.txt"]
-    USER["-D options, ccmake,<br/>CMakeUserPresets.json"] -->|"cache variables"| CML
-    CML -->|"include()"| BCM["cmake/boards/BOARD.cmake<br/>MCU, CPU flags, sources, defaults"]
-    BCM --> CML
-    CML -->|"validate, configure_file()"| HDR["generated/app_config.h"]
-    CML -->|"sources, include dirs,<br/>libopencm3, linker script"| ELF["balancing-robot.elf"]
-    HDR -->|"included by config.h<br/>and FreeRTOSConfig.h"| SRC["C sources"]
-    SRC --> ELF
+    BCM["cmake/boards/BOARD.cmake<br/>MCU, sources, capabilities"] --> CML
+    CML --> REG["cmake/features.cmake<br/>robot_option / robot_feature"]
+    PRJ["prj.conf"] --> REG
+    BCONF["cmake/boards/BOARD.conf<br/>(optional)"] --> REG
+    EXTRA["EXTRA_CONF_FILE<br/>overlays"] --> REG
+    USER["-D, ccmake"] --> REG
+    REG -->|"validated values"| HDR["generated/app_config.h"]
+    REG -->|"sources of enabled features"| ELF["balancing-robot.elf"]
+    HDR -->|"included by config.h<br/>and FreeRTOSConfig.h"| ELF
 ```
 
 1. **The preset** selects the board, the toolchain file and a build directory
    per board.
 2. **The board file** (`cmake/boards/<board>.cmake`) sets everything
-   MCU-specific: CPU flags, libopencm3 library, linker script, FreeRTOS kernel
-   and port, clock frequency, board and motor sources, and per-board option
-   defaults.
-3. **Options** are declared after the board file, so board defaults apply, and
-   are then validated. Configuration stops with an error for an unknown board or
-   filter, a non-integer value, or an `IMU_SAMPLE_RATE_MS` that is not a whole
-   number of RTOS ticks.
-4. **`configure_file()`** writes the option values to
-   `build-<preset>/generated/app_config.h`. Firmware code never reads CMake
-   variables directly; it includes `config.h`, which includes this header.
+   MCU-specific: CPU flags, libopencm3 library, linker script, FreeRTOS port,
+   clock frequency, board and motor sources, and the board's *capabilities*
+   such as `BOARD_HAS_BT_UART`.
+3. **The registry** in `cmake/features.cmake` reads the `.conf` files, declares
+   each option and feature, checks types, choices and feature requirements, and
+   collects the source files of enabled features.
+4. **`generated/app_config.h`** receives every value as a macro. Firmware code
+   never reads CMake variables; it includes `config.h`, which includes this
+   header.
 
 Because the header is generated per build directory, the two boards can be
-built side by side with different options.
+built side by side with different settings.
 
 ## Build Options
 
-Options are CMake cache variables. They are written to
-`build-<preset>/generated/app_config.h`, which `config.h` includes.
+Every option is declared once in `CMakeLists.txt`, with `robot_option()` for a
+value or `robot_feature()` for an ON/OFF feature that can require other
+features and brings its own source files. Their values live in
+[prj.conf](../prj.conf), one `KEY=VALUE` per line:
+
+```ini
+CONSOLE_USB=ON
+TELEMETRY=ON
+ATTITUDE_FILTER=kalman
+```
+
+### Where a value comes from
+
+| Precedence | Source | Use it for |
+|------------|--------|------------|
+| 1 (lowest) | Default in the declaration | — |
+| 2 | `prj.conf` | Project settings, committed |
+| 3 | `cmake/boards/<board>.conf` | Board-specific settings (optional file) |
+| 4 | `-DEXTRA_CONF_FILE=my.conf` | Personal or experiment overlays; separate several files with `;` |
+| 5 (highest) | `-D<KEY>=…` or `ccmake` | Quick one-off changes |
+
+- Editing a `.conf` file re-runs CMake on the next build.
+- A `-D` value stays in that build directory, and CMake prints a line for it on
+  every configure, until you set it back to the `.conf` value or drop it with
+  `cmake -U<KEY> --preset <board>`.
+- Unknown keys and malformed lines are errors, so typos never pass silently.
+- `BOARD` is not a `.conf` key: the preset selects it.
+
+Example, a Bluetooth-only build of the F407 board:
+
+```bash
+echo "CONSOLE_USB=OFF" > bt-only.conf
+cmake --preset f407 -DEXTRA_CONF_FILE=bt-only.conf
+```
+
+### Features
+
+| Feature | Default | Requires | Effect |
+|---------|---------|----------|--------|
+| `CONSOLE_USB` | `ON` | — | AT console on the USB console; carries telemetry, banner and fault reports |
+| `CONSOLE_BT` | `ON` where the board has a Bluetooth port | `BOARD_HAS_BT_UART` | AT console on the Bluetooth module (F407 board) |
+| `CONSOLE_ECHO` | `ON` | `CONSOLE_USB` | Echo each command line |
+| `TELEMETRY` | `ON` | `CONSOLE_USB` | `AT+STREAM` control loop logging ([10](10-at-commands.md)) |
+| `AT_CMD_PID_TOGGLE` | `ON` | a console | `AT+PID`, `AT+PIDON`, `AT+PIDOFF` |
+| `AT_CMD_HELP` | `OFF` | a console | `AT+HELP` |
+| `AT_CMD_ALL_QUERY` | `OFF` | a console | `AT+ALL?` bulk query |
+| `LOGGING` | `OFF` | `CONSOLE_USB` | Debug log messages (~300 bytes of stack) |
+| `FAULT_VERBOSE` | `ON` | `CONSOLE_USB` | Print fault reports before halting |
+| `WATCHDOG` | `ON` | — | Independent watchdog (500 ms) refreshed by the control task |
+| `I2C_BUS_RECOVERY` | `ON` | — | Free a stuck I2C slave at start-up |
+| `AUTO_ENABLE` | `OFF` | — | Start balancing once per boot, after the robot is held upright for 3 s |
+
+- **Unmet requirements switch a feature off**, and CMake says so. Asking for it
+  explicitly (a value different from its default) without its requirement is an
+  error, for example `CONSOLE_BT=ON` on the Blue Pill.
+- **No console needs `AUTO_ENABLE=ON`**: with both consoles off, nothing could
+  send `AT+ENABLE`.
+- **`APP_BLINK_ONLY=ON` switches every feature off.**
+- **In C**, each feature is a macro that is always defined as 1 or 0
+  (`#if TELEMETRY`), plus `CONSOLE_ANY` for "at least one console". The source
+  files of a disabled feature are not compiled.
+
+### Values
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `BOARD` | `f103` | Target board: `f103` or `f407` |
 | `APP_BLINK_ONLY` | `OFF` | Only run the LED heartbeat task |
 | `UART_BAUDRATE` | `921600` | USB console baud rate (telemetry and AT commands) |
-| `BT_BAUDRATE` | `115200` | Bluetooth console baud rate (F407 board); must match the module |
+| `BT_BAUDRATE` | `115200` | Bluetooth console baud rate; must match the module |
 | `IMU_SAMPLE_RATE_MS` | `10` | IMU and control loop period (ms); must be a whole number of ticks |
-| `ATTITUDE_FILTER` | `complementary` | Tilt estimator used by the controller: `complementary` or `kalman` ([07](07-sensor-fusion.md)) |
+| `ATTITUDE_FILTER` | `complementary` | `complementary` or `kalman`, as macros `ATTITUDE_FILTER_COMPLEMENTARY` / `ATTITUDE_FILTER_KALMAN` ([07](07-sensor-fusion.md)) |
 | `FREERTOS_TICK_RATE_HZ` | `1000` | FreeRTOS tick rate |
 | `FREERTOS_TOTAL_HEAP_SIZE` | `12288` (f103), `32768` (f407) | FreeRTOS heap (bytes) |
-| `UART_ECHO_ENABLED` | `ON` | Echo each command line on the USB console |
-| `I2C_BUS_RECOVERY` | `ON` | I2C bus recovery |
-| `AT_CMD_HELP_ENABLED` | `OFF` | `AT+HELP` command |
-| `AT_CMD_ALL_QUERY` | `OFF` | `AT+ALL?` bulk query |
-| `AT_CMD_PID_TOGGLE` | `ON` | `AT+PIDON/PIDOFF/PID` commands |
-| `LOG_ENABLED` | `OFF` | Logging over UART |
-| `FAULT_HANDLERS_VERBOSE` | `ON` | Print fault messages over UART |
-| `WATCHDOG_ENABLED` | `ON` | Independent watchdog (500 ms) refreshed by the control task |
 
-With `APP_BLINK_ONLY=ON` the driver options (everything from
-`UART_ECHO_ENABLED` down) are forced `OFF`.
+### Adding an option or feature
 
-Ways to change options:
+1. Declare it in `CMakeLists.txt`, for example
+   `robot_feature(MY_FEATURE OFF "What it does" REQUIRES CONSOLE_USB SOURCES ${SRC_DIR}/my/my_feature.c)`.
+2. Add `MY_FEATURE=OFF` to `prj.conf` so it is visible there.
+3. Use `#if MY_FEATURE` where the rest of the code calls into it.
 
-- On the command line: `cmake --preset f103 -DUART_BAUDRATE=115200`
-- Interactively: `ccmake build-f103` (install with `sudo apt install cmake-curses-gui`)
-- As personal presets in `CMakeUserPresets.json`, which is gitignored:
-
-```json
-{
-  "version": 3,
-  "configurePresets": [
-    { "name": "f103-dev", "inherits": "f103", "cacheVariables": { "UART_BAUDRATE": "115200" } }
-  ],
-  "buildPresets": [
-    { "name": "f103-dev", "configurePreset": "f103-dev" }
-  ]
-}
-```
-
-A board's defaults only apply to a new build directory. To switch boards,
-use the other preset instead of changing `BOARD` in an existing directory.
+Build directories created before this configuration system may keep stale
+cache entries; when in doubt, delete the build directory and configure again.
 
 ## Build Outputs
 

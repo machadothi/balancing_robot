@@ -25,7 +25,7 @@
  * Private Helpers
  * ========================================================================== */
 
-#if FAULT_HANDLERS_VERBOSE
+#if FAULT_VERBOSE
 /**
  * @brief Send string via USART (blocking, no RTOS)
  */
@@ -34,7 +34,7 @@ static void fault_puts(const char *s) {
         usart_send_blocking(BOARD_UART, *s++);
     }
 }
-#endif // FAULT_HANDLERS_VERBOSE
+#endif // FAULT_VERBOSE
 
 /**
  * @brief Cut motor drive before anything else
@@ -67,7 +67,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     (void)xTask;
     fault_stop_motors();
     
-#if FAULT_HANDLERS_VERBOSE
+#if FAULT_VERBOSE
     fault_puts("\r\n!!! STACK OVERFLOW: ");
     if (pcTaskName) {
         fault_puts(pcTaskName);
@@ -75,7 +75,7 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
     fault_puts("\r\n");
 #else
     (void)pcTaskName;
-#endif // FAULT_HANDLERS_VERBOSE
+#endif // FAULT_VERBOSE
     
     /* Fast blink: stack overflow */
     fault_blink_forever(100000);
@@ -84,9 +84,9 @@ void vApplicationStackOverflowHook(TaskHandle_t xTask, char *pcTaskName) {
 void hard_fault_handler(void) {
     fault_stop_motors();
 
-#if FAULT_HANDLERS_VERBOSE
+#if FAULT_VERBOSE
     fault_puts("\r\n!!! HARD FAULT !!!\r\n");
-#endif // FAULT_HANDLERS_VERBOSE
+#endif // FAULT_VERBOSE
     
     /* Very fast blink: hard fault */
     fault_blink_forever(50000);
@@ -95,9 +95,9 @@ void hard_fault_handler(void) {
 void vApplicationMallocFailedHook(void) {
     fault_stop_motors();
 
-#if FAULT_HANDLERS_VERBOSE
+#if FAULT_VERBOSE
     fault_puts("\r\n!!! MALLOC FAILED !!!\r\n");
-#endif // FAULT_HANDLERS_VERBOSE
+#endif // FAULT_VERBOSE
     
     /* Medium blink: malloc failure */
     fault_blink_forever(200000);
@@ -107,7 +107,7 @@ void vAssertCalled(const char *file, int line) {
     taskDISABLE_INTERRUPTS();
     fault_stop_motors();
 
-#if FAULT_HANDLERS_VERBOSE
+#if FAULT_VERBOSE
     char line_text[12];
     snprintf(line_text, sizeof(line_text), "%d", line);
     fault_puts("\r\n!!! ASSERT: ");
@@ -118,7 +118,7 @@ void vAssertCalled(const char *file, int line) {
 #else
     (void)file;
     (void)line;
-#endif // FAULT_HANDLERS_VERBOSE
+#endif // FAULT_VERBOSE
 
     /* Fastest blink: failed assertion */
     fault_blink_forever(25000);

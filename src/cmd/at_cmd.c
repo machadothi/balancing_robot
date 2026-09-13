@@ -26,7 +26,7 @@
 #include "util/fmt.h"
 
 /* ==========================================================================
- * Float Formatting Helpers (stack-efficient when LOG_ENABLED=0)
+ * Float Formatting Helpers (stack-efficient when LOGGING=0)
  * ========================================================================== */
 
 /* Integer-printf formatting via fmt_fixed(): float printf needs ~400 bytes
@@ -68,7 +68,7 @@ static AT_LockCallback_t lock_callback = NULL;
 static AT_LockCallback_t unlock_callback = NULL;
 
 /** Port the command being processed came from; uart_rx_task runs commands one at a time */
-static UART_Port_t reply_port = UART_PORT_USB;
+static UART_Port_t reply_port = (UART_Port_t)0;
 
 /* ==========================================================================
  * Private Function Prototypes
@@ -79,9 +79,9 @@ static void at_handle_test(void);
 static void at_handle_query(const AT_Command_t *cmd);
 static void at_handle_set(const AT_Command_t *cmd);
 static void at_handle_execute(const AT_Command_t *cmd);
-#if AT_CMD_HELP_ENABLED
+#if AT_CMD_HELP
 static void at_show_help(void);
-#endif // AT_CMD_HELP_ENABLED
+#endif // AT_CMD_HELP
 static void str_to_upper(char *s);
 
 /* ==========================================================================
@@ -527,6 +527,7 @@ static void at_handle_set(const AT_Command_t *cmd) {
             at_cmd_respond_error(AT_ERROR);
         }
     }
+#if TELEMETRY
     else if (strcmp(cmd->cmd, "STREAM") == 0) {
         if (cmd->param_float != 0.0f && cmd->param_float != 1.0f) {
             at_cmd_respond_error(AT_ERROR_RANGE);
@@ -538,6 +539,7 @@ static void at_handle_set(const AT_Command_t *cmd) {
             at_cmd_respond_error(AT_ERROR);
         }
     }
+#endif // TELEMETRY
     else {
         at_cmd_respond_error(AT_ERROR_UNKNOWN_CMD);
     }
@@ -555,11 +557,11 @@ static void at_handle_execute(const AT_Command_t *cmd) {
         /* Trigger system reset */
         scb_reset_system();
     }
-#if AT_CMD_HELP_ENABLED
+#if AT_CMD_HELP
     else if (strcmp(cmd->cmd, "HELP") == 0) {
         at_show_help();
     }
-#endif // AT_CMD_HELP_ENABLED
+#endif // AT_CMD_HELP
     else if (exec_callback == NULL) {
         at_cmd_respond_error(AT_ERROR_NOT_READY);
     }
@@ -576,7 +578,7 @@ static void at_handle_execute(const AT_Command_t *cmd) {
 /**
  * @brief Show help message
  */
-#if AT_CMD_HELP_ENABLED
+#if AT_CMD_HELP
 static void at_println(const char *text) {
     char line[AT_RESPONSE_BUFFER_SIZE];
     snprintf(line, sizeof(line), "%s\r\n", text);
@@ -607,7 +609,9 @@ static void at_show_help(void) {
     at_println("  AT+KP?/=n       PID proportional");
     at_println("  AT+KI?/=n       PID integral");
     at_println("  AT+KD?/=n       PID derivative");
-    at_println("  AT+STREAM=0|1   Stream filter angles");
+#if TELEMETRY
+    at_println("  AT+STREAM=0|1   Telemetry on the USB console");
+#endif // TELEMETRY
     at_println("  AT+ENABLE       Enable motors");
     at_println("  AT+DISABLE      Disable motors");
 #if AT_CMD_PID_TOGGLE
@@ -618,4 +622,4 @@ static void at_show_help(void) {
     at_println("  AT+HELP         This help");
     at_cmd_respond_ok();
 }
-#endif // AT_CMD_HELP_ENABLED
+#endif // AT_CMD_HELP

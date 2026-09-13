@@ -103,7 +103,7 @@ flowchart LR
 | `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
 | TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |
 | Telemetry queue | Queue, 32 / 16 × record | [telemetry.c](../src/telemetry/telemetry.c) | `robot_task` → `telemetry_task` |
-| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L375) | `robot_task` ↔ AT handlers |
+| `state_mutex` | Mutex (priority inheritance) | [robot.c](../src/robot/robot.c#L390) | `robot_task` ↔ AT handlers |
 
 ### Latest-sample mailbox
 
@@ -156,7 +156,7 @@ FreeRTOS divides that range in two with `configMAX_SYSCALL_INTERRUPT_PRIORITY`
 |-----------|---------------|-----------------|--------|
 | F103 encoder EXTI9_5 | 0x80 | No (counter increment only) | [motor.c](../src/motor/motor.c#L140) |
 | I2C event/error, DMA TX/RX | 0xB0 | Yes (`xSemaphoreGiveFromISR`) | [`i2c_init_dma(&i2c, 11)`](../src/imu/mpu6050.c#L121) |
-| Console USART | 0xC0 | Yes (`xQueueSendFromISR`) | [uart.c](../src/drivers/uart.c#L130) |
+| Console USART | 0xC0 | Yes (`xQueueSendFromISR`) | [uart.c](../src/drivers/uart.c#L134) |
 | SysTick, PendSV (kernel) | 0xF0 | — | `configKERNEL_INTERRUPT_PRIORITY` |
 
 The I2C/DMA interrupts used to be at 0x50, above the limit, while calling
@@ -217,14 +217,14 @@ time available for console I/O. The effect of this latency on stability is in
 | Malloc failed hook | `configUSE_MALLOC_FAILED_HOOK 1` | Heap exhausted while creating objects |
 | `configASSERT` | `vAssertCalled()`: motors off, report file:line, halt | Kernel misuse, including invalid ISR priorities |
 | Hard fault | `hard_fault_handler()` | Bus/usage faults |
-| Independent watchdog | `WATCHDOG_ENABLED`, 500 ms, refreshed by `robot_task` | A hung or deadlocked control task; frozen while a debugger halts the core |
+| Independent watchdog | `WATCHDOG`, 500 ms, refreshed by `robot_task` | A hung or deadlocked control task; frozen while a debugger halts the core |
 
 **Every fault path first calls `motor_emergency_stop()`.** The PWM timers keep
 running after the CPU halts, so without it a crashed robot would keep driving at
 its last duty cycle. The function only writes registers, so it is safe with
 interrupts disabled.
 
-Fault handlers then print over the console UART when `FAULT_HANDLERS_VERBOSE`
+Fault handlers then print over the console UART when `FAULT_VERBOSE`
 is on, and blink the board LED at a rate that identifies the fault
 (all in [fault_handlers.c](../src/fault/fault_handlers.c)).
 

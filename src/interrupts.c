@@ -52,12 +52,14 @@ void BOARD_I2C_DMA_RX_ISR(void) {
  * UART Interrupt Handlers
  * ========================================================================== */
 
+#if CONSOLE_USB
 void BOARD_UART_ISR(void) {
     uart_isr(UART_PORT_USB);
 }
+#endif // CONSOLE_USB
 
-#ifdef BOARD_BT_UART
+#if CONSOLE_BT
 void BOARD_BT_UART_ISR(void) {
     uart_isr(UART_PORT_BT);
 }
-#endif // BOARD_BT_UART
+#endif // CONSOLE_BT

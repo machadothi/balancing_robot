@@ -24,7 +24,9 @@
 #include "imu/imu.h"
 #include "filter/filter.h"
 #include "cmd/at_cmd.h"
+#if TELEMETRY
 #include "telemetry/telemetry.h"
+#endif // TELEMETRY
 #include "log/log.h"
 #include "motor/motor.h"
 
@@ -78,8 +80,10 @@ static AT_RobotState_t robot_state = {
 /** Guards robot_state and motor commands against the AT handlers (UART RX task) */
 static SemaphoreHandle_t state_mutex = NULL;
 
-/** AT+STREAM: print the filter angles every sample */
+#if TELEMETRY
+/** AT+STREAM: submit a telemetry record every sample */
 static bool stream_enabled = false;
+#endif // TELEMETRY
 
 /* ==========================================================================
  * PID Controller State
@@ -119,6 +123,7 @@ static float calc_angle_from_accel(const IMU_Data_t *data) {
     return atan2f(data->acc_y, -data->acc_x) * RAD_TO_DEG;
 }
 
+#if CONSOLE_ANY
 /**
  * @brief Convert speed percentage to PWM value and direction
  * 
@@ -135,6 +140,7 @@ static void speed_to_pwm(float speed, uint8_t *pwm, bool *forward) {
         *pwm = (uint8_t)(-speed * 2.55f);
     }
 }
+#endif // CONSOLE_ANY
 
 /**
  * @brief Reset PID controller state
@@ -236,6 +242,7 @@ static void apply_motor_control(float output) {
     motor2_set_speed(right_pwm);
 }
 
+#if CONSOLE_ANY
 /**
  * @brief AT command set callback
  * 
@@ -245,11 +252,13 @@ static void apply_motor_control(float output) {
  * @param value2    Second value (for dual-parameter commands like SPEED)
  */
 static bool at_set_handler(const char *param, float value, float value2) {
+#if TELEMETRY
     if (strcmp(param, "STREAM") == 0) {
         stream_enabled = (value != 0.0f);
         return true;
     }
-    else if (strcmp(param, "SPEED") == 0) {
+#endif // TELEMETRY
+    if (strcmp(param, "SPEED") == 0) {
         /* Direct wheel speed control */
         uint8_t pwm_left, pwm_right;
         bool dir_left, dir_right;
@@ -354,6 +363,7 @@ static AT_Result_t at_exec_handler(const char *cmd) {
     }
     return AT_ERROR_UNKNOWN_CMD;
 }
+#endif // CONSOLE_ANY
 
 /* ==========================================================================
  * Public Functions
@@ -372,28 +382,35 @@ void robot_task(void *args) {
     complementary_init(&complementary);
     bool filters_seeded = false;
 
+#if AUTO_ENABLE
+    bool auto_enable_done = false;
+    TickType_t upright_since = xTaskGetTickCount();
+#endif // AUTO_ENABLE
+
     state_mutex = xSemaphoreCreateMutex();
 
     /* Initialize motor driver */
     motor_init();
     motor_standby(true);  /* Start in standby */
 
+#if CONSOLE_ANY
     /* Register AT command handlers */
     at_cmd_set_lock(robot_lock, robot_unlock);
     at_cmd_set_state(&robot_state);
     at_cmd_set_callback(at_set_handler);
     at_cmd_exec_callback(at_exec_handler);
+#endif // CONSOLE_ANY
 
-#if WATCHDOG_ENABLED
+#if WATCHDOG
     /* Refreshed on every loop pass (sample or stall timeout): a hung control
      * task, e.g. deadlocked on the state mutex, resets the MCU */
     board_watchdog_start(WATCHDOG_TIMEOUT_MS);
-#endif // WATCHDOG_ENABLED
+#endif // WATCHDOG
 
     for (;;) {
-#if WATCHDOG_ENABLED
+#if WATCHDOG
         board_watchdog_refresh();
-#endif // WATCHDOG_ENABLED
+#endif // WATCHDOG
 
         if (xQueueReceive(imu_content, &imu_data, pdMS_TO_TICKS(IMU_STALL_TIMEOUT_MS)) != pdPASS) {
             /* No fresh attitude: acting on stale data is worse than stopping */
@@ -419,11 +436,16 @@ void robot_task(void *args) {
             filters_seeded = true;
         }
 
-        /* Run both filters so AT+STREAM can compare them */
+        /* The selected filter drives the controller; with telemetry both run so
+         * AT+STREAM can compare them */
+#if TELEMETRY || ATTITUDE_FILTER_KALMAN
         float kalman_angle = kalman_update(&kalman, imu_data.gyro_x,
             acc_angle, IMU_SAMPLE_RATE_S);
+#endif // TELEMETRY || ATTITUDE_FILTER_KALMAN
+#if TELEMETRY || ATTITUDE_FILTER_COMPLEMENTARY
         float comp_angle = complementary_update(&complementary, imu_data.gyro_x,
             acc_angle, IMU_SAMPLE_RATE_S);
+#endif // TELEMETRY || ATTITUDE_FILTER_COMPLEMENTARY
 
 #if ATTITUDE_FILTER_KALMAN
         float filtered_angle = kalman_angle;
@@ -448,6 +470,21 @@ void robot_task(void *args) {
         /* Check if balanced (within ~5 degrees of vertical) */
         robot_state.is_balanced = (fabsf(tilt_angle) < 5.0f);
 
+#if AUTO_ENABLE
+        /* Without a console nothing sends AT+ENABLE: start balancing once per
+         * boot, after the robot has been held upright for AUTO_ENABLE_HOLD_MS */
+        if (!auto_enable_done) {
+            if (!robot_state.is_balanced) {
+                upright_since = xTaskGetTickCount();
+            } else if ((xTaskGetTickCount() - upright_since) >= pdMS_TO_TICKS(AUTO_ENABLE_HOLD_MS)) {
+                pid_reset();
+                robot_state.motors_enabled = true;
+                motor_standby(false);
+                auto_enable_done = true;
+            }
+        }
+#endif // AUTO_ENABLE
+
         /* PID balance control */
         if (robot_state.motors_enabled && robot_state.pid_enabled) {
             /* Safety: disable if tilted too far */
@@ -464,6 +501,7 @@ void robot_task(void *args) {
             }
         }
 
+#if TELEMETRY
         bool stream = stream_enabled;
         Telemetry_Record_t record = {
             .tick_ms = (uint32_t)(xTaskGetTickCount() * portTICK_PERIOD_MS),
@@ -476,11 +514,14 @@ void robot_task(void *args) {
             .d = pid.d_term,
             .out = pid.output,
         };
+#endif // TELEMETRY
         robot_unlock();
 
+#if TELEMETRY
         /* Never blocks: formatting and UART output happen in telemetry_task */
         if (stream) {
             (void)telemetry_submit(&record);
         }
+#endif // TELEMETRY
     }
 }

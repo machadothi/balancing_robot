@@ -2,6 +2,9 @@
  * @file app_init.c
  * @brief Application initialization implementation
  *
+ * The one place that wires modules together: which ones exist depends on the
+ * features in app_config.h (prj.conf).
+ *
  * @author Thiago Cunha
  * @date 2024
  */
@@ -15,15 +18,24 @@
 #include "led/led.h"
 
 #if !APP_BLINK_ONLY
+#include "imu/imu.h"
+#include "robot/robot.h"
+#endif // !APP_BLINK_ONLY
+
+#if CONSOLE_ANY
+#include "drivers/uart.h"
+#include "cmd/at_cmd.h"
+#endif // CONSOLE_ANY
+
+#if TELEMETRY
+#include "telemetry/telemetry.h"
+#endif // TELEMETRY
+
+#if CONSOLE_USB
 #include <libopencm3/stm32/usart.h>
 
 #include "board_config.h"
-#include "drivers/uart.h"
-#include "cmd/at_cmd.h"
-#include "imu/mpu6050.h"
 #include "log/log.h"
-#include "robot/robot.h"
-#include "telemetry/telemetry.h"
 
 /* ==========================================================================
  * Private Functions
@@ -46,7 +58,7 @@ void app_print_banner(void) {
         usart_send_blocking(BOARD_UART, *p);
     }
 }
-#endif // !APP_BLINK_ONLY
+#endif // CONSOLE_USB
 
 void app_hardware_init(void) {
     board_clock_init();
@@ -54,9 +66,11 @@ void app_hardware_init(void) {
     /* Initialize hardware peripherals */
     led_init();
 
-#if !APP_BLINK_ONLY
+#if CONSOLE_ANY
     uart_init();
+#endif // CONSOLE_ANY
 
+#if CONSOLE_USB
     /* Send startup banner (blocking, before tasks start) */
     app_print_banner();
 
@@ -66,14 +80,20 @@ void app_hardware_init(void) {
         .send = log_uart_send
     };
     log_init(&log_driver);
+#endif // CONSOLE_USB
 
     /* Create queues before creating tasks */
+#if !APP_BLINK_ONLY
     imu_queue_init();
+#endif // !APP_BLINK_ONLY
+#if TELEMETRY
     telemetry_init();
+#endif // TELEMETRY
 
+#if CONSOLE_ANY
     /* Initialize AT command parser (registers RX callback) */
     at_cmd_init();
-#endif // !APP_BLINK_ONLY
+#endif // CONSOLE_ANY
 }
 
 void app_tasks_init(void) {
@@ -81,15 +101,19 @@ void app_tasks_init(void) {
     xTaskCreate(led_task, TASK_NAME_LED, TASK_STACK_LED,
         NULL, TASK_PRIORITY_LED, NULL);
 
-#if !APP_BLINK_ONLY
+#if CONSOLE_ANY
     /* UART RX task (AT commands from every console port) */
     xTaskCreate(uart_rx_task, TASK_NAME_UART_RX, TASK_STACK_UART_RX,
         NULL, TASK_PRIORITY_IO, NULL);
+#endif // CONSOLE_ANY
 
+#if TELEMETRY
     /* Telemetry logger (USB console) */
     xTaskCreate(telemetry_task, TASK_NAME_TELEMETRY, TASK_STACK_TELEMETRY,
         NULL, TASK_PRIORITY_IO, NULL);
+#endif // TELEMETRY
 
+#if !APP_BLINK_ONLY
     /* IMU reading task */
     xTaskCreate(imu_task, TASK_NAME_IMU, TASK_STACK_IMU,
         NULL, TASK_PRIORITY_CONTROL, NULL);

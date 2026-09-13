@@ -32,4 +32,6 @@ set(FREERTOS_INCLUDE_DIRS
 )
 
 set(BOARD_DEFAULT_HEAP_SIZE 32768)
-set(BOARD_DEFAULT_APP_BLINK_ONLY OFF)
+
+# Optional hardware this board provides (see cmake/features.cmake)
+set(BOARD_HAS_BT_UART ON)

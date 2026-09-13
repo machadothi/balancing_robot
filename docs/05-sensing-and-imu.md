@@ -13,7 +13,7 @@ the calibration and sampling choices that affect the controller.
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
 | Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L63) |
 | Sampling task | [`imu_task()`](../src/imu/imu.c#L109) |
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L118) |
+| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L122) |
 
 ## Configuration
 

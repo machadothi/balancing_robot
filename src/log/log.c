@@ -15,7 +15,7 @@
 #include "config.h"
 #include "log/log.h"
 
-#if LOG_ENABLED
+#if LOGGING
 
 /* ==========================================================================
  * Private Variables
@@ -118,7 +118,7 @@ static const char *get_timestamp(void) {
     return timestamp;
 }
 
-#else /* LOG_ENABLED == 0 */
+#else /* LOGGING == 0 */
 
 /* Stub implementations when logging is disabled */
 void log_init(LogDriver_t *driver) { (void)driver; }
@@ -134,4 +134,4 @@ void log_message_with_int(LogLevel_t level, LogModule_t module,
     (void)level; (void)module; (void)message; (void)value;
 }
 
-#endif // LOG_ENABLED
+#endif // LOGGING

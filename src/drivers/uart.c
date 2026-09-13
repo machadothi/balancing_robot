@@ -68,26 +68,30 @@ typedef struct {
     char data[UART_RX_LINE_SIZE];
 } UART_Line_t;
 
+#if CONSOLE_USB
 static char usb_tx_buf[UART_USB_TX_BUFFER_SIZE];
-#ifdef BOARD_BT_UART
+#endif // CONSOLE_USB
+#if CONSOLE_BT
 static char bt_tx_buf[UART_BT_TX_BUFFER_SIZE];
-#endif // BOARD_BT_UART
+#endif // CONSOLE_BT
 
 static const UART_PortConfig_t port_config[UART_PORT_COUNT] = {
+#if CONSOLE_USB
     [UART_PORT_USB] = {
         BOARD_UART, BOARD_UART_RCC, BOARD_UART_IRQ,
         BOARD_UART_PORT, BOARD_UART_PORT_RCC, BOARD_UART_TX_PIN, BOARD_UART_RX_PIN,
-        BOARD_UART_AF, UART_BAUDRATE, UART_ECHO_ENABLED,
+        BOARD_UART_AF, UART_BAUDRATE, CONSOLE_ECHO,
         usb_tx_buf, sizeof(usb_tx_buf),
     },
-#ifdef BOARD_BT_UART
+#endif // CONSOLE_USB
+#if CONSOLE_BT
     [UART_PORT_BT] = {
         BOARD_BT_UART, BOARD_BT_UART_RCC, BOARD_BT_UART_IRQ,
         BOARD_BT_UART_PORT, BOARD_BT_UART_PORT_RCC, BOARD_BT_UART_TX_PIN, BOARD_BT_UART_RX_PIN,
         BOARD_BT_UART_AF, BT_BAUDRATE, false,
         bt_tx_buf, sizeof(bt_tx_buf),
     },
-#endif // BOARD_BT_UART
+#endif // CONSOLE_BT
 };
 
 static UART_PortState_t port_state[UART_PORT_COUNT];

@@ -9,7 +9,7 @@
 #
 # Dependencies (as git submodules):
 #   - libopencm3: Open-source ARM Cortex-M firmware library
-#   - FreeRTOS-Kernel: Real-time operating system (F407 build)
+#   - FreeRTOS-Kernel: Real-time operating system
 #
 # Build instructions:
 #   cmake --preset f103        (or f407)
@@ -57,41 +57,22 @@ endif()
 include(${CMAKE_SOURCE_DIR}/cmake/boards/${BOARD}.cmake)
 
 # =============================================================================
-# Application Options (written to generated/app_config.h)
+# Configuration: prj.conf, board .conf and overlays (see cmake/features.cmake)
 # =============================================================================
 
-include(CMakeDependentOption)
+include(${CMAKE_SOURCE_DIR}/cmake/features.cmake)
+robot_load_configuration()
 
-option(APP_BLINK_ONLY "Only run the LED heartbeat task (no drivers)"
-    ${BOARD_DEFAULT_APP_BLINK_ONLY})
+# ---- Values -----------------------------------------------------------------
 
-set(UART_BAUDRATE 921600 CACHE STRING "USB console baud rate (telemetry and AT commands)")
-set(BT_BAUDRATE 115200 CACHE STRING "Bluetooth console baud rate (boards with a Bluetooth port)")
-set(IMU_SAMPLE_RATE_MS 10 CACHE STRING "IMU sample period in ms")
-set(FREERTOS_TICK_RATE_HZ 1000 CACHE STRING "FreeRTOS tick rate in Hz")
-set(FREERTOS_TOTAL_HEAP_SIZE ${BOARD_DEFAULT_HEAP_SIZE} CACHE STRING
-    "FreeRTOS heap size in bytes")
-
-set(ATTITUDE_FILTERS complementary kalman)
-set(ATTITUDE_FILTER complementary CACHE STRING
-    "Tilt estimator used by the balance loop (${ATTITUDE_FILTERS})")
-set_property(CACHE ATTITUDE_FILTER PROPERTY STRINGS ${ATTITUDE_FILTERS})
-
-if(NOT ATTITUDE_FILTER IN_LIST ATTITUDE_FILTERS)
-    message(FATAL_ERROR "Unknown ATTITUDE_FILTER '${ATTITUDE_FILTER}'. Valid: ${ATTITUDE_FILTERS}")
-endif()
-
-if(ATTITUDE_FILTER STREQUAL "kalman")
-    set(ATTITUDE_FILTER_KALMAN ON)
-else()
-    set(ATTITUDE_FILTER_KALMAN OFF)
-endif()
-
-foreach(value UART_BAUDRATE BT_BAUDRATE IMU_SAMPLE_RATE_MS FREERTOS_TICK_RATE_HZ FREERTOS_TOTAL_HEAP_SIZE)
-    if(NOT ${value} MATCHES "^[0-9]+$")
-        message(FATAL_ERROR "${value} must be a positive integer, got '${${value}}'")
-    endif()
-endforeach()
+robot_option(APP_BLINK_ONLY BOOL OFF "Only run the LED heartbeat task (no drivers, all features off)")
+robot_option(UART_BAUDRATE INT 921600 "USB console baud rate (telemetry and AT commands)")
+robot_option(BT_BAUDRATE INT 115200 "Bluetooth console baud rate")
+robot_option(IMU_SAMPLE_RATE_MS INT 10 "IMU and control loop period in ms")
+robot_option(FREERTOS_TICK_RATE_HZ INT 1000 "FreeRTOS tick rate in Hz")
+robot_option(FREERTOS_TOTAL_HEAP_SIZE INT ${BOARD_DEFAULT_HEAP_SIZE} "FreeRTOS heap size in bytes")
+robot_option(ATTITUDE_FILTER STRING complementary "Tilt estimator used by the balance loop"
+    CHOICES complementary kalman)
 
 # The filters and PID use IMU_SAMPLE_RATE_MS as dt, so the task period must be exact
 math(EXPR IMU_SAMPLE_PERIOD_REMAINDER "(${IMU_SAMPLE_RATE_MS} * ${FREERTOS_TICK_RATE_HZ}) % 1000")
@@ -102,18 +83,44 @@ if(NOT IMU_SAMPLE_PERIOD_REMAINDER EQUAL 0)
     )
 endif()
 
-# Driver features: forced OFF when the drivers are not built
-cmake_dependent_option(UART_ECHO_ENABLED "Echo command lines on the USB console" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(I2C_BUS_RECOVERY "I2C bus recovery" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(AT_CMD_HELP_ENABLED "AT+HELP command" OFF "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(AT_CMD_ALL_QUERY "AT+ALL? bulk query" OFF "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(AT_CMD_PID_TOGGLE "AT+PIDON/PIDOFF/PID commands" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(LOG_ENABLED "Logging over UART (~300 bytes stack)" OFF "NOT APP_BLINK_ONLY" OFF)
-# Verbose fault output needs an initialized UART
-cmake_dependent_option(FAULT_HANDLERS_VERBOSE "Print fault messages over UART" ON "NOT APP_BLINK_ONLY" OFF)
-cmake_dependent_option(WATCHDOG_ENABLED "Independent watchdog refreshed by the control task" ON "NOT APP_BLINK_ONLY" OFF)
+# ---- Features ---------------------------------------------------------------
 
-configure_file(${SRC_DIR}/app_config.h.in ${GENERATED_DIR}/app_config.h)
+robot_feature(CONSOLE_USB ON "AT console on the USB console UART; carries telemetry and fault reports"
+    REQUIRES "NOT APP_BLINK_ONLY")
+robot_feature(CONSOLE_BT ${BOARD_HAS_BT_UART} "AT console on the Bluetooth module UART"
+    REQUIRES "NOT APP_BLINK_ONLY" BOARD_HAS_BT_UART)
+robot_define(CONSOLE_ANY CONSOLE_USB OR CONSOLE_BT)
+
+if(CONSOLE_ANY)
+    # Shared by both consoles
+    set_property(GLOBAL APPEND PROPERTY ROBOT_FEATURE_SOURCES
+        ${SRC_DIR}/drivers/uart.c
+        ${SRC_DIR}/cmd/at_cmd.c
+        ${SRC_DIR}/util/fmt.c
+    )
+endif()
+
+robot_feature(CONSOLE_ECHO ON "Echo each command line on the USB console" REQUIRES CONSOLE_USB)
+robot_feature(TELEMETRY ON "AT+STREAM control loop telemetry on the USB console"
+    REQUIRES CONSOLE_USB SOURCES ${SRC_DIR}/telemetry/telemetry.c)
+robot_feature(AT_CMD_PID_TOGGLE ON "AT+PID, AT+PIDON and AT+PIDOFF commands" REQUIRES CONSOLE_ANY)
+robot_feature(AT_CMD_HELP OFF "AT+HELP command" REQUIRES CONSOLE_ANY)
+robot_feature(AT_CMD_ALL_QUERY OFF "AT+ALL? bulk sensor query" REQUIRES CONSOLE_ANY)
+robot_feature(LOGGING OFF "Debug log messages on the USB console (~300 bytes stack)" REQUIRES CONSOLE_USB)
+robot_feature(FAULT_VERBOSE ON "Print fault reports on the USB console" REQUIRES CONSOLE_USB)
+robot_feature(WATCHDOG ON "Independent watchdog refreshed by the control task" REQUIRES "NOT APP_BLINK_ONLY")
+robot_feature(I2C_BUS_RECOVERY ON "Free a stuck I2C slave at start-up" REQUIRES "NOT APP_BLINK_ONLY")
+robot_feature(AUTO_ENABLE OFF "Start balancing once per boot after the robot is held upright"
+    REQUIRES "NOT APP_BLINK_ONLY")
+
+if(NOT APP_BLINK_ONLY AND NOT CONSOLE_ANY AND NOT AUTO_ENABLE)
+    message(FATAL_ERROR
+        "CONSOLE_USB and CONSOLE_BT are both off, so nothing could send AT+ENABLE.\n"
+        "Enable a console or set AUTO_ENABLE=ON."
+    )
+endif()
+
+robot_write_config_header(${SRC_DIR}/app_config.h.in ${GENERATED_DIR}/app_config.h)
 
 # =============================================================================
 # Check Dependencies
@@ -207,20 +214,20 @@ set(APP_SOURCES
 if(NOT APP_BLINK_ONLY)
     list(APPEND APP_SOURCES
         ${SRC_DIR}/interrupts.c
-        ${SRC_DIR}/cmd/at_cmd.c
         ${SRC_DIR}/drivers/i2c.c
         ${SRC_DIR}/drivers/pwm.c
-        ${SRC_DIR}/drivers/uart.c
         ${SRC_DIR}/filter/kalman.c
         ${SRC_DIR}/filter/complementary.c
         ${SRC_DIR}/imu/imu.c
         ${SRC_DIR}/imu/mpu6050.c
         ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
-        ${SRC_DIR}/telemetry/telemetry.c
-        ${SRC_DIR}/util/fmt.c
     )
 endif()
+
+# Sources of enabled features
+get_property(FEATURE_SOURCES GLOBAL PROPERTY ROBOT_FEATURE_SOURCES)
+list(APPEND APP_SOURCES ${FEATURE_SOURCES})
 
 # =============================================================================
 # Main Executable
@@ -347,8 +354,6 @@ message(STATUS "Board:          ${BOARD}")
 message(STATUS "MCU:            ${MCU_MODEL}")
 message(STATUS "Flash:          ${MCU_FLASH_SIZE}")
 message(STATUS "RAM:            ${MCU_RAM_SIZE}")
-message(STATUS "Blink only:     ${APP_BLINK_ONLY}")
-message(STATUS "Tilt filter:    ${ATTITUDE_FILTER}")
 message(STATUS "Toolchain:      ${CMAKE_C_COMPILER}")
 message(STATUS "libopencm3:     ${LIBOPENCM3_LIB}")
 message(STATUS "FreeRTOS:       ${FREERTOS_INCLUDE_DIRS}")
