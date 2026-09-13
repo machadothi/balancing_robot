@@ -9,8 +9,8 @@ the locking scheme.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L22) |
-| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L34) |
+| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L20) |
+| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L32) |
 | Stack sizes, priorities | Each module's `App_Module_t` descriptor, levels in [module.h](../src/app/module.h) |
 | Kernel configuration | [FreeRTOSConfig.h](../src/FreeRTOSConfig.h#L92) |
 | libopencm3 ↔ FreeRTOS handler glue | [src/rtos_glue/opencm3.c](../src/rtos_glue/opencm3.c) |

@@ -8,7 +8,7 @@ sample becomes a motor command. Later chapters zoom into each block.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L22), [`app_tasks_init()`](../src/app/app_init.c#L34) |
+| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L20), [`app_tasks_init()`](../src/app/app_init.c#L32) |
 | Per-board peripherals | [src/board/f103/board_config.h](../src/board/f103/board_config.h), [src/board/f407/board_config.h](../src/board/f407/board_config.h) |
 | Sensing | [`imu_task()`](../src/imu/imu.c#L41) |
 | Control | [`robot_task()`](../src/robot/robot.c#L169) |
@@ -148,7 +148,7 @@ A module is a directory under `src/` that exports one descriptor
 
 ```c
 /* src/buzzer/buzzer.c */
-const App_Module_t buzzer_module = {
+APP_MODULE(buzzer_module) = {
     .name = "BUZZER",
     .init = buzzer_init,            /* before the scheduler, may be NULL */
     .task = buzzer_task,            /* may be NULL */
@@ -159,7 +159,7 @@ const App_Module_t buzzer_module = {
 
 ```cmake
 # CMakeLists.txt, next to the other features
-robot_feature(BUZZER OFF "Beep on falls" SOURCES ${SRC_DIR}/buzzer/buzzer.c MODULES buzzer_module)
+robot_feature(BUZZER OFF "Beep on falls" SOURCES ${SRC_DIR}/buzzer/buzzer.c)
 ```
 
 ```ini
@@ -167,9 +167,13 @@ robot_feature(BUZZER OFF "Beep on falls" SOURCES ${SRC_DIR}/buzzer/buzzer.c MODU
 BUZZER=ON
 ```
 
-CMake writes every enabled module into `generated/app_modules.c` and prints the
-list at configure time (`-- Modules: ...`). [`app_hardware_init()`](../src/app/app_init.c#L22)
-runs all `init` functions, then [`app_tasks_init()`](../src/app/app_init.c#L34)
+`APP_MODULE()` places the descriptor in the section `.app_modules.buzzer_module`.
+Both linker scripts gather those sections, sorted by name, into one array
+between `__app_modules_start` and `__app_modules_end`, with `KEEP` so
+`--gc-sections` does not discard them. A module is in the table exactly when its
+`.c` file is built, so there is no list to maintain; `arm-none-eabi-nm -n` on the
+ELF shows the `*_module` symbols in table order. [`app_hardware_init()`](../src/app/app_init.c#L20)
+runs all `init` functions, then [`app_tasks_init()`](../src/app/app_init.c#L32)
 creates all tasks, so a module's queues and locks exist before any task runs.
 Commands are added the same way, from the module's `init`
 ([10](10-at-commands.md#adding-a-command)).

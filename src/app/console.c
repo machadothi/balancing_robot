@@ -50,7 +50,7 @@ static void console_init(void) {
     at_cmd_init();
 }
 
-const App_Module_t console_module = {
+APP_MODULE(console_module) = {
     .name = "UART_RX",
     .init = console_init,
     .task = uart_rx_task,

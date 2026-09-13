@@ -272,7 +272,7 @@ void robot_task(void *args) {
     }
 }
 
-const App_Module_t robot_module = {
+APP_MODULE(robot_module) = {
     .name = "ROBOT",
     .init = robot_init,
     .task = robot_task,

@@ -36,7 +36,7 @@ void led_task(void *args) {
     }
 }
 
-const App_Module_t led_module = {
+APP_MODULE(led_module) = {
     .name = "LED",
     .init = led_init,
     .task = led_task,

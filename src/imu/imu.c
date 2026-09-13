@@ -63,7 +63,7 @@ void imu_task(void *args) {
     }
 }
 
-const App_Module_t imu_module = {
+APP_MODULE(imu_module) = {
     .name = "IMU",
     .init = imu_queue_init,
     .task = imu_task,

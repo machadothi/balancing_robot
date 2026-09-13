@@ -42,6 +42,15 @@ SECTIONS
 		. = ALIGN(4);
 	} >rom
 
+	/* Application module descriptors: APP_MODULE() in src/app/module.h.
+	 * KEEP: nothing references them by name, --gc-sections would drop them. */
+	.app_modules : {
+		. = ALIGN(4);
+		__app_modules_start = .;
+		KEEP (*(SORT(.app_modules.*)))
+		__app_modules_end = .;
+	} >rom
+
 	/* C++ Static constructors/destructors, also used for __attribute__
 	 * ((constructor)) and the likes */
 	.preinit_array : {

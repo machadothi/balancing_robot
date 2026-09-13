@@ -113,7 +113,7 @@ void telemetry_task(void *args) {
     }
 }
 
-const App_Module_t telemetry_module = {
+APP_MODULE(telemetry_module) = {
     .name = "TELEM",
     .init = telemetry_init,
     .task = telemetry_task,

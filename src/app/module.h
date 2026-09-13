@@ -1,25 +1,26 @@
 /**
  * @file module.h
- * @brief Application module descriptor
+ * @brief Application module descriptor, collected by the linker
  *
- * A module exports one descriptor from its own .c file:
+ * A module defines one descriptor in its own .c file:
  *
  * @code
- * const App_Module_t imu_module = {
+ * APP_MODULE(imu_module) = {
  *     .name = "IMU", .init = imu_queue_init, .task = imu_task,
  *     .stack = 192, .priority = APP_PRIORITY_CONTROL,
  * };
  * @endcode
  *
- * and CMake lists it (robot_add_module(imu_module), or MODULES in
- * robot_feature). The generated app_modules.c holds every enabled module;
+ * APP_MODULE() puts it in the section ".app_modules.imu_module". Both linker
+ * scripts gather every such section, sorted by name, into one array between
+ * __app_modules_start and __app_modules_end. A module is therefore in the
+ * table exactly when its .c file is built: there is no list to maintain.
  * app_init.c runs all inits, then creates all tasks.
  */
 
 #ifndef APP_MODULE_H
 #define APP_MODULE_H
 
-#include <stddef.h>
 #include <stdint.h>
 
 #include <FreeRTOS.h>
@@ -43,9 +44,19 @@ typedef struct {
     UBaseType_t priority;       /**< APP_PRIORITY_* */
 } App_Module_t;
 
-/** Enabled modules, generated from the CMake configuration */
-extern const App_Module_t *const app_modules[];
-extern const size_t app_module_count;
+/**
+ * @brief Define a module descriptor in the module table section
+ *
+ * `used` keeps the compiler from dropping the unreferenced object; KEEP in
+ * the linker script does the same for --gc-sections.
+ */
+#define APP_MODULE(symbol)                                                      \
+    const App_Module_t symbol                                                   \
+        __attribute__((used, section(".app_modules." #symbol)))
+
+/** Bounds of the module table, defined by the linker script */
+extern const App_Module_t __app_modules_start[];
+extern const App_Module_t __app_modules_end[];
 
 #ifdef __cplusplus
 }
