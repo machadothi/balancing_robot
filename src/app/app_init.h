@@ -37,6 +37,5 @@ void app_tasks_init(void);
 /**
  * @brief Send startup banner (blocking)
  */
-void app_print_banner(void);
 
 #endif // APP_INIT_H

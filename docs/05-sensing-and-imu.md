@@ -10,11 +10,11 @@ the calibration and sampling choices that affect the controller.
 | Sensor interface | [`IMU_Ops_t`](../src/imu/imu.h#L79), implemented by [`mpu6050_ops`](../src/imu/mpu6050.c#L171) |
 | Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) |
 | Burst read, parsing and scaling | [`mpu6050_read()`](../src/imu/mpu6050.c#L142), [`transfer_callback()`](../src/imu/mpu6050.c#L79) |
-| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L40) |
+| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L41) |
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
-| Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L63) |
-| Sampling task | [`imu_task()`](../src/imu/imu.c#L40) |
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L136) |
+| Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L55) |
+| Sampling task | [`imu_task()`](../src/imu/imu.c#L41) |
+| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L137) |
 
 ## Configuration
 

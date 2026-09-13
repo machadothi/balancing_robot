@@ -17,6 +17,7 @@
 #include <semphr.h>
 
 #include "config.h"
+#include "app/module.h"
 #include "board/board.h"
 #include "control/mixer.h"
 #include "control/pid.h"
@@ -155,6 +156,16 @@ static void robot_balance_step(float tilt) {
  * Task
  * ========================================================================== */
 
+/** Before the scheduler: the lock exists before any AT handler can take it */
+static void robot_init(void) {
+    state_mutex = xSemaphoreCreateMutex();
+    configASSERT(state_mutex != NULL);
+
+#if CONSOLE_ANY
+    robot_commands_register();
+#endif // CONSOLE_ANY
+}
+
 void robot_task(void *args) {
     (void)args;
 
@@ -175,14 +186,8 @@ void robot_task(void *args) {
     TickType_t upright_since = xTaskGetTickCount();
 #endif // AUTO_ENABLE
 
-    state_mutex = xSemaphoreCreateMutex();
-
     motor_init();
     motor_standby(true);  /* Nothing moves until enabled */
-
-#if CONSOLE_ANY
-    robot_commands_register();
-#endif // CONSOLE_ANY
 
 #if WATCHDOG
     /* Refreshed on every loop pass (sample or stall timeout): a hung control
@@ -266,3 +271,11 @@ void robot_task(void *args) {
 #endif // TELEMETRY
     }
 }
+
+const App_Module_t robot_module = {
+    .name = "ROBOT",
+    .init = robot_init,
+    .task = robot_task,
+    .stack = 256,               /* filters, PID */
+    .priority = APP_PRIORITY_CONTROL,
+};

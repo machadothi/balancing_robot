@@ -13,6 +13,7 @@
 #include <queue.h>
 
 #include "config.h"
+#include "app/module.h"
 #include "cmd/at_cmd.h"
 #include "drivers/uart.h"
 #include "telemetry/telemetry.h"
@@ -111,3 +112,11 @@ void telemetry_task(void *args) {
         }
     }
 }
+
+const App_Module_t telemetry_module = {
+    .name = "TELEM",
+    .init = telemetry_init,
+    .task = telemetry_task,
+    .stack = 256,               /* line formatting */
+    .priority = APP_PRIORITY_IO,
+};

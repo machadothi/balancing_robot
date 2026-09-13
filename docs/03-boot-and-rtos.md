@@ -9,9 +9,9 @@ the locking scheme.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L63) |
-| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L99) |
-| Stack sizes, priorities | [config.h](../src/config.h#L110) |
+| Peripheral init before the scheduler | [`app_hardware_init()`](../src/app/app_init.c#L22) |
+| Task creation | [`app_tasks_init()`](../src/app/app_init.c#L34) |
+| Stack sizes, priorities | Each module's `App_Module_t` descriptor, levels in [module.h](../src/app/module.h) |
 | Kernel configuration | [FreeRTOSConfig.h](../src/FreeRTOSConfig.h#L92) |
 | libopencm3 ↔ FreeRTOS handler glue | [src/rtos_glue/opencm3.c](../src/rtos_glue/opencm3.c) |
 | Fault and RTOS hooks | [fault_handlers.c](../src/fault/fault_handlers.c) |
@@ -51,11 +51,11 @@ Points worth noting:
 
 | Task | Priority | Stack (words) | Runs | Blocks on |
 |------|----------|---------------|------|-----------|
-| `imu_task` | 4 (`TASK_PRIORITY_CONTROL`) | 192 | Every `IMU_SAMPLE_RATE_MS` (10 ms) | `vTaskDelayUntil`, DMA semaphore |
-| `robot_task` | 4 (`TASK_PRIORITY_CONTROL`) | 256 | Once per IMU sample | IMU sample mailbox (`imu_wait_sample()`) |
-| `uart_rx_task` | 2 (`TASK_PRIORITY_IO`) | 384 | Once per received line, any console port | `uart_rxq` queue |
-| `telemetry_task` | 2 (`TASK_PRIORITY_IO`) | 256 | Once per record while `AT+STREAM=1` | Telemetry queue, USB TX buffer space |
-| `led_task` | 1 (`TASK_PRIORITY_LED`) | 64 | Every 250 ms | `vTaskDelayUntil` |
+| `imu_task` | 4 (`APP_PRIORITY_CONTROL`) | 192 | Every `IMU_SAMPLE_RATE_MS` (10 ms) | `vTaskDelayUntil`, DMA semaphore |
+| `robot_task` | 4 (`APP_PRIORITY_CONTROL`) | 256 | Once per IMU sample | IMU sample mailbox (`imu_wait_sample()`) |
+| `uart_rx_task` | 2 (`APP_PRIORITY_IO`) | 384 | Once per received line, any console port | `uart_rxq` queue |
+| `telemetry_task` | 2 (`APP_PRIORITY_IO`) | 256 | Once per record while `AT+STREAM=1` | Telemetry queue, USB TX buffer space |
+| `led_task` | 1 (`APP_PRIORITY_BACKGROUND`) | 64 | Every 250 ms | `vTaskDelayUntil` |
 | Idle | 0 | 128 | When nothing else is ready | — |
 
 Stack sizes are in **words**: 256 words is 1024 bytes on a 32-bit MCU.
@@ -98,7 +98,7 @@ flowchart LR
 
 | Object | Type | Created in | Producer → consumer |
 |--------|------|------------|---------------------|
-| `samples` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite`, read through `imu_wait_sample()` | [`imu_queue_init()`](../src/imu/imu.c#L32) | `imu_task` → `robot_task` |
+| `samples` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite`, read through `imu_wait_sample()` | [`imu_queue_init()`](../src/imu/imu.c#L33) | `imu_task` → `robot_task` |
 | `transfer_done` | Binary semaphore | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) | DMA callback (ISR) → `imu_task` |
 | `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
 | TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |

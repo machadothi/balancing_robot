@@ -10,10 +10,10 @@ walks through the code line by line.
 
 | Concept | Where |
 |---------|-------|
-| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L47) |
+| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L48) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27) |
 | Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L20) |
-| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L61) |
+| Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L62) |
 | Unused hooks for an outer loop | `target_velocity` in [robot_internal.h](../src/robot/robot_internal.h), [`motor_get_encoder()`](../src/motor/motor.h) |
 
 ## The closed loop

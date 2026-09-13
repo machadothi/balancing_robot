@@ -11,6 +11,7 @@
 #include <queue.h>
 
 #include "config.h"
+#include "app/module.h"
 #include "imu/imu.h"
 #include "imu/mpu6050.h"
 #include "log/log.h"
@@ -61,3 +62,11 @@ void imu_task(void *args) {
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(IMU_SAMPLE_RATE_MS));
     }
 }
+
+const App_Module_t imu_module = {
+    .name = "IMU",
+    .init = imu_queue_init,
+    .task = imu_task,
+    .stack = 192,
+    .priority = APP_PRIORITY_CONTROL,
+};

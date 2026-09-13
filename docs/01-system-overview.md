@@ -8,10 +8,10 @@ sample becomes a motor command. Later chapters zoom into each block.
 | What | Where |
 |------|-------|
 | Entry point | [`main()`](../src/main.c#L26) |
-| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L63), [`app_tasks_init()`](../src/app/app_init.c#L99) |
+| Hardware and task start-up | [`app_hardware_init()`](../src/app/app_init.c#L22), [`app_tasks_init()`](../src/app/app_init.c#L34) |
 | Per-board peripherals | [src/board/f103/board_config.h](../src/board/f103/board_config.h), [src/board/f407/board_config.h](../src/board/f407/board_config.h) |
-| Sensing | [`imu_task()`](../src/imu/imu.c#L40) |
-| Control | [`robot_task()`](../src/robot/robot.c#L158) |
+| Sensing | [`imu_task()`](../src/imu/imu.c#L41) |
+| Control | [`robot_task()`](../src/robot/robot.c#L169) |
 
 ## Hardware
 
@@ -99,12 +99,12 @@ sequenceDiagram
     end
 ```
 
-1. [`imu_task`](../src/imu/imu.c#L40) wakes on a fixed 10 ms schedule and
+1. [`imu_task`](../src/imu/imu.c#L41) wakes on a fixed 10 ms schedule and
    starts a DMA read of all 14 sensor bytes; it sleeps on a semaphore until the
    DMA interrupt signals completion.
 2. It converts raw counts to g and °/s and overwrites the single-slot
    sample mailbox, so the controller always sees the newest sample.
-3. [`robot_task`](../src/robot/robot.c#L158) blocks in `imu_wait_sample()`, so its
+3. [`robot_task`](../src/robot/robot.c#L169) blocks in `imu_wait_sample()`, so its
    rate is set by the IMU task. It computes the accelerometer angle, runs both
    filters ([07](07-sensor-fusion.md)) and picks one.
 4. Holding the state mutex, it runs the PID ([08](08-pid-implementation.md)),
@@ -140,3 +140,36 @@ sequenceDiagram
 - One balance loop on tilt only; no velocity or position control
   ([06](06-control-theory.md)).
 - Encoders are wired and readable but not used by the controller yet.
+
+## Adding a module
+
+A module is a directory under `src/` that exports one descriptor
+([module.h](../src/app/module.h)); nothing central is edited:
+
+```c
+/* src/buzzer/buzzer.c */
+const App_Module_t buzzer_module = {
+    .name = "BUZZER",
+    .init = buzzer_init,            /* before the scheduler, may be NULL */
+    .task = buzzer_task,            /* may be NULL */
+    .stack = 128,                   /* words */
+    .priority = APP_PRIORITY_BACKGROUND,
+};
+```
+
+```cmake
+# CMakeLists.txt, next to the other features
+robot_feature(BUZZER OFF "Beep on falls" SOURCES ${SRC_DIR}/buzzer/buzzer.c MODULES buzzer_module)
+```
+
+```ini
+# prj.conf
+BUZZER=ON
+```
+
+CMake writes every enabled module into `generated/app_modules.c` and prints the
+list at configure time (`-- Modules: ...`). [`app_hardware_init()`](../src/app/app_init.c#L22)
+runs all `init` functions, then [`app_tasks_init()`](../src/app/app_init.c#L34)
+creates all tasks, so a module's queues and locks exist before any task runs.
+Commands are added the same way, from the module's `init`
+([10](10-at-commands.md#adding-a-command)).

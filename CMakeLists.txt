@@ -98,12 +98,14 @@ if(CONSOLE_ANY)
         ${SRC_DIR}/cmd/at_cmd.c
         ${SRC_DIR}/util/fmt.c
         ${SRC_DIR}/robot/robot_commands.c
+        ${SRC_DIR}/app/console.c
     )
+    robot_add_module(console_module)
 endif()
 
 robot_feature(CONSOLE_ECHO ON "Echo each command line on the USB console" REQUIRES CONSOLE_USB)
 robot_feature(TELEMETRY ON "AT+STREAM control loop telemetry on the USB console"
-    REQUIRES CONSOLE_USB SOURCES ${SRC_DIR}/telemetry/telemetry.c)
+    REQUIRES CONSOLE_USB SOURCES ${SRC_DIR}/telemetry/telemetry.c MODULES telemetry_module)
 robot_feature(AT_CMD_PID_TOGGLE ON "AT+PID, AT+PIDON and AT+PIDOFF commands" REQUIRES CONSOLE_ANY)
 robot_feature(AT_CMD_HELP OFF "AT+HELP command" REQUIRES CONSOLE_ANY)
 robot_feature(AT_CMD_ALL_QUERY OFF "AT+ALL? bulk sensor query" REQUIRES CONSOLE_ANY)
@@ -226,11 +228,18 @@ if(NOT APP_BLINK_ONLY)
         ${SRC_DIR}/control/pid.c
         ${SRC_DIR}/control/mixer.c
     )
+    robot_add_module(imu_module)
+    robot_add_module(robot_module)
 endif()
 
 # Sources of enabled features
 get_property(FEATURE_SOURCES GLOBAL PROPERTY ROBOT_FEATURE_SOURCES)
 list(APPEND APP_SOURCES ${FEATURE_SOURCES})
+
+# Enabled modules; the LED heartbeat is always there
+robot_add_module(led_module)
+robot_write_modules(${SRC_DIR}/app/app_modules.c.in ${GENERATED_DIR}/app_modules.c)
+list(APPEND APP_SOURCES ${GENERATED_DIR}/app_modules.c)
 
 # =============================================================================
 # Main Executable

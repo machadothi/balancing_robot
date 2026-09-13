@@ -9,6 +9,7 @@
 #include <FreeRTOS.h>
 #include <task.h>
 
+#include "app/module.h"
 #include "board/board.h"
 #include "led/led.h"
 #include "log/log.h"
@@ -34,3 +35,11 @@ void led_task(void *args) {
         vTaskDelayUntil(&last_wake_time, pdMS_TO_TICKS(250));
     }
 }
+
+const App_Module_t led_module = {
+    .name = "LED",
+    .init = led_init,
+    .task = led_task,
+    .stack = 64,
+    .priority = APP_PRIORITY_BACKGROUND,
+};

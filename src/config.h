@@ -37,14 +37,6 @@ extern "C" {
 #define UART_BT_TX_BUFFER_SIZE  512     /**< Bluetooth console TX ring buffer (boards with BOARD_BT_UART) */
 /** @} */
 
-/** @defgroup I2C_Config I2C Configuration
- *  @brief I2C bus settings
- *  @{
- */
-#define I2C_SPEED_KHZ           100     /**< I2C bus speed in kHz */
-#define I2C_TIMEOUT_MS          100     /**< I2C operation timeout in ms */
-/** @} */
-
 /* ==========================================================================
  * IMU Configuration
  * ========================================================================== */
@@ -83,47 +75,6 @@ extern "C" {
 /** @} */
 
 /* ==========================================================================
- * Motor Configuration
- * ========================================================================== */
-
-/** @defgroup Motor_Config Motor Configuration
- *  @brief Motor driver settings
- *  @{
- */
-#define MOTOR_MAX_SPEED         255     /**< Maximum motor speed (0-255) */
-/** @} */
-
-/* ==========================================================================
- * FreeRTOS Task Configuration
- * ========================================================================== */
-
-/** @defgroup Task_Config FreeRTOS Task Configuration
- *  @brief Task stack sizes and priorities
- *  @{
- */
-
-/* Stack sizes (in words, not bytes) */
-#define TASK_STACK_LED          64      /**< LED task stack size */
-#define TASK_STACK_TELEMETRY    256     /**< Telemetry task stack size (line formatting) */
-#define TASK_STACK_UART_RX      384     /**< UART RX task stack size (AT cmd + float printf) */
-#define TASK_STACK_IMU          192     /**< IMU task stack size */
-#define TASK_STACK_ROBOT        256     /**< Robot control task stack size (filters, PID) */
-
-/* Task names (for debugging) */
-#define TASK_NAME_LED           "LED"
-#define TASK_NAME_TELEMETRY     "TELEM"
-#define TASK_NAME_UART_RX       "UART_RX"
-#define TASK_NAME_IMU           "IMU"
-#define TASK_NAME_ROBOT         "ROBOT"
-
-/* Priorities (configMAX_PRIORITIES = 5): the sensing/control chain must never
- * wait behind console I/O, and the heartbeat runs only when nothing else does */
-#define TASK_PRIORITY_CONTROL   4       /**< IMU and robot control tasks */
-#define TASK_PRIORITY_IO        2       /**< UART RX (AT commands) and telemetry tasks */
-#define TASK_PRIORITY_LED       1       /**< Heartbeat LED */
-/** @} */
-
-/* ==========================================================================
  * Debug Configuration
  * ========================================================================== */
 
@@ -131,7 +82,6 @@ extern "C" {
  *  @brief Debug and logging settings
  *  @{
  */
-#define DEBUG_BUFFER_SIZE       150     /**< Debug output buffer size */
 #define LOG_BUFFER_SIZE         256     /**< Log message buffer size */
 #define WATCHDOG_TIMEOUT_MS     500     /**< Independent watchdog timeout (WATCHDOG) */
 #define AUTO_ENABLE_HOLD_MS     3000    /**< Upright time before AUTO_ENABLE starts balancing */

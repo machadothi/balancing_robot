@@ -6,7 +6,8 @@
 #
 #   robot_option(<NAME> <BOOL|INT|STRING> <default> "<description>" [CHOICES <value>...])
 #   robot_feature(<NAME> <default> "<description>"
-#                 [REQUIRES <if-expression>...] [SOURCES <file>...])
+#                 [REQUIRES <if-expression>...] [SOURCES <file>...] [MODULES <symbol>...])
+#   robot_add_module(<symbol>)              always-built module (App_Module_t symbol)
 #   robot_define(<NAME> <if-expression>)    derived ON/OFF value, not user-settable
 #
 # Values come from, lowest to highest precedence:
@@ -137,7 +138,7 @@ endfunction()
 # A feature whose requirements are not met is off. Setting it to a non-default
 # ON without them is an error, so a request is never silently ignored.
 function(robot_feature name builtin doc)
-    cmake_parse_arguments(F "" "" "REQUIRES;SOURCES" ${ARGN})
+    cmake_parse_arguments(F "" "" "REQUIRES;SOURCES;MODULES" ${ARGN})
     robot_option(${name} BOOL "${builtin}" "${doc}")
     set(value ${${name}})
     get_property(default GLOBAL PROPERTY ROBOT_OPTION_DEFAULT_${name})
@@ -162,6 +163,31 @@ function(robot_feature name builtin doc)
     if(value AND F_SOURCES)
         set_property(GLOBAL APPEND PROPERTY ROBOT_FEATURE_SOURCES ${F_SOURCES})
     endif()
+    if(value)
+        foreach(module IN LISTS F_MODULES)
+            robot_add_module(${module})
+        endforeach()
+    endif()
+endfunction()
+
+# Modules start in the order they are added
+function(robot_add_module symbol)
+    set_property(GLOBAL APPEND PROPERTY ROBOT_MODULES ${symbol})
+endfunction()
+
+# Generates the module table from a template containing
+# @APP_MODULE_EXTERNS@ and @APP_MODULE_ENTRIES@
+function(robot_write_modules template output)
+    get_property(modules GLOBAL PROPERTY ROBOT_MODULES)
+    set(APP_MODULE_EXTERNS "")
+    set(APP_MODULE_ENTRIES "")
+    foreach(module IN LISTS modules)
+        string(APPEND APP_MODULE_EXTERNS "extern const App_Module_t ${module};\n")
+        string(APPEND APP_MODULE_ENTRIES "    &${module},\n")
+    endforeach()
+    list(JOIN modules ", " summary)
+    message(STATUS "Modules: ${summary}")
+    configure_file(${template} ${output} @ONLY)
 endfunction()
 
 function(robot_define name)
