@@ -2,11 +2,10 @@
  * @file motor_hiwonder.c
  * @brief Motor driver for the Hiwonder ROS Robot Control Board (STM32F407)
  *
- * Implements the motor.h API for the board's encoder motor ports. Each port's
- * H-bridge has two PWM inputs: PWM on the forward input with the reverse
- * input low drives forward, and the other way round for reverse. Both low
- * coasts, both high brakes. Encoders are quadrature, counted by a timer in
- * encoder mode (x4).
+ * Each port's H-bridge has two PWM inputs: PWM on the forward input with the
+ * reverse input low drives forward, and the other way round for reverse.
+ * Both low coasts, both high brakes. Encoders are quadrature, counted by a
+ * timer in encoder mode (x4).
  *
  * Pin mapping from the vendor firmware (RosRobotControllerM4):
  *
@@ -17,7 +16,8 @@
  *   M3    TIM9_CH1  PE5      TIM9_CH2  PE6      TIM4  PB6  / PB7
  *   M4    TIM11_CH1 PB9      TIM10_CH1 PB8      TIM3  PB4  / PB5
  *
- * The ports used for motor1 and motor2 are set in board_config.h.
+ * BOARD_MOTOR1_PORT (left) and BOARD_MOTOR2_PORT (right) in board_config.h
+ * choose the ports.
  */
 
 #include <stddef.h>
@@ -36,8 +36,6 @@
 
 #define MOTOR_PWM_FREQUENCY_HZ      1000
 #define MOTOR_PWM_RESOLUTION        1000
-
-#define MOTOR_COUNT                 2
 
 /* ==========================================================================
  * Port Table
@@ -81,8 +79,7 @@ typedef struct {
     const MotorPort_t *port;
     PWM_Channel_Config_t forward;
     PWM_Channel_Config_t reverse;
-    bool direction;
-    uint8_t speed;
+    int16_t command;
 } Motor_t;
 
 static Motor_t motors[MOTOR_COUNT];
@@ -139,14 +136,14 @@ static void motor_encoder_init(const MotorPort_t *port) {
     timer_enable_counter(port->enc_timer);
 }
 
+/** Drive the input matching the command's sign; clear the other one first */
 static void motor_apply(Motor_t *motor) {
-    uint8_t speed = motors_standby ? 0 : motor->speed;
-    PWM_Channel_Config_t *on = motor->direction ? &motor->forward : &motor->reverse;
-    PWM_Channel_Config_t *off = motor->direction ? &motor->reverse : &motor->forward;
+    int16_t command = motors_standby ? 0 : motor->command;
+    PWM_Channel_Config_t *on = (command >= 0) ? &motor->forward : &motor->reverse;
+    PWM_Channel_Config_t *off = (command >= 0) ? &motor->reverse : &motor->forward;
 
-    /* Clear the opposite input first so both are never driven together */
     pwm_set_duty(off, 0);
-    pwm_set_duty_u8(on, speed);
+    pwm_set_duty_u8(on, (uint8_t)(command < 0 ? -command : command));
 }
 
 static void motor_set_inputs(Motor_t *motor, uint16_t duty) {
@@ -155,11 +152,14 @@ static void motor_set_inputs(Motor_t *motor, uint16_t duty) {
 }
 
 /* ==========================================================================
- * Public Functions - Initialization
+ * Public Functions
  * ========================================================================== */
 
 void motor_init(void) {
-    const uint8_t port_numbers[MOTOR_COUNT] = { BOARD_MOTOR1_PORT, BOARD_MOTOR2_PORT };
+    const uint8_t port_numbers[MOTOR_COUNT] = {
+        [MOTOR_LEFT] = BOARD_MOTOR1_PORT,
+        [MOTOR_RIGHT] = BOARD_MOTOR2_PORT,
+    };
 
     rcc_periph_clock_enable(RCC_GPIOA);
     rcc_periph_clock_enable(RCC_GPIOB);
@@ -168,8 +168,7 @@ void motor_init(void) {
         Motor_t *motor = &motors[i];
 
         motor->port = &motor_ports[port_numbers[i] - 1];
-        motor->direction = true;
-        motor->speed = 0;
+        motor->command = 0;
 
         motor_pwm_pin_init(&motor->forward, &motor->port->forward);
         motor_pwm_pin_init(&motor->reverse, &motor->port->reverse);
@@ -179,62 +178,36 @@ void motor_init(void) {
     motors_standby = false;
 }
 
-void motor_deinit(void) {
-    for (size_t i = 0; i < MOTOR_COUNT; i++) {
-        pwm_channel_disable(&motors[i].forward);
-        pwm_channel_disable(&motors[i].reverse);
-        timer_disable_counter(motors[i].port->enc_timer);
+void motor_set(Motor_Id_t id, int16_t command) {
+    if (id >= MOTOR_COUNT) {
+        return;
     }
+    if (command > MOTOR_COMMAND_MAX) {
+        command = MOTOR_COMMAND_MAX;
+    } else if (command < -MOTOR_COMMAND_MAX) {
+        command = -MOTOR_COMMAND_MAX;
+    }
+    motors[id].command = command;
+    motor_apply(&motors[id]);
+}
 
-    for (size_t i = 0; i < 2 * MOTOR_COUNT; i++) {
-        pwm_timer_deinit(&pwm_timers[i]);
+void motor_brake(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        motor_set_inputs(&motors[id], MOTOR_PWM_RESOLUTION);
     }
 }
 
-/* ==========================================================================
- * Public Functions - Motor Control
- * ========================================================================== */
-
-void motor1_set_direction(bool direction) {
-    motors[0].direction = direction;
-    motor_apply(&motors[0]);
-}
-
-void motor2_set_direction(bool direction) {
-    motors[1].direction = direction;
-    motor_apply(&motors[1]);
-}
-
-void motor1_set_speed(uint8_t speed) {
-    motors[0].speed = speed;
-    motor_apply(&motors[0]);
-}
-
-void motor2_set_speed(uint8_t speed) {
-    motors[1].speed = speed;
-    motor_apply(&motors[1]);
-}
-
-void motor1_brake(void) {
-    motor_set_inputs(&motors[0], MOTOR_PWM_RESOLUTION);
-}
-
-void motor2_brake(void) {
-    motor_set_inputs(&motors[1], MOTOR_PWM_RESOLUTION);
-}
-
-void motor1_coast(void) {
-    motor_set_inputs(&motors[0], 0);
-}
-
-void motor2_coast(void) {
-    motor_set_inputs(&motors[1], 0);
+void motor_coast(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        motor_set_inputs(&motors[id], 0);
+    }
 }
 
 void motor_standby(bool enable) {
     motors_standby = enable;
-    motor_apply(&motors[0]);
-    motor_apply(&motors[1]);
+    for (size_t i = 0; i < MOTOR_COUNT; i++) {
+        motor_apply(&motors[i]);
+    }
 }
 
 void motor_emergency_stop(void) {
@@ -243,22 +216,12 @@ void motor_emergency_stop(void) {
     }
 }
 
-/* ==========================================================================
- * Public Functions - Encoder
- * ========================================================================== */
-
-uint32_t motor1_get_encoder(void) {
-    return timer_get_counter(motors[0].port->enc_timer);
+int32_t motor_get_encoder(Motor_Id_t id) {
+    return (id < MOTOR_COUNT) ? (int32_t)timer_get_counter(motors[id].port->enc_timer) : 0;
 }
 
-uint32_t motor2_get_encoder(void) {
-    return timer_get_counter(motors[1].port->enc_timer);
-}
-
-void motor1_reset_encoder(void) {
-    timer_set_counter(motors[0].port->enc_timer, 0);
-}
-
-void motor2_reset_encoder(void) {
-    timer_set_counter(motors[1].port->enc_timer, 0);
+void motor_reset_encoder(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        timer_set_counter(motors[id].port->enc_timer, 0);
+    }
 }

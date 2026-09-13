@@ -97,6 +97,7 @@ if(CONSOLE_ANY)
         ${SRC_DIR}/drivers/uart.c
         ${SRC_DIR}/cmd/at_cmd.c
         ${SRC_DIR}/util/fmt.c
+        ${SRC_DIR}/robot/robot_commands.c
     )
 endif()
 
@@ -222,6 +223,8 @@ if(NOT APP_BLINK_ONLY)
         ${SRC_DIR}/imu/mpu6050.c
         ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
+        ${SRC_DIR}/control/pid.c
+        ${SRC_DIR}/control/mixer.c
     )
 endif()
 

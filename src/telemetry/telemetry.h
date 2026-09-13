@@ -38,7 +38,9 @@ void telemetry_init(void);
  *
  * Call from one task only (the control task).
  *
- * @return false if the queue was full and the record was dropped
+ * Does nothing unless streaming is on (AT+STREAM=1).
+ *
+ * @return false if not streaming, or the queue was full and the record was dropped
  */
 bool telemetry_submit(const Telemetry_Record_t *record);
 

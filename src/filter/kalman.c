@@ -43,3 +43,25 @@ float kalman_update(KalmanFilter_t *kf, float gyro_rate, float acc_angle, float 
     
     return kf->angle;
 }
+
+/* ==========================================================================
+ * AttitudeFilter_t interface
+ * ========================================================================== */
+
+static void kalman_seed_state(void *state, float angle) {
+    ((KalmanFilter_t *)state)->angle = angle;
+}
+
+static float kalman_update_state(void *state, float gyro_rate, float acc_angle, float dt) {
+    return kalman_update((KalmanFilter_t *)state, gyro_rate, acc_angle, dt);
+}
+
+AttitudeFilter_t kalman_filter_interface(KalmanFilter_t *kf) {
+    AttitudeFilter_t filter = {
+        .name = "kalman",
+        .state = kf,
+        .seed = kalman_seed_state,
+        .update = kalman_update_state,
+    };
+    return filter;
+}

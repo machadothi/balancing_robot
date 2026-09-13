@@ -1,52 +1,17 @@
 /**
  * @file at_cmd.h
- * @brief AT Command Parser Interface
- * 
- * Implements a standard AT command interface for robot control via UART.
- * Compatible with serial terminals and Raspberry Pi communication.
- * 
- * Command Format:
- *   AT                     - Test command, returns "OK"
- *   AT+<CMD>?              - Query command (read value)
- *   AT+<CMD>=<value>       - Set command (write value)
- *   AT+<CMD>               - Execute command (action)
- * 
- * Supported Commands:
- *   AT+VERSION?            - Get firmware version
- *   AT+STATUS?             - Get robot status
- *   AT+ACC_X?              - Get X acceleration (g)
- *   AT+ACC_Y?              - Get Y acceleration (g)
- *   AT+ACC_Z?              - Get Z acceleration (g)
- *   AT+GYRO_X?             - Get X rotation rate (deg/s)
- *   AT+GYRO_Y?             - Get Y rotation rate (deg/s)
- *   AT+GYRO_Z?             - Get Z rotation rate (deg/s)
- *   AT+ANGLE?              - Get current tilt angle (degrees)
- *   AT+VELOCITY?           - Get current velocity
- *   AT+VELOCITY=<val>      - Set target velocity (-100 to 100)
- *   AT+TURN=<val>          - Set turn rate (-100 to 100)
- *   AT+KP?                 - Get PID proportional gain
- *   AT+KP=<val>            - Set PID proportional gain
- *   AT+KI?                 - Get PID integral gain
- *   AT+KI=<val>            - Set PID integral gain
- *   AT+KD?                 - Get PID derivative gain
- *   AT+KD=<val>            - Set PID derivative gain
- *   AT+SPEED=<l>,<r>       - Set left/right wheel speed (-100 to 100 each)
- *   AT+SPEED?              - Get current wheel speeds
- *   AT+STREAM=<0|1>        - Stream filter angles (acc_deg | kalman | comp)
- *   AT+ENABLE              - Enable motors
- *   AT+DISABLE             - Disable motors
- *   AT+PID / PIDON / PIDOFF - Toggle / enable / disable the balance PID
- *   AT+STOP                - Emergency stop
- *   AT+RESET               - Software reset
- *   AT+SAVE / AT+LOAD      - Not implemented yet (return ERROR)
- *   AT+DEFAULT             - Restore default gains
- *   AT+HELP                - List available commands (AT_CMD_HELP)
- * 
- * Response Format:
- *   OK                     - Command successful (no data)
- *   +<CMD>:<value>         - Query response with data
- *   ERROR:<code>           - Error with numeric code
- * 
+ * @brief Generic AT command console
+ *
+ * The parser knows no application commands. Modules register tables of
+ * AT_Command_Def_t; the parser checks syntax, number formats and ranges, calls
+ * the handler and formats the reply. The command reference is
+ * docs/10-at-commands.md.
+ *
+ *   AT              Test, replies OK
+ *   AT+NAME?        Query    -> +NAME:<value>
+ *   AT+NAME=a[,b]   Set      -> OK or ERROR:<code>
+ *   AT+NAME         Execute  -> OK or ERROR:<code>
+ *
  * @author Thiago Cunha
  * @date 2024
  */
@@ -54,198 +19,75 @@
 #ifndef AT_CMD_H
 #define AT_CMD_H
 
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#include "config.h"
+#include "drivers/uart.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
-#include <stddef.h>
-#include <stdint.h>
-#include <stdbool.h>
-
-#include "drivers/uart.h"
-
-/* ==========================================================================
- * Type Definitions
- * ========================================================================== */
-
-/**
- * @brief AT command result codes
- */
+/** Reply codes, printed as ERROR:<code> */
 typedef enum {
-    AT_OK = 0,              /**< Command successful */
-    AT_ERROR,               /**< General error */
-    AT_ERROR_UNKNOWN_CMD,   /**< Unknown command */
-    AT_ERROR_INVALID_PARAM, /**< Invalid parameter */
-    AT_ERROR_RANGE,         /**< Parameter out of range */
+    AT_OK = 0,              /**< Success */
+    AT_ERROR,               /**< Known command that failed */
+    AT_ERROR_UNKNOWN_CMD,   /**< No such command, or it does not support this form */
+    AT_ERROR_INVALID_PARAM, /**< Missing, malformed or non-finite number */
+    AT_ERROR_RANGE,         /**< Number out of range */
     AT_ERROR_NOT_READY,     /**< System not ready */
     AT_ERROR_BUSY,          /**< System busy */
 } AT_Result_t;
 
-/**
- * @brief AT command type
- */
-typedef enum {
-    AT_TYPE_TEST,           /**< AT (basic test) */
-    AT_TYPE_QUERY,          /**< AT+CMD? (read) */
-    AT_TYPE_SET,            /**< AT+CMD=value (write) */
-    AT_TYPE_EXECUTE,        /**< AT+CMD (action) */
-} AT_CmdType_t;
+/** Most numbers a set command can take */
+#define AT_MAX_PARAMS   2
 
-/**
- * @brief Parsed AT command structure
- */
+/** Room a query handler has for its value text */
+#define AT_VALUE_SIZE   96
+
+/** Write the value of AT+NAME? into `value` (null-terminated) */
+typedef AT_Result_t (*AT_QueryFn_t)(char *value, size_t size);
+
+/** Apply AT+NAME=...; `values` holds `params` numbers, already range-checked */
+typedef AT_Result_t (*AT_SetFn_t)(const float *values);
+
+/** Run AT+NAME */
+typedef AT_Result_t (*AT_ExecFn_t)(void);
+
 typedef struct {
-    AT_CmdType_t type;          /**< Command type */
-    char         cmd[24];       /**< Command name (e.g., "VELOCITY") */
-    char         param[64];     /**< Parameter string (for SET commands) */
-    float        param_float;   /**< Parsed float parameter */
-    int32_t      param_int;     /**< Parsed integer parameter */
-    bool         param_is_number; /**< Whole parameter is one finite number */
-} AT_Command_t;
+    const char  *name;      /**< Upper-case name without "AT+" */
+    AT_QueryFn_t query;     /**< NULL if AT+NAME? is not supported */
+    AT_SetFn_t   set;       /**< NULL if AT+NAME= is not supported */
+    AT_ExecFn_t  exec;      /**< NULL if AT+NAME is not supported */
+    uint8_t      params;    /**< Comma-separated numbers AT+NAME= takes (1..AT_MAX_PARAMS) */
+    bool         integer;   /**< Numbers must be whole */
+    float        min;       /**< Inclusive range for every number */
+    float        max;
+    const char  *help;      /**< One-line description for AT+HELP, written with AT_HELP() */
+} AT_Command_Def_t;
 
-/**
- * @brief Robot control values accessible via AT commands
- */
-typedef struct {
-    /* IMU readings */
-    float acc_x;            /**< X acceleration (g) */
-    float acc_y;            /**< Y acceleration (g) */
-    float acc_z;            /**< Z acceleration (g) */
-    float gyro_x;           /**< X rotation rate (deg/s) */
-    float gyro_y;           /**< Y rotation rate (deg/s) */
-    float gyro_z;           /**< Z rotation rate (deg/s) */
-    float angle;            /**< Tilt angle (degrees) */
-    
-    /* Control parameters */
-    float velocity;         /**< Current velocity */
-    float target_velocity;  /**< Target velocity (-100 to 100) */
-    float turn_rate;        /**< Turn rate (-100 to 100) */
-    
-    /* PID gains */
-    float kp;               /**< Proportional gain */
-    float ki;               /**< Integral gain */
-    float kd;               /**< Derivative gain */
-    
-    /* Wheel speeds */
-    float speed_left;       /**< Left wheel speed (-100 to 100) */
-    float speed_right;      /**< Right wheel speed (-100 to 100) */
-    
-    /* Status */
-    bool  motors_enabled;   /**< Motors enabled flag */
-    bool  pid_enabled;      /**< PID controller enabled flag */
-    bool  is_balanced;      /**< Robot is balanced */
-} AT_RobotState_t;
+/** Help strings only take flash when AT+HELP is built */
+#if AT_CMD_HELP
+#define AT_HELP(text)   (text)
+#else
+#define AT_HELP(text)   NULL
+#endif // AT_CMD_HELP
 
-/**
- * @brief Callback for setting values
- * 
- * @param param     Parameter name (e.g., "VELOCITY")
- * @param value     New value
- * @param value2    Second value (for dual-parameter commands like SPEED)
- * @return true if successful
- */
-typedef bool (*AT_SetCallback_t)(const char *param, float value, float value2);
-
-/**
- * @brief Callback for execute commands
- * 
- * @param cmd   Command name (e.g., "ENABLE", "STOP")
- * @return AT_OK, AT_ERROR_UNKNOWN_CMD if not handled, or another error code
- */
-typedef AT_Result_t (*AT_ExecCallback_t)(const char *cmd);
-
-/**
- * @brief Lock/unlock hooks guarding the shared robot state
- *
- * Called around state reads and set/execute callbacks, so the AT handlers
- * (UART RX task) and the control loop never see a half-updated state.
- */
-typedef void (*AT_LockCallback_t)(void);
-
-/* ==========================================================================
- * Initialization
- * ========================================================================== */
-
-/**
- * @brief Initialize AT command parser
- * 
- * Sets up the command parser and registers it as UART RX callback.
- */
+/** Register the parser's own commands and the UART line callback */
 void at_cmd_init(void);
 
 /**
- * @brief Register robot state pointer
- * 
- * The AT parser will read values from this structure for query commands.
- * 
- * @param state     Pointer to robot state (must remain valid)
- */
-void at_cmd_set_state(AT_RobotState_t *state);
-
-/**
- * @brief Register set callback
- * 
- * Called when a SET command is received (AT+CMD=value).
- * 
- * @param callback  Function to handle set operations
- */
-void at_cmd_set_callback(AT_SetCallback_t callback);
-
-/**
- * @brief Register execute callback
- * 
- * Called when an execute command is received (AT+CMD).
- * 
- * @param callback  Function to handle execute operations
- */
-void at_cmd_exec_callback(AT_ExecCallback_t callback);
-
-/**
- * @brief Register lock hooks for the robot state
+ * @brief Add a table of commands
  *
- * @param lock      Called before reading the state or calling a callback
- * @param unlock    Called afterwards; responses are sent after unlocking
+ * The table must stay valid forever (normally a static const array).
+ * Call from init code or a task's start-up, before commands for it arrive.
  */
-void at_cmd_set_lock(AT_LockCallback_t lock, AT_LockCallback_t unlock);
+void at_cmd_register(const AT_Command_Def_t *table, size_t count);
 
-/* ==========================================================================
- * Command Processing
- * ========================================================================== */
-
-/**
- * @brief Process a received AT command line
- * 
- * Parses the command and generates appropriate response.
- * This is called automatically when registered as UART callback.
- * 
- * @param line      Command line (without line terminator)
- * @param length    Line length
- */
+/** Parse and execute one received line; replies go to `port` */
 void at_cmd_process(UART_Port_t port, const char *line, uint16_t length);
-
-/**
- * @brief Send an OK response
- */
-void at_cmd_respond_ok(void);
-
-/**
- * @brief Send an error response
- * 
- * @param error     Error code
- */
-void at_cmd_respond_error(AT_Result_t error);
-
-/**
- * @brief Send a data response
- * 
- * Format: +CMD:value
- * 
- * @param cmd       Command name
- * @param fmt       Printf format for value
- * @param ...       Value arguments
- */
-void at_cmd_respond_data(const char *cmd, const char *fmt, ...)
-    __attribute__((format(printf, 2, 3)));
 
 #ifdef __cplusplus
 }

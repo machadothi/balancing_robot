@@ -1,22 +1,25 @@
 /**
  * @file motor.c
- * @brief TB6612FNG Motor Driver Implementation
- * 
- * Dual DC motor control using TB6612FNG H-bridge driver IC.
- * Uses the PWM driver for speed control via TIM3 channels.
- * 
- * Hardware Configuration:
- *   - Motor A: AIN1/AIN2 for direction, PWMA for speed
- *   - Motor B: BIN1/BIN2 for direction, PWMB for speed
- *   - STBY: Active-high standby release
- *   - Encoders: EXTI interrupts for speed feedback
- * 
+ * @brief TB6612FNG dual motor driver (Blue Pill board)
+ *
+ * Pin mapping:
+ *
+ *   TB6612FNG   STM32      Function
+ *   ---------   -----      --------
+ *   STBY        PB4        Standby release, high = driver enabled
+ *   AIN1/AIN2   PB3/PA8    Left wheel (A) direction
+ *   BIN1/BIN2   PB5/PB8    Right wheel (B) direction
+ *   PWMA        PB1        Left wheel speed, TIM3_CH4
+ *   PWMB        PB0        Right wheel speed, TIM3_CH3
+ *   Encoder A   PA5        Rising edges, EXTI5
+ *   Encoder B   PA6        Rising edges, EXTI6
+ *
+ * Direction truth table: IN1=H IN2=L forward, L/H reverse, H/H short brake,
+ * L/L coast.
+ *
  * @author Thiago Cunha
  * @date 2024
  */
-
-#include <FreeRTOS.h>
-#include <task.h>
 
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/gpio.h>
@@ -31,56 +34,46 @@
  * Configuration
  * ========================================================================== */
 
-/** PWM frequency for motor control (Hz) */
-#define MOTOR_PWM_FREQUENCY_HZ      1000    /* Optimized for JGA25-370 motors with TB6612 */
-
-/** PWM resolution (1000 = 0.1% steps) */
+#define MOTOR_PWM_FREQUENCY_HZ      1000    /* Suits JGA25-370 motors with the TB6612 */
 #define MOTOR_PWM_RESOLUTION        1000
+
+#define TB6612_STBY_PORT            GPIOB
+#define TB6612_STBY_PIN             GPIO4
+
+typedef struct {
+    uint32_t in1_port;
+    uint16_t in1_pin;
+    uint32_t in2_port;
+    uint16_t in2_pin;
+    PWM_Channel_t pwm_channel;  /**< TIM3 channel, pin on port B */
+    uint16_t pwm_pin;
+    uint32_t exti;              /**< Encoder line, pin on port A */
+    uint16_t encoder_pin;
+} TB6612_Channel_t;
+
+static const TB6612_Channel_t channels[MOTOR_COUNT] = {
+    [MOTOR_LEFT]  = { GPIOB, GPIO3, GPIOA, GPIO8, PWM_CHANNEL_4, GPIO1, EXTI5, GPIO5 },
+    [MOTOR_RIGHT] = { GPIOB, GPIO5, GPIOB, GPIO8, PWM_CHANNEL_3, GPIO0, EXTI6, GPIO6 },
+};
 
 /* ==========================================================================
  * Private Variables
  * ========================================================================== */
 
-/** PWM timer instance */
-static PWM_Timer_t motor_pwm_timer;
-
-/** PWM channel for Motor A (TIM3_CH4 on PB1) */
-static PWM_Channel_Config_t motor_a_pwm;
-
-/** PWM channel for Motor B (TIM3_CH3 on PB0) */
-static PWM_Channel_Config_t motor_b_pwm;
-
-/** Encoder counters */
-static volatile uint32_t motor_a_encoder_count = 0;
-static volatile uint32_t motor_b_encoder_count = 0;
+static PWM_Timer_t pwm_timer;
+static PWM_Channel_Config_t pwm[MOTOR_COUNT];
+static volatile int32_t encoder_count[MOTOR_COUNT];
 
 /* ==========================================================================
- * Private Function Prototypes
+ * Interrupt Handler
  * ========================================================================== */
 
-static void motor_gpio_init(void);
-static void motor_encoder_init(void);
-static void motor_pwm_init(void);
-
-/* ==========================================================================
- * Interrupt Handlers
- * ========================================================================== */
-
-/**
- * @brief Encoder interrupt handler (EXTI5-9)
- * 
- * Handles rising edge interrupts from motor encoders for
- * speed measurement and position tracking.
- */
 void exti9_5_isr(void) {
-    if (exti_get_flag_status(EXTI5)) {
-        exti_reset_request(EXTI5);
-        motor_a_encoder_count++;
-    }
-    
-    if (exti_get_flag_status(EXTI6)) {
-        exti_reset_request(EXTI6);
-        motor_b_encoder_count++;
+    for (int m = 0; m < MOTOR_COUNT; m++) {
+        if (exti_get_flag_status(channels[m].exti)) {
+            exti_reset_request(channels[m].exti);
+            encoder_count[m]++;
+        }
     }
 }
 
@@ -88,186 +81,105 @@ void exti9_5_isr(void) {
  * Private Functions
  * ========================================================================== */
 
-/**
- * @brief Initialize motor control GPIO pins
- * 
- * Configures direction control pins (AIN1, AIN2, BIN1, BIN2) and
- * standby control pin as push-pull outputs.
- */
-static void motor_gpio_init(void) {
-    /* Enable GPIO clocks */
-    rcc_periph_clock_enable(RCC_GPIOA);
-    rcc_periph_clock_enable(RCC_GPIOB);
-    
-    /* Configure direction control pins on Port B */
-    gpio_set_mode(GPIOB, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
-                  TB6612_STBY | TB6612_AIN1 | TB6612_BIN1 | TB6612_BIN2);
-    
-    /* Configure AIN2 on Port A */
-    gpio_set_mode(GPIOA, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL,
-                  TB6612_AIN2);
-    
-    /* Start in standby mode (motors disabled) */
-    gpio_clear(GPIOB, TB6612_STBY);
-    
-    /* Set initial direction (both motors stopped, direction neutral) */
-    gpio_clear(GPIOB, TB6612_AIN1 | TB6612_BIN1 | TB6612_BIN2);
-    gpio_clear(GPIOA, TB6612_AIN2);
-}
-
-/**
- * @brief Initialize encoder inputs with EXTI interrupts
- */
-static void motor_encoder_init(void) {
-    rcc_periph_clock_enable(RCC_AFIO);
-    rcc_periph_clock_enable(RCC_GPIOA);
-    
-    /* Configure encoder pins as floating inputs */
-    gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT,
-                  MOTOR1_ENCODER | MOTOR2_ENCODER);
-    
-    /* Configure EXTI for encoder pins */
-    exti_select_source(EXTI5, GPIOA);
-    exti_select_source(EXTI6, GPIOA);
-    
-    exti_set_trigger(EXTI5, EXTI_TRIGGER_RISING);
-    exti_set_trigger(EXTI6, EXTI_TRIGGER_RISING);
-    
-    exti_enable_request(EXTI5);
-    exti_enable_request(EXTI6);
-    
-    /* Enable EXTI interrupt with medium priority */
-    nvic_set_priority(NVIC_EXTI9_5_IRQ, 0x80);
-    nvic_enable_irq(NVIC_EXTI9_5_IRQ);
-}
-
-/**
- * @brief Initialize PWM for motor speed control
- */
-static void motor_pwm_init(void) {
-    /* Initialize PWM timer (TIM3) */
-    pwm_timer_init(&motor_pwm_timer, TIM3, MOTOR_PWM_FREQUENCY_HZ, MOTOR_PWM_RESOLUTION);
-    
-    /* Initialize Motor A PWM channel (TIM3_CH4 on PB1) */
-    pwm_channel_init(&motor_a_pwm, &motor_pwm_timer, PWM_CHANNEL_4,
-                     GPIOB, TB6612_PWMA, PWM_OUTPUT_OPEN_DRAIN);
-    pwm_channel_enable(&motor_a_pwm);
-    
-    /* Initialize Motor B PWM channel (TIM3_CH3 on PB0) */
-    pwm_channel_init(&motor_b_pwm, &motor_pwm_timer, PWM_CHANNEL_3,
-                     GPIOB, TB6612_PWMB, PWM_OUTPUT_OPEN_DRAIN);
-    pwm_channel_enable(&motor_b_pwm);
+static void set_inputs(const TB6612_Channel_t *ch, bool in1, bool in2) {
+    if (in1) {
+        gpio_set(ch->in1_port, ch->in1_pin);
+    } else {
+        gpio_clear(ch->in1_port, ch->in1_pin);
+    }
+    if (in2) {
+        gpio_set(ch->in2_port, ch->in2_pin);
+    } else {
+        gpio_clear(ch->in2_port, ch->in2_pin);
+    }
 }
 
 /* ==========================================================================
- * Public Functions - Initialization
+ * Public Functions
  * ========================================================================== */
 
 void motor_init(void) {
-    motor_gpio_init();
-    motor_encoder_init();
-    motor_pwm_init();
-    
-    /* Exit standby mode - enable motor driver */
-    gpio_set(GPIOB, TB6612_STBY);
+    rcc_periph_clock_enable(RCC_GPIOA);
+    rcc_periph_clock_enable(RCC_GPIOB);
+    rcc_periph_clock_enable(RCC_AFIO);
+
+    /* Direction and standby pins, driver held in standby during setup */
+    gpio_set_mode(TB6612_STBY_PORT, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, TB6612_STBY_PIN);
+    gpio_clear(TB6612_STBY_PORT, TB6612_STBY_PIN);
+
+    for (int m = 0; m < MOTOR_COUNT; m++) {
+        const TB6612_Channel_t *ch = &channels[m];
+
+        gpio_set_mode(ch->in1_port, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, ch->in1_pin);
+        gpio_set_mode(ch->in2_port, GPIO_MODE_OUTPUT_2_MHZ, GPIO_CNF_OUTPUT_PUSHPULL, ch->in2_pin);
+        set_inputs(ch, false, false);
+
+        /* Encoder: rising edges on EXTI */
+        gpio_set_mode(GPIOA, GPIO_MODE_INPUT, GPIO_CNF_INPUT_FLOAT, ch->encoder_pin);
+        exti_select_source(ch->exti, GPIOA);
+        exti_set_trigger(ch->exti, EXTI_TRIGGER_RISING);
+        exti_enable_request(ch->exti);
+    }
+    nvic_set_priority(NVIC_EXTI9_5_IRQ, 0x80);
+    nvic_enable_irq(NVIC_EXTI9_5_IRQ);
+
+    pwm_timer_init(&pwm_timer, TIM3, MOTOR_PWM_FREQUENCY_HZ, MOTOR_PWM_RESOLUTION);
+    for (int m = 0; m < MOTOR_COUNT; m++) {
+        pwm_channel_init(&pwm[m], &pwm_timer, channels[m].pwm_channel,
+                         GPIOB, channels[m].pwm_pin, PWM_OUTPUT_OPEN_DRAIN);
+        pwm_channel_enable(&pwm[m]);
+    }
+
+    gpio_set(TB6612_STBY_PORT, TB6612_STBY_PIN);
 }
 
-void motor_deinit(void) {
-    /* Enter standby mode */
-    gpio_clear(GPIOB, TB6612_STBY);
-    
-    /* Stop PWM */
-    pwm_channel_disable(&motor_a_pwm);
-    pwm_channel_disable(&motor_b_pwm);
-    pwm_timer_deinit(&motor_pwm_timer);
+void motor_set(Motor_Id_t id, int16_t command) {
+    if (id >= MOTOR_COUNT) {
+        return;
+    }
+    if (command > MOTOR_COMMAND_MAX) {
+        command = MOTOR_COMMAND_MAX;
+    } else if (command < -MOTOR_COMMAND_MAX) {
+        command = -MOTOR_COMMAND_MAX;
+    }
+
+    set_inputs(&channels[id], command >= 0, command < 0);
+    pwm_set_duty_u8(&pwm[id], (uint8_t)(command < 0 ? -command : command));
 }
 
-/* ==========================================================================
- * Public Functions - Motor Control
- * ========================================================================== */
-
-void motor1_set_direction(bool direction) {
-    if (direction) {
-        gpio_set(GPIOB, TB6612_AIN1);
-        gpio_clear(GPIOA, TB6612_AIN2);
-    } else {
-        gpio_clear(GPIOB, TB6612_AIN1);
-        gpio_set(GPIOA, TB6612_AIN2);
+void motor_brake(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        set_inputs(&channels[id], true, true);
     }
 }
 
-void motor2_set_direction(bool direction) {
-    if (direction) {
-        gpio_set(GPIOB, TB6612_BIN1);
-        gpio_clear(GPIOB, TB6612_BIN2);
-    } else {
-        gpio_clear(GPIOB, TB6612_BIN1);
-        gpio_set(GPIOB, TB6612_BIN2);
+void motor_coast(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        set_inputs(&channels[id], false, false);
     }
-}
-
-void motor1_set_speed(uint8_t speed) {
-    pwm_set_duty_u8(&motor_a_pwm, speed);
-}
-
-void motor2_set_speed(uint8_t speed) {
-    pwm_set_duty_u8(&motor_b_pwm, speed);
-}
-
-void motor1_brake(void) {
-    /* Short brake: both direction pins high */
-    gpio_set(GPIOB, TB6612_AIN1);
-    gpio_set(GPIOA, TB6612_AIN2);
-}
-
-void motor2_brake(void) {
-    /* Short brake: both direction pins high */
-    gpio_set(GPIOB, TB6612_BIN1);
-    gpio_set(GPIOB, TB6612_BIN2);
-}
-
-void motor1_coast(void) {
-    /* Coast: both direction pins low */
-    gpio_clear(GPIOB, TB6612_AIN1);
-    gpio_clear(GPIOA, TB6612_AIN2);
-}
-
-void motor2_coast(void) {
-    /* Coast: both direction pins low */
-    gpio_clear(GPIOB, TB6612_BIN1);
-    gpio_clear(GPIOB, TB6612_BIN2);
 }
 
 void motor_standby(bool enable) {
     if (enable) {
-        gpio_clear(GPIOB, TB6612_STBY);
+        gpio_clear(TB6612_STBY_PORT, TB6612_STBY_PIN);
     } else {
-        gpio_set(GPIOB, TB6612_STBY);
+        gpio_set(TB6612_STBY_PORT, TB6612_STBY_PIN);
     }
 }
 
 void motor_emergency_stop(void) {
-    gpio_clear(GPIOB, TB6612_STBY);
-    pwm_set_duty(&motor_a_pwm, 0);
-    pwm_set_duty(&motor_b_pwm, 0);
+    gpio_clear(TB6612_STBY_PORT, TB6612_STBY_PIN);
+    for (int m = 0; m < MOTOR_COUNT; m++) {
+        pwm_set_duty(&pwm[m], 0);
+    }
 }
 
-/* ==========================================================================
- * Public Functions - Encoder
- * ========================================================================== */
-
-uint32_t motor1_get_encoder(void) {
-    return motor_a_encoder_count;
+int32_t motor_get_encoder(Motor_Id_t id) {
+    return (id < MOTOR_COUNT) ? encoder_count[id] : 0;
 }
 
-uint32_t motor2_get_encoder(void) {
-    return motor_b_encoder_count;
-}
-
-void motor1_reset_encoder(void) {
-    motor_a_encoder_count = 0;
-}
-
-void motor2_reset_encoder(void) {
-    motor_b_encoder_count = 0;
+void motor_reset_encoder(Motor_Id_t id) {
+    if (id < MOTOR_COUNT) {
+        encoder_count[id] = 0;
+    }
 }

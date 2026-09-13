@@ -1,6 +1,9 @@
 /**
  * @file telemetry.c
  * @brief Control loop logging over the USB console
+ *
+ * Owns its AT command (AT+STREAM): the parser and the control loop know
+ * nothing about streaming.
  */
 
 #include <stdio.h>
@@ -10,9 +13,10 @@
 #include <queue.h>
 
 #include "config.h"
-#include "util/fmt.h"
+#include "cmd/at_cmd.h"
 #include "drivers/uart.h"
 #include "telemetry/telemetry.h"
+#include "util/fmt.h"
 
 #define TELEMETRY_LINE_SIZE     200
 
@@ -23,16 +27,48 @@ typedef struct {
 
 static QueueHandle_t telemetry_queue = NULL;
 
+/** AT+STREAM state */
+static volatile bool streaming = false;
+
 /** Assigned to every submitted record, including dropped ones, so drops show as gaps */
 static uint32_t next_seq = 0;
 
 static volatile uint32_t dropped = 0;
 
+/* ==========================================================================
+ * AT+STREAM
+ * ========================================================================== */
+
+static AT_Result_t query_stream(char *value, size_t size) {
+    snprintf(value, size, "%d", streaming ? 1 : 0);
+    return AT_OK;
+}
+
+static AT_Result_t set_stream(const float *values) {
+    streaming = (values[0] != 0.0f);
+    return AT_OK;
+}
+
+static const AT_Command_Def_t telemetry_commands[] = {
+    { .name = "STREAM", .query = query_stream, .set = set_stream,
+      .params = 1, .integer = true, .min = 0.0f, .max = 1.0f,
+      .help = AT_HELP("Telemetry on the USB console, 0 or 1") },
+};
+
+/* ==========================================================================
+ * Public Functions
+ * ========================================================================== */
+
 void telemetry_init(void) {
     telemetry_queue = xQueueCreate(TELEMETRY_QUEUE_SIZE, sizeof(Telemetry_Item_t));
+    at_cmd_register(telemetry_commands, sizeof(telemetry_commands) / sizeof(telemetry_commands[0]));
 }
 
 bool telemetry_submit(const Telemetry_Record_t *record) {
+    if (!streaming) {
+        return false;
+    }
+
     Telemetry_Item_t item = { .seq = next_seq++, .record = *record };
 
     if (xQueueSend(telemetry_queue, &item, 0) != pdPASS) {

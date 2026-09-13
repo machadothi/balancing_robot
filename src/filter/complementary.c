@@ -34,3 +34,25 @@ float complementary_update(ComplementaryFilter_t *cf, float gyro_rate, float acc
     cf->angle = cf->alpha * (cf->angle + gyro_rate * dt) + (1.0f - cf->alpha) * acc_angle;
     return cf->angle;
 }
+
+/* ==========================================================================
+ * AttitudeFilter_t interface
+ * ========================================================================== */
+
+static void complementary_seed_state(void *state, float angle) {
+    ((ComplementaryFilter_t *)state)->angle = angle;
+}
+
+static float complementary_update_state(void *state, float gyro_rate, float acc_angle, float dt) {
+    return complementary_update((ComplementaryFilter_t *)state, gyro_rate, acc_angle, dt);
+}
+
+AttitudeFilter_t complementary_filter_interface(ComplementaryFilter_t *cf) {
+    AttitudeFilter_t filter = {
+        .name = "complementary",
+        .state = cf,
+        .seed = complementary_seed_state,
+        .update = complementary_update_state,
+    };
+    return filter;
+}

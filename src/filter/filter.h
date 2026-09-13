@@ -111,6 +111,26 @@ void complementary_init_custom(ComplementaryFilter_t *cf, float alpha);
  */
 float complementary_update(ComplementaryFilter_t *cf, float gyro_rate, float acc_angle, float dt);
 
+/* ==========================================================================
+ * Common interface
+ * ========================================================================== */
+
+/**
+ * @brief Any tilt estimator, so the control loop does not depend on which
+ *
+ * Adding a filter: implement seed/update for its state, add a *_filter_interface()
+ * constructor, and an entry to the ATTITUDE_FILTER choices in CMakeLists.txt.
+ */
+typedef struct {
+    const char *name;
+    void *state;
+    void (*seed)(void *state, float angle);
+    float (*update)(void *state, float gyro_rate, float acc_angle, float dt);
+} AttitudeFilter_t;
+
+AttitudeFilter_t kalman_filter_interface(KalmanFilter_t *kf);
+AttitudeFilter_t complementary_filter_interface(ComplementaryFilter_t *cf);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus
