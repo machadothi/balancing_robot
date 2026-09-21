@@ -23,7 +23,7 @@ flowchart TD
     RESET["Reset vector<br/>libopencm3 reset_handler"] --> CRT["Copy .data, zero .bss<br/>F407: enable the FPU (CPACR)"]
     CRT --> MAIN["main()"]
     MAIN --> HW["app_hardware_init()"]
-    HW --> CLK["board_clock_init()<br/>8 MHz HSE → PLL → 72 / 168 MHz"]
+    HW --> CLK["board_clock_init()<br/>8 / 16 MHz HSE → PLL → 72 / 168 MHz"]
     CLK --> LEDI["led_init()"]
     LEDI --> UART["uart_init()<br/>queues, RX interrupt"]
     UART --> BAN["Banner, blocking TX<br/>(scheduler not running yet)"]

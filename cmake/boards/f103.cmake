@@ -30,6 +30,7 @@ set(FREERTOS_INCLUDE_DIRS
 )
 
 set(BOARD_DEFAULT_HEAP_SIZE 12288)
+set(BOARD_DEFAULT_IMU mpu6050)
 
 # Optional hardware this board provides (see cmake/features.cmake)
 set(BOARD_HAS_BT_UART OFF)

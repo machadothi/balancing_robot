@@ -118,7 +118,7 @@ cmake --build build-f407
 
 Board peripheral assignments (console UART, I2C bus, DMA streams) are in
 `src/board/<board>/board_config.h`. On the F407 board the console is the
-Type-C USB-serial port (USART1), and the robot's motors plug into ports M1
+Type-C USB-serial port (USART3), and the robot's motors plug into ports M1
 and M2; change `BOARD_MOTOR1_PORT` / `BOARD_MOTOR2_PORT` there to use others.
 
 ## How configuration flows
@@ -279,7 +279,7 @@ tested on the board yet.
 ## Serial Monitor
 
 The USB console runs at `UART_BAUDRATE` (921600): USART2 (PA2/PA3) through a
-USB-serial adapter on the Blue Pill, or the Type-C USB-serial port (USART1) on
+USB-serial adapter on the Blue Pill, or the Type-C USB-serial port (USART3) on
 the F407 board. It accepts AT commands and carries telemetry after
 `AT+STREAM=1`:
 

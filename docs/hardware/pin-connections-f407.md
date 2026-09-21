@@ -6,7 +6,7 @@ Pin assignments come from the vendor firmware project
 [Hiwonder wiki](https://wiki.hiwonder.com/projects/ROS-Robot-Control-Board/en/latest/docs/1_Controller_Hardware_Course.html).
 
 **MCU:** STM32F407VET6 (Cortex-M4F, 168 MHz, 512K flash, 128K SRAM + 64K CCM)
-**Clock:** 8 MHz HSE crystal
+**Clock:** 16 MHz HSE crystal (from the vendor firmware's PLL setup)
 **Supply:** DC 5V – 12.6V
 
 ## Used by this firmware
@@ -14,7 +14,7 @@ Pin assignments come from the vendor firmware project
 | Function | Pins | Peripheral | Notes |
 |----------|------|------------|-------|
 | User LED | PE10 | GPIO | Active low; heartbeat |
-| Console | PA9 (TX), PA10 (RX) | USART1 | Type-C USB-serial; also the bootloader port (DTR = reset, RTS = BOOT0) |
+| Console | PD8 (TX), PD9 (RX) | USART3 | Type-C USB-serial (CH9102), found from the vendor firmware. Not a ROM bootloader port (those are USART1 PA9/PA10 and USART3 on PB10/PB11 or PC10/PC11): flash over SWD |
 | Bluetooth console | PD5 (TX → module RXD), PD6 (RX ← module TXD) | USART2 | HC-05/HC-06 at `BT_BAUDRATE`; check the header's supply voltage before connecting |
 | MPU-6050 | PB10 (SCL), PB11 (SDA) | I2C2 | DMA1 stream 7 (TX) / stream 2 (RX), channel 7 |
 | motor1 | Port M1 | see below | `BOARD_MOTOR1_PORT` in `src/board/f407/board_config.h` |

@@ -108,7 +108,7 @@ settings (20 Hz, ~8.5 ms) filter more but cost more phase.
 
 On the Blue Pill build the MPU-6050 supply is switched by PA10, so the driver
 can power-cycle a sensor that stopped responding. On the F407 board the IMU is
-powered directly and PA10 is the console RX pin, so `BOARD_IMU_RESET_PORT` is
+powered directly, so `BOARD_IMU_RESET_PORT` is
 not defined and the reset is skipped.
 
 ## Limitations and next steps

@@ -1,5 +1,5 @@
 # Hiwonder ROS Robot Control Board: STM32F407VET6, Cortex-M4F,
-# 512K flash / 128K SRAM (+64K CCM, unused), 8 MHz HSE
+# 512K flash / 128K SRAM (+64K CCM, unused), 16 MHz HSE
 
 set(MCU_FAMILY STM32F4)
 set(MCU_MODEL STM32F407VET6)
@@ -32,6 +32,7 @@ set(FREERTOS_INCLUDE_DIRS
 )
 
 set(BOARD_DEFAULT_HEAP_SIZE 32768)
+set(BOARD_DEFAULT_IMU qmi8658)     # found at 0x6A (WHO_AM_I 0x05)
 
 # Optional hardware this board provides (see cmake/features.cmake)
 set(BOARD_HAS_BT_UART ON)

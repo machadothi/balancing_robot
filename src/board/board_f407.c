@@ -26,8 +26,9 @@ void board_watchdog_refresh(void) {
 }
 
 void board_clock_init(void) {
-    /* 168MHz from 8MHz HSE crystal */
-    rcc_clock_setup_pll(&rcc_hse_8mhz_3v3[RCC_CLOCK_3V3_168MHZ]);
+    /* 168MHz from the 16MHz HSE crystal (vendor firmware: PLLCFGR 0x07402A08,
+     * M=8 N=168 P=2 Q=7, i.e. VCO 336MHz and USB 48MHz only with 16MHz in) */
+    rcc_clock_setup_pll(&rcc_hse_16mhz_3v3[RCC_CLOCK_3V3_168MHZ]);
 }
 
 void board_led_init(void) {

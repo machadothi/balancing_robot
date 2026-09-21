@@ -79,6 +79,8 @@ robot_option(BT_BAUDRATE INT 115200 "Bluetooth console baud rate")
 robot_option(IMU_SAMPLE_RATE_MS INT 10 "IMU and control loop period in ms")
 robot_option(FREERTOS_TICK_RATE_HZ INT 1000 "FreeRTOS tick rate in Hz")
 robot_option(FREERTOS_TOTAL_HEAP_SIZE INT ${BOARD_DEFAULT_HEAP_SIZE} "FreeRTOS heap size in bytes")
+robot_option(IMU_SENSOR STRING ${BOARD_DEFAULT_IMU} "IMU chip on the board"
+    CHOICES mpu6050 qmi8658)
 robot_option(ATTITUDE_FILTER STRING complementary "Tilt estimator used by the balance loop"
     CHOICES complementary kalman)
 
@@ -229,7 +231,7 @@ if(NOT APP_BLINK_ONLY)
         ${SRC_DIR}/filter/kalman.c
         ${SRC_DIR}/filter/complementary.c
         ${SRC_DIR}/imu/imu.c
-        ${SRC_DIR}/imu/mpu6050.c
+        ${SRC_DIR}/imu/${IMU_SENSOR}.c
         ${MOTOR_SOURCE}
         ${SRC_DIR}/robot/robot.c
         ${SRC_DIR}/control/pid.c

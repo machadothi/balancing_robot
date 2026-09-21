@@ -4,7 +4,7 @@ AT commands are accepted on every console port:
 
 | Console | Blue Pill | F407 board | Carries |
 |---------|-----------|------------|---------|
-| USB | USART2 via a USB-serial adapter | Type-C USB-serial port (USART1) | AT commands, telemetry, startup banner, echo |
+| USB | USART2 via a USB-serial adapter | Type-C USB-serial port (USART3) | AT commands, telemetry, startup banner, echo |
 | Bluetooth | — | Bluetooth header (USART2) | AT commands only, no echo |
 
 Commands are case-insensitive, run one at a time in the UART RX task under the

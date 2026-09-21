@@ -40,7 +40,7 @@ The firmware builds for two boards from the same tree:
 | IMU bus | I2C1 on PB6/PB7, external module | I2C2 on PB10/PB11, on-board |
 | Motor driver | External TB6612FNG: direction pins + 1 PWM per motor | On-board H-bridges: 2 PWM inputs per motor |
 | Encoders | Rising edges on EXTI (count only, no direction) | Quadrature, counted by hardware timers |
-| Console | USART2 on PA2/PA3 via a USB-serial adapter | USART1 via the on-board Type-C USB-serial port |
+| Console | USART2 on PA2/PA3 via a USB-serial adapter | USART3 (PD8/PD9) via the on-board Type-C USB-serial port |
 | FreeRTOS | V10.4.3 LTS submodule, `ARM_CM3` port | V10.4.3 LTS submodule, `ARM_CM4F` port |
 | Wiring | [pin-connections-f103](hardware/pin-connections-f103.md) | [pin-connections-f407](hardware/pin-connections-f407.md) |
 

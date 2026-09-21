@@ -28,8 +28,11 @@ the linked [docs](docs/README.md) chapter.
       holds under real load on both boards.
 - [ ] Verify the `flash-serial` DTR/RTS boot sequence (`SERIAL_BOOT_SEQUENCE`)
       and update [02](docs/02-build-and-configuration.md) with the working value.
-- [ ] Back up the F407 vendor firmware before the first flash
-      (`st-flash read vendor_backup.bin 0x8000000 0x80000`).
+      Blue Pill only: the F407 Type-C port is USART3 on PD8/PD9, which the ROM
+      bootloader does not serve, so the F407 is flashed over SWD.
+- [x] Back up the F407 vendor firmware before the first flash
+      (`~/git/hiwonder-vendor-fw/vendor_fw.bin`, RDP level 0, read twice and
+      identical; restore with `st-flash write vendor_fw.bin 0x08000000`).
 
 ## 2. Hardware questions to settle
 
@@ -98,3 +101,39 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
       after code moves; review the result, it matches symbols heuristically).
 - [ ] Install `doxygen graphviz` and check the `docs` target output.
 - [ ] Add a photo or schematic of the F407 robot wiring once it is built.
+
+## 8. Board features from the vendor firmware (F407)
+
+The vendor firmware (decompiled in `~/git/hiwonder-vendor-fw/decompiled/vendor_fw.c`)
+drives more of the board than we do. Each item fits as one module: an
+`APP_MODULE()` descriptor plus a `robot_feature()` flag ([01](docs/01-system-overview.md#adding-a-module)).
+Pins marked *(?)* are inferred from GPIO setup only, so confirm them in the
+decompiled code before use.
+
+- [ ] **Battery monitor** (`battery_check_timer`, prints `BAT:%dmv`): ADC1 on
+      PB0 (IN8). Find the divider ratio in the vendor code, then add `AT+BAT?`, a
+      telemetry field and a low-battery cut-off that disables the motors (a
+      sagging supply makes the motor gain drift during tuning).
+- [ ] **Buzzer** (`buzzer_timer`, `buzzer1_ctrl_quque`): PA8, software PWM from
+      the TIM13 interrupt at 200 Hz. Beep on enable, fall and low battery.
+- [ ] **OLED display** (`oled_task`, `gui_task`, LVGL): SPI2, SCK PB13 and MOSI
+      PC3; CS/DC/RST among PD11–PD14, PC8 and PC9 *(?)*; controller chip
+      unknown (SSD1306 likely). A small text screen is enough, no LVGL: tilt,
+      battery, state, gains.
+- [ ] **Buttons** (`button_timer`): inputs on PE0, PE1 and PD3 *(?)*. Enable or
+      disable balancing without a console; a gain preset selector.
+- [ ] **Status LEDs** (`led_timer`, `led1_ctrl_quque`): PE10 is ours; PE7 and
+      PE8 are more outputs *(?)*. Blink patterns for disabled, balancing, fault
+      and low battery.
+- [ ] **IMU data-ready interrupt** (`mpu6050_data_ready`): PB12, rising edge.
+      Sample on data-ready instead of the timer: less jitter, and the delay
+      between measurement and control becomes fixed.
+- [ ] **RC receiver** (`sbus_rx_task`): UART5 RX on PD2, 100000 baud 8E2, receive
+      only (vendor setting; SBUS is also inverted). Drive and turn from a radio
+      remote through `target_velocity` and `turn_rate`.
+- [ ] Lower priority:
+      - bus servos (`serial_servo_rx_complete`, USART3 on PD8/PD9 at 1 Mbaud)
+      - USART6 (PC6/PC7, 115200): purpose unknown, maybe the Raspberry Pi header
+      - USB-host gamepad (`USBH_Queue`, PA11/PA12)
+      - the vendor's PC packet protocol (`packet_rx_task`/`packet_tx_task`),
+        for compatibility with their ROS tools

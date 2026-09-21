@@ -10,15 +10,16 @@
 #ifndef BOARD_CONFIG_H
 #define BOARD_CONFIG_H
 
-/* Console: USART1 on the Type-C USB-serial port (PA9 = TX, PA10 = RX) */
-#define BOARD_UART               USART1
-#define BOARD_UART_RCC           RCC_USART1
-#define BOARD_UART_IRQ           NVIC_USART1_IRQ
-#define BOARD_UART_ISR           usart1_isr
-#define BOARD_UART_PORT          GPIOA
-#define BOARD_UART_PORT_RCC      RCC_GPIOA
-#define BOARD_UART_TX_PIN        GPIO9
-#define BOARD_UART_RX_PIN        GPIO10
+/* Console: USART3 on the Type-C USB-serial port (PD8 = TX, PD9 = RX). The
+ * vendor firmware sends its 1 Mbaud packet protocol here; USART1 is unused. */
+#define BOARD_UART               USART3
+#define BOARD_UART_RCC           RCC_USART3
+#define BOARD_UART_IRQ           NVIC_USART3_IRQ
+#define BOARD_UART_ISR           usart3_isr
+#define BOARD_UART_PORT          GPIOD
+#define BOARD_UART_PORT_RCC      RCC_GPIOD
+#define BOARD_UART_TX_PIN        GPIO8
+#define BOARD_UART_RX_PIN        GPIO9
 #define BOARD_UART_AF            GPIO_AF7
 
 /* Bluetooth AT console (HC-05/HC-06 module): USART2 on the Bluetooth header

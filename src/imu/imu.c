@@ -13,7 +13,11 @@
 #include "config.h"
 #include "app/module.h"
 #include "imu/imu.h"
+#if IMU_SENSOR_QMI8658
+#include "imu/qmi8658.h"
+#else
 #include "imu/mpu6050.h"
+#endif // IMU_SENSOR_QMI8658
 #include "log/log.h"
 
 /* ==========================================================================
@@ -21,7 +25,11 @@
  * ========================================================================== */
 
 /** The sensor in use: the only line that names a specific driver */
+#if IMU_SENSOR_QMI8658
+static const IMU_Ops_t *const sensor = &qmi8658_ops;
+#else
 static const IMU_Ops_t *const sensor = &mpu6050_ops;
+#endif // IMU_SENSOR_QMI8658
 
 /** Holds one sample (IMU_QUEUE_SIZE 1): overwritten, never backlogged */
 static QueueHandle_t samples = NULL;
@@ -41,8 +49,10 @@ bool imu_wait_sample(IMU_Data_t *out, TickType_t timeout) {
 void imu_task(void *args) {
     (void)args;
 
-    while (sensor->init() != IMU_OK) {
-        log_message(LOG_ERROR, IMU_TASK, "IMU init failed, retrying");
+    IMU_Status_t status;
+    while ((status = sensor->init()) != IMU_OK) {
+        /* IMU_Status_t: 1 config (no ACK), 2 bus (lines stuck), 3/4 timeouts */
+        log_message_with_int(LOG_ERROR, IMU_TASK, "IMU init failed, retrying; status", (int)status);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
     log_message(LOG_INFO, IMU_TASK, "IMU initialized");

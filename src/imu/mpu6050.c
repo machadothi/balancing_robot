@@ -121,6 +121,7 @@ static IMU_Status_t mpu6050_init(void) {
         return IMU_COMM_BUS_ERROR;
     }
 
+
     i2c_init_dma(bus, MPU6050_DMA_IRQ_PRIORITY);
     bus->callback = transfer_callback;
 
