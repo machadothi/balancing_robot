@@ -6,11 +6,14 @@
  * @date 2024
  */
 
+#include <math.h>
+
 #include <FreeRTOS.h>
 #include <task.h>
 #include <queue.h>
 
 #include "config.h"
+#include "board_config.h"
 #include "app/module.h"
 #include "imu/imu.h"
 #if IMU_SENSOR_QMI8658
@@ -40,6 +43,14 @@ static QueueHandle_t samples = NULL;
 
 void imu_queue_init(void) {
     samples = xQueueCreate(IMU_QUEUE_SIZE, sizeof(IMU_Data_t));
+}
+
+IMU_Tilt_t imu_tilt(const IMU_Data_t *sample) {
+    IMU_Tilt_t tilt = {
+        .acc_deg = atan2f(BOARD_TILT_ACC_NUM(sample), BOARD_TILT_ACC_DEN(sample)) * (180.0f / 3.14159265f),
+        .rate_dps = BOARD_TILT_RATE(sample),
+    };
+    return tilt;
 }
 
 bool imu_wait_sample(IMU_Data_t *out, TickType_t timeout) {

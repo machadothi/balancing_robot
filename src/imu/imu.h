@@ -67,6 +67,17 @@ typedef struct {
 } IMU_Data_t;
 
 /**
+ * @brief Tilt measurements in the balance plane
+ *
+ * 0 = upright, positive = leaning forward. How the sensor axes map onto the
+ * balance plane is a board property (BOARD_TILT_* in board_config.h).
+ */
+typedef struct {
+    float acc_deg;      /**< Tilt from gravity alone (deg) */
+    float rate_dps;     /**< Tilt rate from the gyroscope (deg/s) */
+} IMU_Tilt_t;
+
+/**
  * @brief What a sensor driver provides
  *
  * Adding a sensor means implementing these two functions; nothing above the
@@ -81,6 +92,9 @@ typedef struct {
 /* ==========================================================================
  * Public Functions
  * ========================================================================== */
+
+/** Project a sample onto the balance plane using the board's mounting */
+IMU_Tilt_t imu_tilt(const IMU_Data_t *sample);
 
 /** Create the sample mailbox; call before the scheduler starts */
 void imu_queue_init(void);

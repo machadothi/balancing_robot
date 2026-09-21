@@ -59,6 +59,13 @@
 #define BOARD_I2C_DMA_RX_ISR     dma1_stream2_isr
 
 /* Motor ports (M1-M4 on the silkscreen) used as motor1 and motor2 */
+/* IMU mounting: the board lies flat, chip side up (Z up). The wheel axle is
+ * assumed along X; if leaning forward reads negative, negate both NUM and RATE,
+ * and if the angle does not follow the lean at all, use acc_x / gyro_y. */
+#define BOARD_TILT_ACC_NUM(d)    ((d)->acc_y)
+#define BOARD_TILT_ACC_DEN(d)    ((d)->acc_z)
+#define BOARD_TILT_RATE(d)       ((d)->gyro_x)
+
 #define BOARD_MOTOR1_PORT        1
 #define BOARD_MOTOR2_PORT        2
 

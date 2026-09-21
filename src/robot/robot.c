@@ -34,8 +34,6 @@
  * Constants
  * ========================================================================== */
 
-#define RAD_TO_DEG              (180.0f / 3.14159265f)
-
 /** Balance PID gains at startup and after AT+DEFAULT */
 #define ROBOT_DEFAULT_KP        25.0f
 #define ROBOT_DEFAULT_KI        0.5f
@@ -128,16 +126,6 @@ void robot_restore_defaults(void) {
  * Control
  * ========================================================================== */
 
-/**
- * @brief Tilt from gravity
- *
- * The IMU is mounted with its X axis vertical (ax is about -1 g upright), so
- * upright reads about 90 degrees.
- */
-static float calc_angle_from_accel(const IMU_Data_t *data) {
-    return atan2f(data->acc_y, -data->acc_x) * RAD_TO_DEG;
-}
-
 /** One balance update: safety cut-off, PID, mixing, motors */
 static void robot_balance_step(float tilt) {
     if (fabsf(tilt) > MAX_TILT_ANGLE) {
@@ -212,19 +200,21 @@ void robot_task(void *args) {
             continue;
         }
 
-        float acc_angle = calc_angle_from_accel(&imu_data);
+        /* The board config maps the sensor axes onto the balance plane */
+        IMU_Tilt_t measured = imu_tilt(&imu_data);
+        float acc_angle = measured.acc_deg;
 
         for (int f = 0; f < FILTER_COUNT; f++) {
             /* Start at the measured angle instead of converging from 0 */
             if (!filters_seeded) {
                 filters[f].seed(filters[f].state, acc_angle);
             }
-            angles[f] = filters[f].update(filters[f].state, imu_data.gyro_x, acc_angle, IMU_SAMPLE_RATE_S);
+            angles[f] = filters[f].update(filters[f].state, measured.rate_dps, acc_angle, IMU_SAMPLE_RATE_S);
         }
         filters_seeded = true;
 
-        /* 0 = vertical, positive = leaning forward */
-        float tilt = angles[CONTROL_FILTER] - 90.0f;
+        /* 0 = upright, positive = leaning forward */
+        float tilt = angles[CONTROL_FILTER];
 
         robot_lock();
 

@@ -98,7 +98,7 @@ flowchart LR
 
 | Object | Type | Created in | Producer → consumer |
 |--------|------|------------|---------------------|
-| `samples` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite`, read through `imu_wait_sample()` | [`imu_queue_init()`](../src/imu/imu.c#L33) | `imu_task` → `robot_task` |
+| `samples` | Queue, 1 × `IMU_Data_t`, written with `xQueueOverwrite`, read through `imu_wait_sample()` | [`imu_queue_init()`](../src/imu/imu.c#L44) | `imu_task` → `robot_task` |
 | `transfer_done` | Binary semaphore | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) | DMA callback (ISR) → `imu_task` |
 | `uart_rxq` | Queue, 8 × `UART_Line_t` (port + line) | [uart.c](../src/drivers/uart.c) `uart_init()` | USART ISRs → `uart_rx_task` |
 | TX ring buffers | 4096 / 1024 bytes (USB, F407 / F103), 512 (Bluetooth) | [uart.c](../src/drivers/uart.c) | `uart_write()` → USART ISR |

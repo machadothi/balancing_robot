@@ -43,6 +43,13 @@
 #define BOARD_I2C_DMA_RX_ISR     dma1_channel7_isr
 
 /* Switch on the MPU6050 VCC line, used for a hard reset */
+/* IMU mounting on the Blue Pill robot: the balance plane is the sensor's X-Y
+ * plane (Y up when upright), rate from gyro X. Equal to the former
+ * atan2(a_y, -a_x) - 90 deg, which this robot was tuned with. */
+#define BOARD_TILT_ACC_NUM(d)    ((d)->acc_x)
+#define BOARD_TILT_ACC_DEN(d)    ((d)->acc_y)
+#define BOARD_TILT_RATE(d)       ((d)->gyro_x)
+
 #define BOARD_IMU_RESET_PORT     GPIOA
 #define BOARD_IMU_RESET_PORT_RCC RCC_GPIOA
 #define BOARD_IMU_RESET_PIN      GPIO10

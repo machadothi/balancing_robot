@@ -36,8 +36,8 @@ AT+ANGLE?
 
 If upright is far from 0°, the IMU is mounted at an angle; if the sign is
 reversed, the IMU is mounted facing the other way. Either way, fix
-[`calc_angle_from_accel()`](../src/robot/robot.c#L137) and the 90° offset in
-[`robot_task()`](../src/robot/robot.c#L169) before going further.
+the board's `BOARD_TILT_*` mounting macros
+([05](05-sensing-and-imu.md#axes-and-mounting)) before going further.
 
 ### 2. Gyro calibration
 

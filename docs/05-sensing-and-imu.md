@@ -7,14 +7,14 @@ the calibration and sampling choices that affect the controller.
 
 | What | Where |
 |------|-------|
-| Sensor interface | [`IMU_Ops_t`](../src/imu/imu.h#L79), implemented by [`mpu6050_ops`](../src/imu/mpu6050.c#L171) |
+| Sensor interface | [`IMU_Ops_t`](../src/imu/imu.h#L90), implemented by [`mpu6050_ops`](../src/imu/mpu6050.c#L172) |
 | Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) |
-| Burst read, parsing and scaling | [`mpu6050_read()`](../src/imu/mpu6050.c#L142), [`transfer_callback()`](../src/imu/mpu6050.c#L79) |
-| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L41) |
+| Burst read, parsing and scaling | [`mpu6050_read()`](../src/imu/mpu6050.c#L143), [`transfer_callback()`](../src/imu/mpu6050.c#L79) |
+| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L60) |
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
 | Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L55) |
-| Sampling task | [`imu_task()`](../src/imu/imu.c#L41) |
-| Accelerometer tilt | [`calc_angle_from_accel()`](../src/robot/robot.c#L137) |
+| Sampling task | [`imu_task()`](../src/imu/imu.c#L60) |
+| Accelerometer tilt and rate | [`imu_tilt()`](../src/imu/imu.c#L48), mounting in `BOARD_TILT_*` ([f103](../src/board/f103/board_config.h), [f407](../src/board/f407/board_config.h)) |
 
 ## Configuration
 
@@ -63,18 +63,20 @@ taken at different instants.
 
 ### Axes and mounting
 
-The IMU is mounted with its **X axis vertical**:
+How the sensor sits is a **board property**. Each `board_config.h` names the
+two accelerometer axes that span the balance plane and the gyro axis the robot
+pitches about, and [`imu_tilt()`](../src/imu/imu.c#L48) turns a sample into
+`acc_deg = atan2(NUM, DEN)` and `rate_dps`: 0° upright, positive when leaning
+forward. The control task only sees those two numbers.
 
-| Axis | Role on this robot |
-|------|--------------------|
-| Accel X | Gravity when upright (≈ −1 g) |
-| Accel Y | Gravity component along the direction of travel as the robot tilts |
-| Gyro X | Pitch rate: the rotation the controller fights |
-| Accel Z, gyro Y/Z | Not used by the controller |
+| Board | `BOARD_TILT_ACC_NUM` | `BOARD_TILT_ACC_DEN` | `BOARD_TILT_RATE` | Mounting |
+|-------|------|------|------|----------|
+| f103 | `acc_x` | `acc_y` | `gyro_x` | MPU-6050, Y up when upright (the former `atan2(a_y, −a_x) − 90°`) |
+| f407 | `acc_y` | `acc_z` | `gyro_x` | QMI8658 on the board, lying flat chip side up (Z up); axle assumed along X |
 
-Hence `atan2(a_y, −a_x)` reads about 90° upright, and the robot task subtracts
-90° so that the controller sees 0° upright and positive when leaning forward. A
-differently mounted IMU needs these two lines changed, nothing else.
+A differently mounted sensor changes these three macros and nothing else. If
+leaning forward reads negative, negate `NUM` and `RATE` together; the gyro rate
+must be the time derivative of the accelerometer angle, or the filters fight.
 
 ## Gyro calibration
 
