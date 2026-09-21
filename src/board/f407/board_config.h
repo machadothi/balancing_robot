@@ -66,6 +66,12 @@
 #define BOARD_TILT_ACC_DEN(d)    ((d)->acc_z)
 #define BOARD_TILT_RATE(d)       ((d)->gyro_x)
 
+/* User button that arms/stops balancing: PE0, active low, board pull-up
+ * (PE1 is the second user button, unused) */
+#define BOARD_BUTTON_ENABLE_PORT     GPIOE
+#define BOARD_BUTTON_ENABLE_PORT_RCC RCC_GPIOE
+#define BOARD_BUTTON_ENABLE_PIN      GPIO0
+
 #define BOARD_MOTOR1_PORT        1
 #define BOARD_MOTOR2_PORT        2
 

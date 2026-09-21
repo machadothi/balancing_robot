@@ -34,3 +34,4 @@ set(BOARD_DEFAULT_IMU mpu6050)
 
 # Optional hardware this board provides (see cmake/features.cmake)
 set(BOARD_HAS_BT_UART OFF)
+set(BOARD_HAS_BUTTON OFF)

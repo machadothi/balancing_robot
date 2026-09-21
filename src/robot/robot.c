@@ -107,11 +107,22 @@ void robot_enable(void) {
 }
 
 void robot_disable(void) {
+    robot.armed = false;        /* a stop or a fall also cancels arming */
     robot.motors_enabled = false;
     motor_set(MOTOR_LEFT, 0);
     motor_set(MOTOR_RIGHT, 0);
     motor_standby(true);
     pid_reset(&robot.pid);
+}
+
+void robot_toggle_armed(void) {
+    robot_lock();
+    if (robot.armed || robot.motors_enabled) {
+        robot_disable();
+    } else {
+        robot.armed = true;
+    }
+    robot_unlock();
 }
 
 void robot_restore_defaults(void) {
@@ -221,6 +232,12 @@ void robot_task(void *args) {
         robot.imu = imu_data;
         robot.tilt = tilt;
         robot.is_balanced = (fabsf(tilt) < BALANCED_TILT_ANGLE);
+
+        /* Armed (button): lifted upright, so start balancing */
+        if (robot.armed && robot.is_balanced) {
+            robot_enable();
+            robot.armed = false;
+        }
 
 #if AUTO_ENABLE
         /* Without a console nothing sends AT+ENABLE: start balancing once per

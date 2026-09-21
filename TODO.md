@@ -121,8 +121,11 @@ decompiled code before use.
       PC3; CS/DC/RST among PD11–PD14, PC8 and PC9 *(?)*; controller chip
       unknown (SSD1306 likely). A small text screen is enough, no LVGL: tilt,
       battery, state, gains.
-- [ ] **Buttons** (`button_timer`): inputs on PE0, PE1 and PD3 *(?)*. Enable or
-      disable balancing without a console; a gain preset selector.
+- [x] **Enable button**: PE0 (active low) arms balancing, which starts when the
+      robot is lifted upright; a second press stops ([button.c](src/ui/button.c)).
+- [ ] Second button PE1 (PD3 is a third input *(?)*): a gain preset selector, or
+      calibrate the gyro bias on demand.
+- [ ] Show the armed state (fast LED blink or buzzer beep) once those modules exist.
 - [ ] **Status LEDs** (`led_timer`, `led1_ctrl_quque`): PE10 is ours; PE7 and
       PE8 are more outputs *(?)*. Blink patterns for disabled, balancing, fault
       and low battery.

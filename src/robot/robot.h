@@ -33,6 +33,15 @@ extern "C" {
  */
 void robot_task(void *args);
 
+/**
+ * @brief Arm or stop balancing, e.g. from a button
+ *
+ * Off -> armed: balancing starts by itself once the robot is upright
+ * (the BALANCED threshold). Armed or balancing -> off: motors stopped and
+ * the driver in standby, like AT+DISABLE.
+ */
+void robot_toggle_armed(void);
+
 #ifdef __cplusplus
 }
 #endif // __cplusplus

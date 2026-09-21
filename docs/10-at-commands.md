@@ -93,7 +93,10 @@ one response are consistent with each other.
 | `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
 | `AT+HELP` | Command summary, only with `AT_CMD_HELP=ON` (default OFF) |
 
-The robot starts with motors in standby: nothing moves until `AT+ENABLE`.
+The robot starts with motors in standby: nothing moves until `AT+ENABLE`. On the
+F407 board the user button on PE0 does the same without a console
+(`BUTTON_ENABLE`): press it with the robot lying down to arm, lift the robot
+upright and balancing starts; press again to stop.
 Balancing also stops by itself when |tilt| exceeds 45° or when the IMU delivers
 no sample for 50 ms; send `AT+ENABLE` again once the cause is gone.
 

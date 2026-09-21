@@ -11,7 +11,7 @@ the two filters in the firmware, and shows how to measure them on your robot.
 | Accelerometer tilt and rate | [`imu_tilt()`](../src/imu/imu.c#L48) |
 | Complementary filter | [`complementary_update()`](../src/filter/complementary.c#L32), `COMPLEMENTARY_ALPHA` in [config.h](../src/config.h#L82) |
 | Kalman filter | [`kalman_update()`](../src/filter/kalman.c#L34), `KALMAN_Q_ANGLE` / `KALMAN_R_MEASURE` in [config.h](../src/config.h#L74) |
-| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L157), `ATTITUDE_FILTER` CMake option |
+| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L168), `ATTITUDE_FILTER` CMake option |
 | Telemetry for analysis | `AT+STREAM`, [telemetry.c](../src/telemetry/telemetry.c), [test/filter_comparison.py](../test/filter_comparison.py) |
 
 ## 1. Two sensors, two error models

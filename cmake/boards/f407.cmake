@@ -36,3 +36,4 @@ set(BOARD_DEFAULT_IMU qmi8658)     # found at 0x6A (WHO_AM_I 0x05)
 
 # Optional hardware this board provides (see cmake/features.cmake)
 set(BOARD_HAS_BT_UART ON)
+set(BOARD_HAS_BUTTON ON)

@@ -52,4 +52,13 @@ static inline void gpio_compat_output(uint32_t port, uint16_t pins, bool open_dr
 #endif // defined(STM32F1)
 }
 
+static inline void gpio_compat_input_pullup(uint32_t port, uint16_t pins) {
+#if defined(STM32F1)
+    gpio_set_mode(port, GPIO_MODE_INPUT, GPIO_CNF_INPUT_PULL_UPDOWN, pins);
+    gpio_set(port, pins);   /* ODR high selects the pull-up on the F1 */
+#else
+    gpio_mode_setup(port, GPIO_MODE_INPUT, GPIO_PUPD_PULLUP, pins);
+#endif // defined(STM32F1)
+}
+
 #endif // GPIO_COMPAT_H
