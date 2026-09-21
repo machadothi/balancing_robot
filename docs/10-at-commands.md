@@ -60,6 +60,8 @@ The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 | `AT+GYRO_X?` `AT+GYRO_Y?` `AT+GYRO_Z?` | `+GYRO_X:0.125` | °/s, 3 decimals; X includes the calibration offset |
 | `AT+ANGLE?` | `+ANGLE:1.23` | Filtered tilt, 0 = upright, positive = leaning forward |
 | `AT+KP?` `AT+KI?` `AT+KD?` | `+KP:25.0000` | Current PID gains |
+| `AT+SETPOINT?` | `+SETPOINT:0.00` | Balance target angle |
+| `AT+ENC?` | `+ENC:1234,-56` | Encoder counts left,right since boot (`test/pid_tune.py motor-test`) |
 | `AT+TURN?` | `+TURN:0.00` | |
 | `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |
 | `AT+TARGET?` | `+TARGET:0.00` | Stored only, see limitations |
@@ -74,6 +76,7 @@ one response are consistent with each other.
 | Command | Range | Effect |
 |---------|-------|--------|
 | `AT+KP=n` `AT+KI=n` `AT+KD=n` | ≥ 0 | PID gains, effective on the next sample |
+| `AT+SETPOINT=n` | −10 … 10 | Balance target angle in degrees: trims the balance point, or drives step tests (`test/pid_tune.py step`) |
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
 | `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Stored in `target_velocity`, not used by the control law |
@@ -88,12 +91,15 @@ one response are consistent with each other.
 | `AT+STOP` | Like `DISABLE`, and also zero wheel speeds, `TURN` and `TARGET` |
 | `AT+PID` | Toggle the balance PID (`AT_CMD_PID_TOGGLE`, default ON) |
 | `AT+PIDON` / `AT+PIDOFF` | Enable / disable the PID; `PIDOFF` also zeroes the motors |
-| `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET` |
+| `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET`/`SETPOINT` |
 | `AT+RESET` | Reply `OK`, wait 100 ms, then reset the MCU |
 | `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
 | `AT+HELP` | Command summary, only with `AT_CMD_HELP=ON` (default OFF) |
 
-The robot starts with motors in standby: nothing moves until `AT+ENABLE`.
+The robot starts with motors in standby: nothing moves until `AT+ENABLE`. On the
+F407 board the user button on PE0 does the same without a console
+(`BUTTON_ENABLE`): press it with the robot lying down to arm, lift the robot
+upright and balancing starts; press again to stop.
 Balancing also stops by itself when |tilt| exceeds 45° or when the IMU delivers
 no sample for 50 ms; send `AT+ENABLE` again once the cause is gone.
 

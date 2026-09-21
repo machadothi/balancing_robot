@@ -40,6 +40,7 @@ DEFINE_FLOAT_QUERY(query_turn, robot.turn_rate, 2)
 DEFINE_FLOAT_QUERY(query_kp, robot.pid.kp, 4)
 DEFINE_FLOAT_QUERY(query_ki, robot.pid.ki, 4)
 DEFINE_FLOAT_QUERY(query_kd, robot.pid.kd, 4)
+DEFINE_FLOAT_QUERY(query_setpoint, robot.setpoint, 2)
 
 static AT_Result_t query_velocity(char *value, size_t size) {
     /* There is no velocity estimate yet */
@@ -66,6 +67,13 @@ static AT_Result_t query_speed(char *value, size_t size) {
 
     char l[16], r[16];
     snprintf(value, size, "%s,%s", fmt_fixed(l, sizeof(l), left, 1), fmt_fixed(r, sizeof(r), right, 1));
+    return AT_OK;
+}
+
+static AT_Result_t query_encoders(char *value, size_t size) {
+    int32_t left = motor_get_encoder(MOTOR_LEFT);
+    int32_t right = motor_get_encoder(MOTOR_RIGHT);
+    snprintf(value, size, "%ld,%ld", (long)left, (long)right);
     return AT_OK;
 }
 
@@ -103,6 +111,7 @@ DEFINE_FLOAT_SET(set_turn, robot.turn_rate)
 DEFINE_FLOAT_SET(set_kp, robot.pid.kp)
 DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
+DEFINE_FLOAT_SET(set_setpoint, robot.setpoint)
 
 static AT_Result_t set_speed(const float *values) {
     robot_lock();
@@ -197,6 +206,7 @@ static const AT_Command_Def_t robot_commands[] = {
     { .name = "GYRO_X",   .query = query_gyro_x,   .help = AT_HELP("X rotation rate (deg/s)") },
     { .name = "GYRO_Y",   .query = query_gyro_y,   .help = AT_HELP("Y rotation rate (deg/s)") },
     { .name = "GYRO_Z",   .query = query_gyro_z,   .help = AT_HELP("Z rotation rate (deg/s)") },
+    { .name = "ENC",      .query = query_encoders, .help = AT_HELP("Encoder counts left,right (since boot)") },
     { .name = "ANGLE",    .query = query_angle,    .help = AT_HELP("Filtered tilt (deg, 0 = upright)") },
 #if AT_CMD_ALL_QUERY
     { .name = "ALL",      .query = query_all,      .help = AT_HELP("ax,ay,az,gx,gy,gz,angle") },
@@ -215,6 +225,8 @@ static const AT_Command_Def_t robot_commands[] = {
       .help = AT_HELP("PID integral gain") },
     { .name = "KD",       .query = query_kd,       .set = set_kd,     .params = 1, .min = 0.0f, .max = FLT_MAX,
       .help = AT_HELP("PID derivative gain") },
+    { .name = "SETPOINT", .query = query_setpoint, .set = set_setpoint, .params = 1, .min = -10.0f, .max = 10.0f,
+      .help = AT_HELP("Balance target angle (deg): trim, or step tests") },
     { .name = "ENABLE",   .exec = exec_enable,     .help = AT_HELP("Start balancing") },
     { .name = "DISABLE",  .exec = exec_disable,    .help = AT_HELP("Stop balancing, motors in standby") },
     { .name = "STOP",     .exec = exec_stop,       .help = AT_HELP("DISABLE and zero speed, turn, target") },
@@ -223,7 +235,7 @@ static const AT_Command_Def_t robot_commands[] = {
     { .name = "PIDON",    .exec = exec_pid_on,     .help = AT_HELP("Enable the balance PID") },
     { .name = "PIDOFF",   .exec = exec_pid_off,    .help = AT_HELP("Disable the balance PID, zero motors") },
 #endif // AT_CMD_PID_TOGGLE
-    { .name = "DEFAULT",  .exec = exec_default,    .help = AT_HELP("Default gains, zero turn and target") },
+    { .name = "DEFAULT",  .exec = exec_default,    .help = AT_HELP("Default gains, zero turn, target and setpoint") },
     { .name = "SAVE",     .exec = exec_not_implemented, .help = AT_HELP("Not implemented") },
     { .name = "LOAD",     .exec = exec_not_implemented, .help = AT_HELP("Not implemented") },
 };

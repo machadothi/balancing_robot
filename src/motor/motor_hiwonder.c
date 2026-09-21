@@ -217,7 +217,18 @@ void motor_emergency_stop(void) {
 }
 
 int32_t motor_get_encoder(Motor_Id_t id) {
-    return (id < MOTOR_COUNT) ? (int32_t)timer_get_counter(motors[id].port->enc_timer) : 0;
+    if (id >= MOTOR_COUNT) {
+        return 0;
+    }
+    uint32_t timer = motors[id].port->enc_timer;
+    uint32_t count = timer_get_counter(timer);
+
+    /* TIM2/TIM5 count in 32 bits; the others wrap at 16 bits, so sign-extend
+     * them or -2 reads as 65534 */
+    if (timer == TIM2 || timer == TIM5) {
+        return (int32_t)count;
+    }
+    return (int16_t)count;
 }
 
 void motor_reset_encoder(Motor_Id_t id) {

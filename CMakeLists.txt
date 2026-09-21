@@ -122,13 +122,15 @@ robot_feature(LOGGING OFF "Debug log messages on the USB console (~300 bytes sta
 robot_feature(FAULT_VERBOSE ON "Print fault reports on the USB console" REQUIRES CONSOLE_USB)
 robot_feature(WATCHDOG ON "Independent watchdog refreshed by the control task" REQUIRES "NOT APP_BLINK_ONLY")
 robot_feature(I2C_BUS_RECOVERY ON "Free a stuck I2C slave at start-up" REQUIRES "NOT APP_BLINK_ONLY")
+robot_feature(BUTTON_ENABLE ${BOARD_HAS_BUTTON} "Board button arms balancing (starts when lifted upright) and stops it"
+    REQUIRES "NOT APP_BLINK_ONLY" BOARD_HAS_BUTTON SOURCES ${SRC_DIR}/ui/button.c)
 robot_feature(AUTO_ENABLE OFF "Start balancing once per boot after the robot is held upright"
     REQUIRES "NOT APP_BLINK_ONLY")
 
-if(NOT APP_BLINK_ONLY AND NOT CONSOLE_ANY AND NOT AUTO_ENABLE)
+if(NOT APP_BLINK_ONLY AND NOT CONSOLE_ANY AND NOT AUTO_ENABLE AND NOT BUTTON_ENABLE)
     message(FATAL_ERROR
         "CONSOLE_USB and CONSOLE_BT are both off, so nothing could send AT+ENABLE.\n"
-        "Enable a console or set AUTO_ENABLE=ON."
+        "Enable a console, AUTO_ENABLE or BUTTON_ENABLE."
     )
 endif()
 

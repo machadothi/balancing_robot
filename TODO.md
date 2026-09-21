@@ -37,6 +37,14 @@ the linked [docs](docs/README.md) chapter.
 
 ## 2. Hardware questions to settle
 
+- [x] **F407 encoders**: no pulses on any motor was a cable problem, not firmware:
+      the encoder's 5V/GND pins (2 and 5) were not connected right, so the
+      encoders had no supply (0 V at the plug), then a loose pin. Fixed by
+      re-pinning; both motors count ~3400-3600 counts/s at 80%, symmetric in both
+      directions. Always measure 5 V between pins 2 and 5 at the motor plug first.
+- [ ] Spin both motors together (`AT+SPEED=80,80`) and compare their speed: the
+      M1 motor measured ~5.5% slower than the other one alone (per-wheel trim or
+      the velocity loop).
 - [ ] Blue Pill: the TB6612 PWM pins are configured open-drain
       ([motor.c](src/motor/motor.c)). Confirm the board has pull-ups, otherwise
       switch to push-pull.
@@ -121,8 +129,11 @@ decompiled code before use.
       PC3; CS/DC/RST among PD11–PD14, PC8 and PC9 *(?)*; controller chip
       unknown (SSD1306 likely). A small text screen is enough, no LVGL: tilt,
       battery, state, gains.
-- [ ] **Buttons** (`button_timer`): inputs on PE0, PE1 and PD3 *(?)*. Enable or
-      disable balancing without a console; a gain preset selector.
+- [x] **Enable button**: PE0 (active low) arms balancing, which starts when the
+      robot is lifted upright; a second press stops ([button.c](src/ui/button.c)).
+- [ ] Second button PE1 (PD3 is a third input *(?)*): a gain preset selector, or
+      calibrate the gyro bias on demand.
+- [ ] Show the armed state (fast LED blink or buzzer beep) once those modules exist.
 - [ ] **Status LEDs** (`led_timer`, `led1_ctrl_quque`): PE10 is ours; PE7 and
       PE8 are more outputs *(?)*. Blink patterns for disabled, balancing, fault
       and low battery.

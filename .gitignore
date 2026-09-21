@@ -77,3 +77,6 @@ __pycache__/
 
 # Dependencies (submodules have their own .gitignore)
 # lib/ is managed via git submodules
+
+# PID tuning captures (test/pid_tune.py)
+test/pid_logs/

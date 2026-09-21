@@ -35,6 +35,7 @@ UART_Status_t uart_puts(UART_Port_t port, const char *s) {
 void uart_set_rx_callback(UART_RxCallback_t callback) { (void)callback; }
 void motor_set(Motor_Id_t id, int16_t command) { wheel[id] = command; }
 void motor_standby(bool enable) { standby = enable; }
+int32_t motor_get_encoder(Motor_Id_t id) { return id == MOTOR_LEFT ? 1234 : -56; }
 void robot_lock(void) {}
 void robot_unlock(void) {}
 
@@ -159,6 +160,7 @@ static void test_values(void) {
     EXPECT("AT+TARGET=-42.5", "OK");
     EXPECT("AT+TARGET?", "+TARGET:-42.50");
     EXPECT("AT+VELOCITY?", "+VELOCITY:0.00");
+    EXPECT("AT+ENC?", "+ENC:1234,-56");
     EXPECT("AT+ALL?", "+ALL:0.000,0.000,0.000,0.000,0.000,0.000,0.00");
     EXPECT("AT+STREAM=1", "OK");
     CHECK(streaming);

@@ -42,7 +42,7 @@
 /** Clamp on the accumulated angle error (deg x s) */
 #define PID_INTEGRAL_LIMIT      100.0f
 
-/** Setpoint angle for balance (degrees from vertical) */
+/** Balance target at startup and after AT+DEFAULT (degrees from vertical) */
 #define BALANCE_SETPOINT        0.0f
 
 /** Beyond this tilt recovery is impossible: stop instead (degrees) */
@@ -67,6 +67,7 @@ Robot_t robot = {
         .output_limit = (float)MOTOR_COMMAND_MAX,
     },
     .pid_enabled = true,
+    .setpoint = BALANCE_SETPOINT,
 };
 
 /** Guards `robot` and motor commands against the AT handlers (UART RX task) */
@@ -107,11 +108,22 @@ void robot_enable(void) {
 }
 
 void robot_disable(void) {
+    robot.armed = false;        /* a stop or a fall also cancels arming */
     robot.motors_enabled = false;
     motor_set(MOTOR_LEFT, 0);
     motor_set(MOTOR_RIGHT, 0);
     motor_standby(true);
     pid_reset(&robot.pid);
+}
+
+void robot_toggle_armed(void) {
+    robot_lock();
+    if (robot.armed || robot.motors_enabled) {
+        robot_disable();
+    } else {
+        robot.armed = true;
+    }
+    robot_unlock();
 }
 
 void robot_restore_defaults(void) {
@@ -120,6 +132,7 @@ void robot_restore_defaults(void) {
     robot.pid.kd = ROBOT_DEFAULT_KD;
     robot.target_velocity = 0.0f;
     robot.turn_rate = 0.0f;
+    robot.setpoint = BALANCE_SETPOINT;
 }
 
 /* ==========================================================================
@@ -133,7 +146,7 @@ static void robot_balance_step(float tilt) {
         return;
     }
 
-    float output = pid_update(&robot.pid, BALANCE_SETPOINT - tilt, IMU_SAMPLE_RATE_S);
+    float output = pid_update(&robot.pid, robot.setpoint - tilt, IMU_SAMPLE_RATE_S);
     Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX, MOTOR_DEADBAND);
 
     motor_set(MOTOR_LEFT, wheels.left);
@@ -221,6 +234,12 @@ void robot_task(void *args) {
         robot.imu = imu_data;
         robot.tilt = tilt;
         robot.is_balanced = (fabsf(tilt) < BALANCED_TILT_ANGLE);
+
+        /* Armed (button): lifted upright, so start balancing */
+        if (robot.armed && robot.is_balanced) {
+            robot_enable();
+            robot.armed = false;
+        }
 
 #if AUTO_ENABLE
         /* Without a console nothing sends AT+ENABLE: start balancing once per

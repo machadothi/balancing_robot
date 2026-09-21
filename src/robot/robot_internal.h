@@ -25,6 +25,8 @@ typedef struct {
     bool motors_enabled;
     bool pid_enabled;
     bool is_balanced;           /**< |tilt| below the "balanced" threshold */
+    float setpoint;             /**< Balance target angle (deg), AT+SETPOINT */
+    bool armed;                 /**< Start balancing once upright (robot_toggle_armed) */
     PID_t pid;                  /**< Balance controller, gains included */
 } Robot_t;
 

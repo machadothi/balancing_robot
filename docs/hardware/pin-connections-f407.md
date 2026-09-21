@@ -23,6 +23,12 @@ Pin assignments come from the vendor firmware project
 
 ## Encoder motor ports
 
+Connector pinout (Hiwonder V1.2 silkscreen; pin 1 is the square pad):
+`M_B, GND, A, B, 5V, M_F`. The JGA25-370 encoder motors use
+`M1, GND, C1, C2, VCC, M2`, so the cable must be straight (pin n to pin n).
+Before plugging a motor in, check **~5 V between pins 2 and 5 at the motor
+plug**: without it the motor still turns but the encoder stays silent.
+
 Each port's driver has two PWM inputs: PWM on the forward input with the reverse
 input low turns the motor forward (vendor convention), and vice versa. The
 encoders are quadrature, read by a timer in encoder mode.
