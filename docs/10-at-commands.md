@@ -212,14 +212,22 @@ Bluetooth header gives a wireless AT console alongside USB. It is built when
    first; if it provides only 3.3 V, power the module from a 5 V pin instead.
 2. **Wiring.** Module TXD → PD6, module RXD → PD5, GND → GND. The logic is 3.3 V,
    no level shifting needed.
-3. **Baud rate.** Set the module to `BT_BAUDRATE` (115200 by default):
+3. **Baud rate.** `BT_BAUDRATE` must equal the module's speed. The F407 board
+   sets 9600 in [cmake/boards/f407.conf](../cmake/boards/f407.conf), the
+   factory speed of HC-06 firmware (the tested ZS-040 advertises as `HC-06`).
+   To run faster, change the module first, then `BT_BAUDRATE`:
+   - HC-06: send `AT+BAUD8` (115200) at the current speed with no line ending,
+     while no phone or PC is connected.
    - HC-05: hold its button while powering up (AT mode, 38400 baud, CR+LF line
      endings) and send `AT+UART=115200,0,0`.
-   - HC-06: send `AT+BAUD8` at 9600 baud with no line ending.
-4. **Connect.** Pair (PIN usually 1234). On Linux:
-   `sudo rfcomm bind 0 <MAC>`, then open `/dev/rfcomm0`; its baud setting is
-   ignored. Classic Bluetooth serial (SPP) works with Android terminal apps but
-   not with iPhones.
+4. **Connect.** Pair with PIN 1234. On Linux:
+   ```sh
+   bluetoothctl            # then: scan on, pair <MAC>, trust <MAC>
+   sudo rfcomm bind 0 <MAC>
+   picocom /dev/rfcomm0    # the baud setting is ignored over Bluetooth
+   ```
+   Classic Bluetooth serial (SPP) works with Android terminal apps but not with
+   iPhones.
 
 The Bluetooth console does not echo and never receives telemetry. Run the
 hardware tests over it with `pytest --port /dev/rfcomm0 --bluetooth`.

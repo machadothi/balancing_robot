@@ -27,7 +27,7 @@ flowchart LR
     ML -.->|"encoder"| MCU
     MR -.->|"encoder"| MCU
     HOST["PC / Raspberry Pi"] <-->|"USB-serial 921600<br/>AT commands + telemetry"| MCU
-    PHONE["Phone / PC"] <-->|"Bluetooth HC-05, 115200<br/>AT commands (F407 board)"| MCU
+    PHONE["Phone / PC"] <-->|"Bluetooth HC-06, 9600<br/>AT commands (F407 board)"| MCU
     MCU --> LED["Heartbeat LED"]
 ```
 

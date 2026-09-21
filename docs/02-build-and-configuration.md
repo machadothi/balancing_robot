@@ -223,7 +223,7 @@ cmake --preset f407 -DEXTRA_CONF_FILE=bt-only.conf
 |--------|---------|-------------|
 | `APP_BLINK_ONLY` | `OFF` | Only run the LED heartbeat task |
 | `UART_BAUDRATE` | `921600` | USB console baud rate (telemetry and AT commands) |
-| `BT_BAUDRATE` | `115200` | Bluetooth console baud rate; must match the module |
+| `BT_BAUDRATE` | `115200` (`9600` on f407, from `cmake/boards/f407.conf`) | Bluetooth console baud rate; must match the module |
 | `IMU_SAMPLE_RATE_MS` | `10` | IMU and control loop period (ms); must be a whole number of ticks |
 | `ATTITUDE_FILTER` | `complementary` | `complementary` or `kalman`, as macros `ATTITUDE_FILTER_COMPLEMENTARY` / `ATTITUDE_FILTER_KALMAN` ([07](07-sensor-fusion.md)) |
 | `FREERTOS_TICK_RATE_HZ` | `1000` | FreeRTOS tick rate |

@@ -20,9 +20,10 @@ the linked [docs](docs/README.md) chapter.
 - [ ] **F407 bring-up** in order: LED blink → console on Type-C → `AT+ANGLE?` →
       motor direction per port → balancing
       ([09](docs/09-tuning-and-experiments.md#bring-up-checklist)).
-- [ ] F407 Bluetooth console: measure the Bluetooth header's supply voltage,
-      set the HC-05 to `BT_BAUDRATE`, then run
-      `pytest --port /dev/rfcomm0 --bluetooth`
+- [x] F407 Bluetooth console: HC-06 at 9600 (`cmake/boards/f407.conf`), paired
+      with PIN 1234; `AT`, `AT+ANGLE?` answer over RFCOMM.
+- [ ] Run `pytest --port /dev/rfcomm0 --bluetooth` (needs `sudo rfcomm bind 0
+      98:DA:60:05:77:01`)
       ([10](docs/10-at-commands.md#bluetooth-console-f407-board)).
 - [ ] Log a long balancing run over USB and confirm `test_no_lost_records`
       holds under real load on both boards.
@@ -76,7 +77,7 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
       stacks from data.
 - [ ] Decide whether the watchdog should also supervise the UART tasks.
 - [ ] Arbitrate the USB and Bluetooth consoles, and stop the robot when the
-      Bluetooth link drops (HC-05 STATE pin).
+      Bluetooth link drops (module STATE pin).
 - [ ] DMA transmission for the USB console if the per-byte TX interrupt load
       matters on the Blue Pill.
 
