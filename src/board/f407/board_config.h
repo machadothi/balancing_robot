@@ -89,10 +89,11 @@
 #define BOARD_COMPLEMENTARY_ALPHA    0.99f
 
 /* Balance tuning of the F407 robot (floor tests on the bench supply, 2026-10-08):
- * 40 s runs without a fall; with the speed loop it hovers in place (+-4 % speed) */
-#define BOARD_DEFAULT_KP             11.0f
+ * gyro D + speed loop: 1.1 deg tilt RMS, never at the cap, recovers from pushes,
+ * stays in place (KP sweep 9/11/13 with KD 0.55) */
+#define BOARD_DEFAULT_KP             13.0f
 #define BOARD_DEFAULT_KI             0.0f    /* the speed loop removes offsets; two integrators rocked it */
-#define BOARD_DEFAULT_KD             0.7f
+#define BOARD_DEFAULT_KD             0.55f
 #define BOARD_BALANCE_SETPOINT       -2.5f   /* where the speed loop settles it */
 #define BOARD_DEFAULT_OUTLIMIT       70
 
@@ -101,5 +102,9 @@
 #define BOARD_SPEED_KP               0.15f
 #define BOARD_SPEED_KI               0.1f
 #define BOARD_SPEED_LOOP_DEFAULT     1       /* on at start-up (AT+VLOOP) */
+
+/* Balance D term from the gyro rate (AT+DGYRO): floor A/B, 15 s each: tilt
+ * 3.1 vs 4.6 deg RMS, cap 6 vs 17 %, a third less motor command */
+#define BOARD_D_FROM_GYRO            1
 
 #endif // BOARD_CONFIG_H
