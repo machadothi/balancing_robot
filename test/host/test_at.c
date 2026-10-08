@@ -172,6 +172,9 @@ static void test_values(void) {
     EXPECT("AT+ALPHA=0.99", "OK");
     EXPECT("AT+ALPHA?", "+ALPHA:0.990");
     EXPECT("AT+ALPHA=1", "ERROR:4");
+    EXPECT("AT+DGYRO=1", "OK");
+    EXPECT("AT+DGYRO?", "+DGYRO:1");
+    CHECK(robot.d_from_gyro);
     EXPECT("AT+VLOOP?", "+VLOOP:0");
     EXPECT("AT+VLOOP=1", "OK");
     EXPECT("AT+VLOOP?", "+VLOOP:1");

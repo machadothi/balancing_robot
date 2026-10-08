@@ -147,6 +147,21 @@ DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
 DEFINE_FLOAT_SET(set_setpoint, robot.setpoint)
 DEFINE_FLOAT_SET(set_alpha, robot.comp_alpha)
+static AT_Result_t query_dgyro(char *value, size_t size) {
+    robot_lock();
+    bool on = robot.d_from_gyro;
+    robot_unlock();
+    snprintf(value, size, "%d", on ? 1 : 0);
+    return AT_OK;
+}
+
+static AT_Result_t set_dgyro(const float *values) {
+    robot_lock();
+    robot.d_from_gyro = (values[0] != 0.0f);
+    robot_unlock();
+    return AT_OK;
+}
+
 #if SPEED_LOOP
 DEFINE_FLOAT_SET(set_vkp, robot.speed_pid.kp)
 DEFINE_FLOAT_SET(set_vki, robot.speed_pid.ki)
@@ -300,6 +315,8 @@ static const AT_Command_Def_t robot_commands[] = {
     { .name = "VKI",      .query = query_vki,      .set = set_vki,    .params = 1, .min = 0.0f, .max = 1.0f,
       .help = AT_HELP("Speed loop integral gain") },
 #endif // SPEED_LOOP
+    { .name = "DGYRO",    .query = query_dgyro,    .set = set_dgyro,  .params = 1, .integer = true, .min = 0.0f, .max = 1.0f,
+      .help = AT_HELP("Balance D term from the gyro rate (1) or the angle difference (0)") },
     { .name = "ALPHA",    .query = query_alpha,    .set = set_alpha,  .params = 1, .min = 0.9f, .max = 0.999f,
       .help = AT_HELP("Complementary filter gyro weight (0.9..0.999)") },
     { .name = "SETPOINT", .query = query_setpoint, .set = set_setpoint, .params = 1, .min = -10.0f, .max = 10.0f,

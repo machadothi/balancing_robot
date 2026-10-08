@@ -39,11 +39,22 @@ void pid_reset(PID_t *pid);
  * @brief Run one controller update
  *
  * @param pid    Controller
- * @param error  Setpoint minus measurement
+ * @param error  Controller error (the caller chooses the sign convention)
  * @param dt     Time since the previous update in seconds, > 0
  * @return Output clamped to +/- output_limit
  */
 float pid_update(PID_t *pid, float error, float dt);
+
+/**
+ * @brief Same as pid_update(), with the D term from a measured rate of the error
+ *
+ * For a balancing robot the gyro measures d(tilt)/dt directly: no difference
+ * quotient (noise x 1/dt), no sample of delay, and no kick when the setpoint
+ * moves. With a constant setpoint it equals the error's derivative.
+ *
+ * @param error_rate  d(error)/dt from a sensor, units of error per second
+ */
+float pid_update_rate(PID_t *pid, float error, float error_rate, float dt);
 
 #ifdef __cplusplus
 }

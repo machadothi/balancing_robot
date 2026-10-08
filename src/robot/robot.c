@@ -104,6 +104,15 @@
 #ifndef BOARD_SPEED_KI
 #define BOARD_SPEED_KI          0.02f   /**< deg per (% x s) */
 #endif // BOARD_SPEED_KI
+/** Balance D term from the gyro rate instead of the angle difference (AT+DGYRO) */
+#ifndef BOARD_D_FROM_GYRO
+#define BOARD_D_FROM_GYRO       0
+#endif // BOARD_D_FROM_GYRO
+
+/** Speed loop on at start-up (AT+VLOOP changes it) */
+#ifndef BOARD_SPEED_LOOP_DEFAULT
+#define BOARD_SPEED_LOOP_DEFAULT 0
+#endif // BOARD_SPEED_LOOP_DEFAULT
 
 /** Gyro weight of the complementary filter: a robot whose wheels accelerate
  * hard needs more, since the accelerometer then reads that acceleration as tilt */
@@ -128,6 +137,8 @@ Robot_t robot = {
     .deadband_left = BOARD_MOTOR_DEADBAND_LEFT,
     .deadband_right = BOARD_MOTOR_DEADBAND_RIGHT,
     .comp_alpha = BOARD_COMPLEMENTARY_ALPHA,
+    .speed_loop = BOARD_SPEED_LOOP_DEFAULT,
+    .d_from_gyro = BOARD_D_FROM_GYRO,
     .speed_pid = {
         .kp = BOARD_SPEED_KP,
         .ki = BOARD_SPEED_KI,
@@ -207,8 +218,8 @@ void robot_restore_defaults(void) {
  * Control
  * ========================================================================== */
 
-/** One balance update: safety cut-off, PID, mixing, motors */
-static void robot_balance_step(float tilt) {
+/** One balance update: safety cut-off, PID, mixing, motors; tilt_rate from the gyro (deg/s) */
+static void robot_balance_step(float tilt, float tilt_rate) {
     if (fabsf(tilt) > MAX_TILT_ANGLE) {
         robot_disable();
         return;
@@ -218,7 +229,9 @@ static void robot_balance_step(float tilt) {
      * under the falling body. error = setpoint - tilt would push them away. */
     /* The speed loop leans the robot back while it rolls forward too fast */
     float setpoint = robot.setpoint - robot.speed_offset;
-    float output = pid_update(&robot.pid, tilt - setpoint, IMU_SAMPLE_RATE_S);
+    float output = robot.d_from_gyro
+        ? pid_update_rate(&robot.pid, tilt - setpoint, tilt_rate, IMU_SAMPLE_RATE_S)
+        : pid_update(&robot.pid, tilt - setpoint, IMU_SAMPLE_RATE_S);
     /* The PID's output limit (AT+OUTLIMIT) also caps each wheel after mixing */
     Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, (int16_t)robot.pid.output_limit,
                                      robot.deadband_left, robot.deadband_right);
@@ -374,7 +387,7 @@ void robot_task(void *args) {
 #endif // SPEED_LOOP
 
         if (robot.motors_enabled && robot.pid_enabled) {
-            robot_balance_step(tilt);
+            robot_balance_step(tilt, measured.rate_dps);
         }
 
 #if TELEMETRY

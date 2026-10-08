@@ -116,6 +116,22 @@ static void test_mixer_continuous(void) {
     }
 }
 
+/* D from a measured rate: same P/I as pid_update(), D = kd * rate */
+static void test_pid_rate_input(void) {
+    PID_t a = default_pid(), b = default_pid();
+    (void)pid_update(&a, 1.0f, DT);
+    (void)pid_update_rate(&b, 1.0f, 50.0f, DT);
+    CHECK_NEAR(b.p_term, a.p_term, 1e-5);
+    CHECK_NEAR(b.i_term, a.i_term, 1e-6);
+    CHECK_NEAR(b.d_term, 0.8 * 50.0, 1e-4);
+
+    /* A setpoint jump moves the error but not the measured rate: no kick */
+    PID_t c = default_pid();
+    (void)pid_update_rate(&c, 0.0f, 0.0f, DT);
+    (void)pid_update_rate(&c, 5.0f, 0.0f, DT);
+    CHECK_NEAR(c.d_term, 0.0, 1e-6);
+}
+
 int main(void) {
     test_pid_worked_example();
     test_pid_output_clamp();
@@ -126,5 +142,6 @@ int main(void) {
     test_mixer_saturates_before_narrowing();
     test_mixer_deadband();
     test_mixer_continuous();
+    test_pid_rate_input();
     return UNIT_RESULT();
 }

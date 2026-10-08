@@ -82,13 +82,14 @@ one response are consistent with each other.
 |---------|-------|--------|
 | `AT+KP=n` `AT+KI=n` `AT+KD=n` | ≥ 0 | PID gains, effective on the next sample |
 | `AT+SETPOINT=n` | −10 … 10 | Balance target angle in degrees: trims the balance point, or drives step tests (`test/pid_tune.py step`) |
+| `AT+DGYRO=0\|1` | 0 or 1 | Balance D term from the gyro rate (1) or the angle difference (0, board default) |
 | `AT+ALPHA=a` | 0.9 … 0.999 | Complementary filter gyro weight, from the next sample; board default at reset |
 | `AT+OUTLIMIT=n` | 20 … 100, integer | Caps the balance output (and each wheel) at n % of full power; not reset by `AT+DEFAULT`, back to 100 at reset |
 | `AT+DEADBAND=l,r` | 0 … 200 each, integers | Motor dead zone per wheel; measured by `test/pid_tune.py deadband` |
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
 | `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Target speed in % of full wheel speed, followed by the speed loop |
-| `AT+VLOOP=0\|1` | 0 or 1 | Speed loop off/on (off at reset); it keeps the robot in place by leaning it against any drift |
+| `AT+VLOOP=0\|1` | 0 or 1 | Speed loop off/on (board default at reset: on for the F407 robot); it keeps the robot in place by leaning it against any drift |
 | `AT+VKP=n` `AT+VKI=n` | 0 … 1 | Speed loop gains: degrees of lean per % of speed error, and per %·s |
 | `AT+STREAM=0\|1` | 0 or 1 | Telemetry record every sample, on the USB console (from either console) |
 

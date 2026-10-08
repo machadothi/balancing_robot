@@ -24,17 +24,25 @@ void pid_reset(PID_t *pid) {
     pid->output = 0.0f;
 }
 
-float pid_update(PID_t *pid, float error, float dt) {
+static float pid_finish(PID_t *pid, float error, float dt) {
     pid->p_term = pid->kp * error;
 
     /* Clamping the accumulated error bounds the I term at ki * integral_limit */
     pid->integral = clamp(pid->integral + error * dt, pid->integral_limit);
     pid->i_term = pid->ki * pid->integral;
 
-    /* Derivative on error: equals -kd * d(measurement)/dt while the setpoint is constant */
-    pid->d_term = pid->kd * (error - pid->prev_error) / dt;
     pid->prev_error = error;
-
     pid->output = clamp(pid->p_term + pid->i_term + pid->d_term, pid->output_limit);
     return pid->output;
+}
+
+float pid_update_rate(PID_t *pid, float error, float error_rate, float dt) {
+    pid->d_term = pid->kd * error_rate;
+    return pid_finish(pid, error, dt);
+}
+
+float pid_update(PID_t *pid, float error, float dt) {
+    /* Derivative on error: equals -kd * d(measurement)/dt while the setpoint is constant */
+    pid->d_term = pid->kd * (error - pid->prev_error) / dt;
+    return pid_finish(pid, error, dt);
 }

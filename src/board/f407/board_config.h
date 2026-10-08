@@ -89,16 +89,17 @@
 #define BOARD_COMPLEMENTARY_ALPHA    0.99f
 
 /* Balance tuning of the F407 robot (floor tests on the bench supply, 2026-10-08):
- * 51 s without a fall, little drift; the speed loop is still missing */
+ * 40 s runs without a fall; with the speed loop it hovers in place (+-4 % speed) */
 #define BOARD_DEFAULT_KP             11.0f
-#define BOARD_DEFAULT_KI             0.5f
+#define BOARD_DEFAULT_KI             0.0f    /* the speed loop removes offsets; two integrators rocked it */
 #define BOARD_DEFAULT_KD             0.7f
-#define BOARD_BALANCE_SETPOINT       0.5f
+#define BOARD_BALANCE_SETPOINT       -2.5f   /* where the speed loop settles it */
 #define BOARD_DEFAULT_OUTLIMIT       70
 
 /* Speed loop: ~3600 counts/s per wheel at 80 % on the bench supply */
 #define BOARD_WHEEL_MAX_CPS          4500.0f
-#define BOARD_SPEED_KP               0.05f
-#define BOARD_SPEED_KI               0.02f
+#define BOARD_SPEED_KP               0.15f
+#define BOARD_SPEED_KI               0.1f
+#define BOARD_SPEED_LOOP_DEFAULT     1       /* on at start-up (AT+VLOOP) */
 
 #endif // BOARD_CONFIG_H

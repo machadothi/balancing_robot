@@ -1,7 +1,7 @@
 # 06 — Control Theory: Balancing an Inverted Pendulum
 
 This chapter builds the model the firmware is controlling, explains why the
-PID in [`pid_update()`](../src/control/pid.c#L27) can stabilise it, what
+PID in [`pid_update()`](../src/control/pid.c#L44) can stabilise it, what
 sampling and delay do to that argument, and where a state-space controller
 would take it next. [08 — PID Implementation](08-pid-implementation.md) then
 walks through the code line by line.
@@ -11,7 +11,7 @@ walks through the code line by line.
 | Concept | Where |
 |---------|-------|
 | Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L67) |
-| Control law | [`pid_update()`](../src/control/pid.c#L27) |
+| Control law | [`pid_update()`](../src/control/pid.c#L44) |
 | Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L24) |
 | Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L72) |
 | Unused hooks for an outer loop | `target_velocity` in [robot_internal.h](../src/robot/robot_internal.h), [`motor_get_encoder()`](../src/motor/motor.h) |
@@ -316,7 +316,7 @@ flowchart LR
 
 ### As implemented (`SPEED_LOOP`, F407 robot)
 
-[`robot_speed_step()`](../src/robot/robot.c#L239) runs every 100 ms: the average
+[`robot_speed_step()`](../src/robot/robot.c#L252) runs every 100 ms: the average
 of both encoders is the forward speed (turning cancels out), in % of
 `BOARD_WHEEL_MAX_CPS`. A PI (`PID_t` with D = 0, `AT+VKP`/`AT+VKI`) turns
 `speed − AT+VELOCITY` into a lean, clamped to ±4°, that is subtracted from the
