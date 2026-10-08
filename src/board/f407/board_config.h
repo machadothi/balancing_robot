@@ -75,4 +75,8 @@
 #define BOARD_MOTOR1_PORT        1
 #define BOARD_MOTOR2_PORT        2
 
+/* The left motor (M1) is mounted mirrored: flip its drive and encoder */
+#define BOARD_MOTOR1_REVERSED    1
+#define BOARD_MOTOR2_REVERSED    0
+
 #endif // BOARD_CONFIG_H

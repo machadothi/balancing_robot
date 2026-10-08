@@ -155,6 +155,21 @@ static void motor_set_inputs(Motor_t *motor, uint16_t duty) {
  * Public Functions
  * ========================================================================== */
 
+/* A motor mounted mirrored (always one of the two on a two-wheeled robot) is
+ * marked reversed by the board: its drive and its encoder are both flipped, so
+ * positive means "robot forward" for every wheel */
+#ifndef BOARD_MOTOR1_REVERSED
+#define BOARD_MOTOR1_REVERSED   0
+#endif // BOARD_MOTOR1_REVERSED
+#ifndef BOARD_MOTOR2_REVERSED
+#define BOARD_MOTOR2_REVERSED   0
+#endif // BOARD_MOTOR2_REVERSED
+
+static const bool motor_reversed[MOTOR_COUNT] = {
+    [MOTOR_LEFT] = BOARD_MOTOR1_REVERSED,
+    [MOTOR_RIGHT] = BOARD_MOTOR2_REVERSED,
+};
+
 void motor_init(void) {
     const uint8_t port_numbers[MOTOR_COUNT] = {
         [MOTOR_LEFT] = BOARD_MOTOR1_PORT,
@@ -187,7 +202,7 @@ void motor_set(Motor_Id_t id, int16_t command) {
     } else if (command < -MOTOR_COMMAND_MAX) {
         command = -MOTOR_COMMAND_MAX;
     }
-    motors[id].command = command;
+    motors[id].command = motor_reversed[id] ? (int16_t)-command : command;
     motor_apply(&motors[id]);
 }
 
@@ -225,10 +240,8 @@ int32_t motor_get_encoder(Motor_Id_t id) {
 
     /* TIM2/TIM5 count in 32 bits; the others wrap at 16 bits, so sign-extend
      * them or -2 reads as 65534 */
-    if (timer == TIM2 || timer == TIM5) {
-        return (int32_t)count;
-    }
-    return (int16_t)count;
+    int32_t value = (timer == TIM2 || timer == TIM5) ? (int32_t)count : (int16_t)count;
+    return motor_reversed[id] ? -value : value;
 }
 
 void motor_reset_encoder(Motor_Id_t id) {

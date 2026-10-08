@@ -29,6 +29,12 @@ Connector pinout (Hiwonder V1.2 silkscreen; pin 1 is the square pad):
 Before plugging a motor in, check **~5 V between pins 2 and 5 at the motor
 plug**: without it the motor still turns but the encoder stays silent.
 
+The two motors face opposite ways, so one turns backwards for the same command.
+`BOARD_MOTOR1_REVERSED` / `BOARD_MOTOR2_REVERSED` in `board_config.h` flip a
+motor's drive and its encoder together; on this robot M1 (left) is reversed.
+Check: `AT+PIDOFF`, `AT+ENABLE`, `AT+SPEED=40,40` must drive both wheels toward
+the side where `AT+ANGLE?` goes positive, and `AT+ENC?` must count up on both.
+
 Each port's driver has two PWM inputs: PWM on the forward input with the reverse
 input low turns the motor forward (vendor convention), and vice versa. The
 encoders are quadrature, read by a timer in encoder mode.
