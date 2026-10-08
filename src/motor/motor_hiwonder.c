@@ -26,6 +26,9 @@
 #include <libopencm3/stm32/gpio.h>
 #include <libopencm3/stm32/timer.h>
 
+#include <FreeRTOS.h>
+#include <task.h>
+
 #include "board_config.h"
 #include "motor/motor.h"
 #include "drivers/pwm.h"
@@ -80,6 +83,8 @@ typedef struct {
     PWM_Channel_Config_t forward;
     PWM_Channel_Config_t reverse;
     int16_t command;
+    uint16_t enc_last;          /**< 16-bit timers: last raw count */
+    int32_t enc_total;          /**< 16-bit timers: count extended to 32 bits */
 } Motor_t;
 
 static Motor_t motors[MOTOR_COUNT];
@@ -235,17 +240,32 @@ int32_t motor_get_encoder(Motor_Id_t id) {
     if (id >= MOTOR_COUNT) {
         return 0;
     }
-    uint32_t timer = motors[id].port->enc_timer;
-    uint32_t count = timer_get_counter(timer);
+    Motor_t *motor = &motors[id];
+    uint32_t timer = motor->port->enc_timer;
+    int32_t value;
 
-    /* TIM2/TIM5 count in 32 bits; the others wrap at 16 bits, so sign-extend
-     * them or -2 reads as 65534 */
-    int32_t value = (timer == TIM2 || timer == TIM5) ? (int32_t)count : (int16_t)count;
+    if (timer == TIM2 || timer == TIM5) {
+        value = (int32_t)timer_get_counter(timer);      /* 32-bit timers */
+    } else {
+        /* 16-bit timers wrap every 65536 counts (~18 s at full speed): extend
+         * them from the change since the last call, which must come within
+         * half a wrap (the control task reads every 100 ms) */
+        taskENTER_CRITICAL();
+        uint16_t raw = (uint16_t)timer_get_counter(timer);
+        motor->enc_total += (int16_t)(uint16_t)(raw - motor->enc_last);
+        motor->enc_last = raw;
+        value = motor->enc_total;
+        taskEXIT_CRITICAL();
+    }
     return motor_reversed[id] ? -value : value;
 }
 
 void motor_reset_encoder(Motor_Id_t id) {
     if (id < MOTOR_COUNT) {
+        taskENTER_CRITICAL();
         timer_set_counter(motors[id].port->enc_timer, 0);
+        motors[id].enc_last = 0;
+        motors[id].enc_total = 0;
+        taskEXIT_CRITICAL();
     }
 }

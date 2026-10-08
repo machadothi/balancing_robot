@@ -46,7 +46,7 @@ from at_console import AtConsole, is_telemetry, parse_telemetry_line
 LOG_DIR = Path(__file__).resolve().parent / "pid_logs"
 OUTPUT_LIMIT = 255.0        # MOTOR_COMMAND_MAX
 FALL_ANGLE = 45.0           # MAX_TILT_ANGLE: the firmware cuts the motors beyond it
-FIELDS = ["host_s", "sp", "seq", "t", "acc_deg", "kalman", "comp", "tilt", "p", "i", "d", "out", "drops"]
+FIELDS = ["host_s", "sp", "seq", "t", "acc_deg", "kalman", "comp", "tilt", "p", "i", "d", "out", "v", "spe", "drops"]
 
 
 # =============================================================================

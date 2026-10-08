@@ -62,7 +62,7 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 - [x] Continuous deadband compensation (offset mapping instead of 1…19 → 20),
       per wheel, measured with `pid_tune.py deadband`.
 - [ ] Conditional integration while the output is saturated.
-- [ ] Velocity estimate from the encoders, then an outer velocity PI loop so
+- [ ] Tune the outer speed loop (implemented: `AT+VLOOP`, `AT+VKP/VKI`); then an outer velocity PI loop so
       `AT+VELOCITY` works and the robot stops drifting
       ([06 §6](docs/06-control-theory.md#6-cascade-control-the-next-step)).
 - [ ] Optional: discrete LQR on [θ, θ̇, x, ẋ] as a comparison to the cascade.

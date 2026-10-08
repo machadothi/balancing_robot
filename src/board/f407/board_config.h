@@ -96,4 +96,9 @@
 #define BOARD_BALANCE_SETPOINT       0.5f
 #define BOARD_DEFAULT_OUTLIMIT       70
 
+/* Speed loop: ~3600 counts/s per wheel at 80 % on the bench supply */
+#define BOARD_WHEEL_MAX_CPS          4500.0f
+#define BOARD_SPEED_KP               0.05f
+#define BOARD_SPEED_KI               0.02f
+
 #endif // BOARD_CONFIG_H

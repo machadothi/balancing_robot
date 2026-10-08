@@ -61,9 +61,13 @@ class TelemetryRecord:
     d: float
     out: float
     drops: int
+    v: float = float("nan")      # speed %, firmware with the speed loop
+    spe: float = float("nan")    # balance target after the speed loop
 
 
 _INT_FIELDS = ("seq", "t", "drops")
+# Newer fields: records from older firmware parse without them
+_OPTIONAL_FIELDS = ("v", "spe")
 
 
 def _strip_prompts(line: str) -> str:
@@ -96,6 +100,7 @@ def parse_telemetry_line(line: str) -> TelemetryRecord | None:
         return TelemetryRecord(**{
             name: int(fields[name]) if name in _INT_FIELDS else _number(fields[name])
             for name in TelemetryRecord.__dataclass_fields__
+            if name in fields or name not in _OPTIONAL_FIELDS
         })
     except (KeyError, ValueError):
         return None

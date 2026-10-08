@@ -28,6 +28,8 @@ typedef struct {
     float i;
     float d;
     float out;
+    float speed;        /**< Forward speed, % (0 without the speed loop) */
+    float setpoint;     /**< Balance target after the speed loop (deg) */
 } Telemetry_Record_t;
 
 /** Create the record queue; call before the scheduler starts */

@@ -39,5 +39,7 @@ set(BOARD_HAS_BT_UART ON)
 set(BOARD_HAS_BUTTON ON)
 # Serial bootloader in sector 0 (src/bootloader): firmware updates over USB-C
 set(BOARD_HAS_BOOTLOADER ON)
+# Encoders in timer quadrature mode: speed and direction (SPEED_LOOP)
+set(BOARD_HAS_QUADRATURE_ENCODERS ON)
 set(BOARD_APP_LINKER_SCRIPT ${SRC_DIR}/stm32f407vet6_app.ld)
 set(BOARD_BOOTLOADER_LINKER_SCRIPT ${SRC_DIR}/bootloader/bootloader_f407.ld)

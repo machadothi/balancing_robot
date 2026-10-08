@@ -314,6 +314,17 @@ flowchart LR
   `AT+VELOCITY`, and the motor API exposes encoder counts. What is missing is a
   velocity estimate (counts per sample, low-pass filtered) and the outer PI.
 
+### As implemented (`SPEED_LOOP`, F407 robot)
+
+[`robot_speed_step()`](../src/robot/robot.c#L239) runs every 100 ms: the average
+of both encoders is the forward speed (turning cancels out), in % of
+`BOARD_WHEEL_MAX_CPS`. A PI (`PID_t` with D = 0, `AT+VKP`/`AT+VKI`) turns
+`speed − AT+VELOCITY` into a lean, clamped to ±4°, that is subtracted from the
+balance setpoint: rolling forward too fast leans the robot back, which first
+pushes the wheels forward a little more (the non-minimum-phase response) and
+then brakes. `AT+VLOOP=1` switches it on; telemetry shows `v` (speed) and
+`spe` (the setpoint the inner loop actually uses).
+
 ## Limitations and next steps
 
 - The model ignores wheel inertia, motor dynamics and ground contact; use it

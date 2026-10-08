@@ -84,6 +84,27 @@
 #define BOARD_MOTOR_DEADBAND_RIGHT  20
 #endif // BOARD_MOTOR_DEADBAND_RIGHT
 
+/** Outer speed loop (SPEED_LOOP): every SPEED_LOOP_DIVIDER samples (100 ms) */
+#define SPEED_LOOP_DIVIDER      10
+#define SPEED_LOOP_PERIOD_S     (SPEED_LOOP_DIVIDER * IMU_SAMPLE_RATE_S)
+/** Weight of a new speed measurement (light low-pass against encoder jitter) */
+#define SPEED_FILTER_WEIGHT     0.5f
+/** The outer loop moves the balance setpoint by at most this much (deg) */
+#define SPEED_LOOP_MAX_TILT     4.0f
+/** Clamp on the accumulated speed error (% x s) */
+#define SPEED_INTEGRAL_LIMIT    100.0f
+
+/** Wheel speed at full power, encoder counts/s: AT+VELOCITY is a percentage of it */
+#ifndef BOARD_WHEEL_MAX_CPS
+#define BOARD_WHEEL_MAX_CPS     4500.0f
+#endif // BOARD_WHEEL_MAX_CPS
+#ifndef BOARD_SPEED_KP
+#define BOARD_SPEED_KP          0.05f   /**< deg of lean per % of speed error */
+#endif // BOARD_SPEED_KP
+#ifndef BOARD_SPEED_KI
+#define BOARD_SPEED_KI          0.02f   /**< deg per (% x s) */
+#endif // BOARD_SPEED_KI
+
 /** Gyro weight of the complementary filter: a robot whose wheels accelerate
  * hard needs more, since the accelerometer then reads that acceleration as tilt */
 #ifndef BOARD_COMPLEMENTARY_ALPHA
@@ -107,6 +128,12 @@ Robot_t robot = {
     .deadband_left = BOARD_MOTOR_DEADBAND_LEFT,
     .deadband_right = BOARD_MOTOR_DEADBAND_RIGHT,
     .comp_alpha = BOARD_COMPLEMENTARY_ALPHA,
+    .speed_pid = {
+        .kp = BOARD_SPEED_KP,
+        .ki = BOARD_SPEED_KI,
+        .integral_limit = SPEED_INTEGRAL_LIMIT,
+        .output_limit = SPEED_LOOP_MAX_TILT,
+    },
 };
 
 /** Guards `robot` and motor commands against the AT handlers (UART RX task) */
@@ -142,6 +169,8 @@ void robot_unlock(void) {
 
 void robot_enable(void) {
     pid_reset(&robot.pid);
+    pid_reset(&robot.speed_pid);
+    robot.speed_offset = 0.0f;
     robot.motors_enabled = true;
     motor_standby(false);
 }
@@ -187,7 +216,9 @@ static void robot_balance_step(float tilt) {
 
     /* Lean forward (tilt > 0) -> drive forward (output > 0): the wheels move
      * under the falling body. error = setpoint - tilt would push them away. */
-    float output = pid_update(&robot.pid, tilt - robot.setpoint, IMU_SAMPLE_RATE_S);
+    /* The speed loop leans the robot back while it rolls forward too fast */
+    float setpoint = robot.setpoint - robot.speed_offset;
+    float output = pid_update(&robot.pid, tilt - setpoint, IMU_SAMPLE_RATE_S);
     /* The PID's output limit (AT+OUTLIMIT) also caps each wheel after mixing */
     Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, (int16_t)robot.pid.output_limit,
                                      robot.deadband_left, robot.deadband_right);
@@ -195,6 +226,44 @@ static void robot_balance_step(float tilt) {
     motor_set(MOTOR_LEFT, wheels.left);
     motor_set(MOTOR_RIGHT, wheels.right);
 }
+
+#if SPEED_LOOP
+/**
+ * @brief Every SPEED_LOOP_DIVIDER samples: measure the forward speed and run
+ *        the outer loop (caller holds the lock)
+ *
+ * The average of both wheels is the forward speed; turning cancels out. To
+ * stop rolling forward, the robot must lean back, so a positive speed error
+ * gives a positive offset that is subtracted from the balance setpoint.
+ */
+static void robot_speed_step(void) {
+    static uint8_t divider;
+    static bool started;
+    static int32_t previous;
+
+    if (++divider < SPEED_LOOP_DIVIDER) {
+        return;
+    }
+    divider = 0;
+
+    int32_t now = motor_get_encoder(MOTOR_LEFT) + motor_get_encoder(MOTOR_RIGHT);
+    if (started) {
+        float cps = (float)(now - previous) / 2.0f / SPEED_LOOP_PERIOD_S;
+        float percent = 100.0f * cps / BOARD_WHEEL_MAX_CPS;
+        robot.speed += SPEED_FILTER_WEIGHT * (percent - robot.speed);
+    }
+    previous = now;
+    started = true;
+
+    if (robot.speed_loop && robot.motors_enabled && robot.pid_enabled) {
+        robot.speed_offset = pid_update(&robot.speed_pid, robot.speed - robot.target_velocity,
+                                        SPEED_LOOP_PERIOD_S);
+    } else {
+        pid_reset(&robot.speed_pid);
+        robot.speed_offset = 0.0f;
+    }
+}
+#endif // SPEED_LOOP
 
 /* ==========================================================================
  * Task
@@ -300,6 +369,10 @@ void robot_task(void *args) {
         }
 #endif // AUTO_ENABLE
 
+#if SPEED_LOOP
+        robot_speed_step();
+#endif // SPEED_LOOP
+
         if (robot.motors_enabled && robot.pid_enabled) {
             robot_balance_step(tilt);
         }
@@ -315,6 +388,8 @@ void robot_task(void *args) {
             .i = robot.pid.i_term,
             .d = robot.pid.d_term,
             .out = robot.pid.output,
+            .speed = robot.speed,
+            .setpoint = robot.setpoint - robot.speed_offset,
         };
 #endif // TELEMETRY
 

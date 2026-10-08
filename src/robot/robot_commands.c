@@ -43,11 +43,25 @@ DEFINE_FLOAT_QUERY(query_kd, robot.pid.kd, 4)
 DEFINE_FLOAT_QUERY(query_setpoint, robot.setpoint, 2)
 DEFINE_FLOAT_QUERY(query_alpha, robot.comp_alpha, 3)
 
+#if SPEED_LOOP
+DEFINE_FLOAT_QUERY(query_velocity, robot.speed, 2)
+DEFINE_FLOAT_QUERY(query_vkp, robot.speed_pid.kp, 4)
+DEFINE_FLOAT_QUERY(query_vki, robot.speed_pid.ki, 4)
+
+static AT_Result_t query_vloop(char *value, size_t size) {
+    robot_lock();
+    bool on = robot.speed_loop;
+    robot_unlock();
+    snprintf(value, size, "%d", on ? 1 : 0);
+    return AT_OK;
+}
+#else
 static AT_Result_t query_velocity(char *value, size_t size) {
-    /* There is no velocity estimate yet */
+    /* No speed measurement without quadrature encoders */
     snprintf(value, size, "0.00");
     return AT_OK;
 }
+#endif // SPEED_LOOP
 
 static AT_Result_t query_status(char *value, size_t size) {
     robot_lock();
@@ -133,6 +147,18 @@ DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
 DEFINE_FLOAT_SET(set_setpoint, robot.setpoint)
 DEFINE_FLOAT_SET(set_alpha, robot.comp_alpha)
+#if SPEED_LOOP
+DEFINE_FLOAT_SET(set_vkp, robot.speed_pid.kp)
+DEFINE_FLOAT_SET(set_vki, robot.speed_pid.ki)
+
+static AT_Result_t set_vloop(const float *values) {
+    robot_lock();
+    robot.speed_loop = (values[0] != 0.0f);
+    pid_reset(&robot.speed_pid);
+    robot_unlock();
+    return AT_OK;
+}
+#endif // SPEED_LOOP
 
 static AT_Result_t set_deadband(const float *values) {
     robot_lock();
@@ -249,7 +275,7 @@ static const AT_Command_Def_t robot_commands[] = {
     { .name = "ALL",      .query = query_all,      .help = AT_HELP("ax,ay,az,gx,gy,gz,angle") },
 #endif // AT_CMD_ALL_QUERY
     { .name = "VELOCITY", .query = query_velocity, .set = set_target, .params = 1, .min = -100.0f, .max = 100.0f,
-      .help = AT_HELP("Target velocity (stored, not used yet)") },
+      .help = AT_HELP("Target speed / measured speed, % of full wheel speed") },
     { .name = "TARGET",   .query = query_target,   .set = set_target, .params = 1, .min = -100.0f, .max = 100.0f,
       .help = AT_HELP("Target velocity (stored, not used yet)") },
     { .name = "TURN",     .query = query_turn,     .set = set_turn,   .params = 1, .min = -100.0f, .max = 100.0f,
@@ -266,6 +292,14 @@ static const AT_Command_Def_t robot_commands[] = {
       .min = 0.0f, .max = 200.0f, .help = AT_HELP("Motor dead zone left,right (counts of 255)") },
     { .name = "OUTLIMIT", .query = query_outlimit, .set = set_outlimit, .params = 1, .integer = true,
       .min = 20.0f, .max = 100.0f, .help = AT_HELP("Balance output limit, percent of full power") },
+#if SPEED_LOOP
+    { .name = "VLOOP",    .query = query_vloop,    .set = set_vloop,  .params = 1, .integer = true, .min = 0.0f, .max = 1.0f,
+      .help = AT_HELP("Speed loop off/on (keeps the robot in place)") },
+    { .name = "VKP",      .query = query_vkp,      .set = set_vkp,    .params = 1, .min = 0.0f, .max = 1.0f,
+      .help = AT_HELP("Speed loop gain, deg of lean per % of speed") },
+    { .name = "VKI",      .query = query_vki,      .set = set_vki,    .params = 1, .min = 0.0f, .max = 1.0f,
+      .help = AT_HELP("Speed loop integral gain") },
+#endif // SPEED_LOOP
     { .name = "ALPHA",    .query = query_alpha,    .set = set_alpha,  .params = 1, .min = 0.9f, .max = 0.999f,
       .help = AT_HELP("Complementary filter gyro weight (0.9..0.999)") },
     { .name = "SETPOINT", .query = query_setpoint, .set = set_setpoint, .params = 1, .min = -10.0f, .max = 10.0f,

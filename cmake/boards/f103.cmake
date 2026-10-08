@@ -36,3 +36,5 @@ set(BOARD_DEFAULT_IMU mpu6050)
 set(BOARD_HAS_BT_UART OFF)
 set(BOARD_HAS_BUTTON OFF)
 set(BOARD_HAS_BOOTLOADER OFF)
+# EXTI edge counting only: no direction, no speed loop
+set(BOARD_HAS_QUADRATURE_ENCODERS OFF)

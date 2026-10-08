@@ -14,6 +14,7 @@
 #define AT_CMD_ALL_QUERY            1
 #define AT_CMD_PID_TOGGLE           1
 #define BOOTLOADER                  0
+#define SPEED_LOOP                  1
 #define IMU_SAMPLE_RATE_MS          10
 #define ATTITUDE_FILTER_COMPLEMENTARY 1
 #define ATTITUDE_FILTER_KALMAN      0

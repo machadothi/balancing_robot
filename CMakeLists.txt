@@ -130,6 +130,8 @@ if(BOOTLOADER)
     # The firmware is linked behind the bootloader and its header
     set(LINKER_SCRIPT ${BOARD_APP_LINKER_SCRIPT})
 endif()
+robot_feature(SPEED_LOOP ${BOARD_HAS_QUADRATURE_ENCODERS} "Outer speed loop from the wheel encoders (AT+VLOOP)"
+    REQUIRES BOARD_HAS_QUADRATURE_ENCODERS "NOT APP_BLINK_ONLY")
 robot_feature(AUTO_ENABLE OFF "Start balancing once per boot after the robot is held upright"
     REQUIRES "NOT APP_BLINK_ONLY")
 

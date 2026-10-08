@@ -83,7 +83,7 @@ void telemetry_task(void *args) {
     (void)args;
     Telemetry_Item_t item;
     char line[TELEMETRY_LINE_SIZE];
-    char v[8][16];
+    char v[10][16];
 
     for (;;) {
         if (xQueueReceive(telemetry_queue, &item, portMAX_DELAY) != pdPASS) {
@@ -93,7 +93,7 @@ void telemetry_task(void *args) {
         const Telemetry_Record_t *r = &item.record;
         int len = snprintf(line, sizeof(line),
             "seq: %lu | t: %lu | acc_deg: %s | kalman: %s | comp: %s | tilt: %s"
-            " | p: %s | i: %s | d: %s | out: %s | drops: %lu\r\n",
+            " | p: %s | i: %s | d: %s | out: %s | v: %s | spe: %s | drops: %lu\r\n",
             (unsigned long)item.seq, (unsigned long)r->tick_ms,
             fmt_fixed(v[0], sizeof(v[0]), r->acc_deg, 2),
             fmt_fixed(v[1], sizeof(v[1]), r->kalman, 2),
@@ -103,6 +103,8 @@ void telemetry_task(void *args) {
             fmt_fixed(v[5], sizeof(v[5]), r->i, 2),
             fmt_fixed(v[6], sizeof(v[6]), r->d, 2),
             fmt_fixed(v[7], sizeof(v[7]), r->out, 2),
+            fmt_fixed(v[8], sizeof(v[8]), r->speed, 1),
+            fmt_fixed(v[9], sizeof(v[9]), r->setpoint, 2),
             (unsigned long)dropped);
 
         if (len > 0 && (size_t)len < sizeof(line)) {

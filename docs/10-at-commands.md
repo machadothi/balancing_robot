@@ -69,7 +69,8 @@ The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 | `AT+TURN?` | `+TURN:0.00` | |
 | `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |
 | `AT+TARGET?` | `+TARGET:0.00` | Stored only, see limitations |
-| `AT+VELOCITY?` | `+VELOCITY:0.00` | Always 0: velocity is not estimated yet |
+| `AT+VELOCITY?` | `+VELOCITY:3.20` | Measured forward speed, % of full wheel speed (`SPEED_LOOP`; 0 without it) |
+| `AT+VLOOP?` `AT+VKP?` `AT+VKI?` | `+VLOOP:1` | Speed loop state and gains |
 | `AT+ALL?` | `+ALL:ax,ay,az,gx,gy,gz,angle` | Only with `AT_CMD_ALL_QUERY=ON` (default OFF) |
 
 Queries copy the robot state under the lock and format the copy, so values in
@@ -86,7 +87,9 @@ one response are consistent with each other.
 | `AT+DEADBAND=l,r` | 0 … 200 each, integers | Motor dead zone per wheel; measured by `test/pid_tune.py deadband` |
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
-| `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Stored in `target_velocity`, not used by the control law |
+| `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Target speed in % of full wheel speed, followed by the speed loop |
+| `AT+VLOOP=0\|1` | 0 or 1 | Speed loop off/on (off at reset); it keeps the robot in place by leaning it against any drift |
+| `AT+VKP=n` `AT+VKI=n` | 0 … 1 | Speed loop gains: degrees of lean per % of speed error, and per %·s |
 | `AT+STREAM=0\|1` | 0 or 1 | Telemetry record every sample, on the USB console (from either console) |
 
 ## Execute commands

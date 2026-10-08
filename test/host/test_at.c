@@ -159,7 +159,6 @@ static void test_values(void) {
     EXPECT("AT+TURN?", "+TURN:-100.00");
     EXPECT("AT+TARGET=-42.5", "OK");
     EXPECT("AT+TARGET?", "+TARGET:-42.50");
-    EXPECT("AT+VELOCITY?", "+VELOCITY:0.00");
     EXPECT("AT+ENC?", "+ENC:1234,-56");
     EXPECT("AT+DEADBAND=46,20", "OK");
     EXPECT("AT+DEADBAND?", "+DEADBAND:46,20");
@@ -173,6 +172,15 @@ static void test_values(void) {
     EXPECT("AT+ALPHA=0.99", "OK");
     EXPECT("AT+ALPHA?", "+ALPHA:0.990");
     EXPECT("AT+ALPHA=1", "ERROR:4");
+    EXPECT("AT+VLOOP?", "+VLOOP:0");
+    EXPECT("AT+VLOOP=1", "OK");
+    EXPECT("AT+VLOOP?", "+VLOOP:1");
+    CHECK(robot.speed_loop);
+    EXPECT("AT+VKP=0.05", "OK");
+    EXPECT("AT+VKP?", "+VKP:0.0500");
+    EXPECT("AT+VKI=2", "ERROR:4");
+    robot.speed = 12.34f;
+    EXPECT("AT+VELOCITY?", "+VELOCITY:12.34");
     EXPECT("AT+ALL?", "+ALL:0.000,0.000,0.000,0.000,0.000,0.000,0.00");
     EXPECT("AT+STREAM=1", "OK");
     CHECK(streaming);
