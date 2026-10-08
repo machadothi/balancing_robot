@@ -17,7 +17,12 @@
  * along with this library.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* Linker script for ST STM32F407VET6: standalone firmware at the start of flash */
+/* Linker script for ST STM32F407VET6: robot firmware behind the bootloader.
+ *
+ * 0x08000000  16K  bootloader (sector 0)
+ * 0x08004000  512  application header (magic, size, CRC32)
+ * 0x08004200       firmware: vector table first, 512-byte aligned for VTOR
+ */
 
 /* 64K CCM RAM at 0x10000000 is left out: DMA cannot access it. */
 /* The last 16 bytes of SRAM (0x2001FFF0) are left out of `ram`: the robot
@@ -25,7 +30,7 @@
  * stack, .data and .bss (src/bootloader/boot_shared.h). */
 MEMORY
 {
-	rom (rx) : ORIGIN = 0x08000000, LENGTH = 512K
+	rom (rx) : ORIGIN = 0x08004200, LENGTH = 512K - 16K - 512
 	ram (rwx) : ORIGIN = 0x20000000, LENGTH = 128K - 16
 }
 

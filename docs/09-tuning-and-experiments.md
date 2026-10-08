@@ -95,7 +95,7 @@ flowchart TD
     OSC -->|"no, stands briefly"| DRIFT{"Leans or drifts<br/>one way?"}
     DRIFT -->|"yes"| RAISEI["Add a little KI"] --> DRIFT
     DRIFT -->|"no"| MARGIN["Raise KP 20%, re-check,<br/>keep the stable set"]
-    MARGIN --> SAVE["Write gains into<br/>ROBOT_DEFAULT_KP/KI/KD"]
+    MARGIN --> SAVE["Write gains into<br/>BOARD_DEFAULT_KP/KI/KD"]
 ```
 
 1. **Start with P only.** `AT+KI=0`, `AT+KD=0`, `AT+KP=5`, `AT+ENABLE`. Raise
@@ -111,7 +111,7 @@ flowchart TD
    gains somewhat below the edge of oscillation; battery sag and floor changes
    move that edge.
 5. **Persist.** `AT+SAVE` is not implemented: copy the final gains into
-   `ROBOT_DEFAULT_KP/KI/KD` and rebuild.
+   `BOARD_DEFAULT_KP/KI/KD` (and `BOARD_BALANCE_SETPOINT`) in the board config and rebuild.
 
 The default gains (Kp 25, Ki 0.5, Kd 0.8) are in PWM counts per degree and
 depend on motors, wheels, mass distribution and battery voltage; treat them as
@@ -153,7 +153,7 @@ every firmware change ([test/README.md](../test/README.md)).
 | Worked, then the motors stop | Robot fell past 45°, or IMU samples stopped for 50 ms, and it disabled itself | `AT+STATUS?`, then `AT+ENABLE` |
 | Motors stop and `AT+ANGLE?` is frozen | IMU samples stopped (I2C problem) | Check wiring/pull-ups; at start-up the IMU task retries initialisation every second |
 | Board resets every ~0.5 s | Watchdog: the control task is not running its loop | Look for a deadlock or a task starving `robot_task`; build with `-DWATCHDOG_ENABLED=OFF` only to debug |
-| Gains reset after power cycle | No parameter storage | Write gains into `ROBOT_DEFAULT_*` |
+| Gains reset after power cycle | No parameter storage | Write gains into `BOARD_DEFAULT_*` in the board config |
 
 ## Limitations and next steps
 

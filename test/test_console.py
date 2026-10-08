@@ -9,7 +9,8 @@ import re
 import pytest
 
 # ROBOT_DEFAULT_KP/KI/KD in src/robot/robot.c, as printed by AT+KP? (4 decimals)
-DEFAULT_GAINS = {"KP": "25.0000", "KI": "0.5000", "KD": "0.8000"}
+# Gains checked by the round-trip and AT+DEFAULT tests (values come from the firmware)
+DEFAULT_GAINS = ("KP", "KI", "KD")
 
 
 def test_at_replies_ok(robot):
@@ -84,10 +85,15 @@ def test_gain_round_trip(robot, name):
 
 
 def test_default_restores_startup_gains(robot):
+    # The defaults are per robot (BOARD_DEFAULT_KP/KI/KD): take them from the
+    # firmware, then check that AT+DEFAULT brings them back
+    robot.expect_ok("AT+DEFAULT")
+    defaults = {name: robot.query(name) for name in DEFAULT_GAINS}
+    assert all(float(v) > 0 for v in defaults.values()), defaults
     for name in DEFAULT_GAINS:
         robot.expect_ok(f"AT+{name}=1")
     robot.expect_ok("AT+DEFAULT")
-    assert {name: robot.query(name) for name in DEFAULT_GAINS} == DEFAULT_GAINS
+    assert {name: robot.query(name) for name in DEFAULT_GAINS} == defaults
 
 
 @pytest.mark.parametrize("sent, shown", [

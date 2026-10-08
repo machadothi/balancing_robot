@@ -88,4 +88,12 @@
  * tilt, in phase with the motor command (measured): trust the gyro more */
 #define BOARD_COMPLEMENTARY_ALPHA    0.99f
 
+/* Balance tuning of the F407 robot (floor tests on the bench supply, 2026-10-08):
+ * 51 s without a fall, little drift; the speed loop is still missing */
+#define BOARD_DEFAULT_KP             11.0f
+#define BOARD_DEFAULT_KI             0.5f
+#define BOARD_DEFAULT_KD             0.7f
+#define BOARD_BALANCE_SETPOINT       0.5f
+#define BOARD_DEFAULT_OUTLIMIT       70
+
 #endif // BOARD_CONFIG_H

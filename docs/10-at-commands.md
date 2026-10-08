@@ -15,11 +15,11 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 
 | What | Where |
 |------|-------|
-| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L219) |
-| Command definition, registration | [`AT_Command_Def_t`](../src/cmd/at_cmd.h), [`at_cmd_register()`](../src/cmd/at_cmd.c#L327) |
+| Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L222) |
+| Command definition, registration | [`AT_Command_Def_t`](../src/cmd/at_cmd.h), [`at_cmd_register()`](../src/cmd/at_cmd.c#L344) |
 | Robot commands | [robot_commands.c](../src/robot/robot_commands.c) |
 | `AT+STREAM` | [telemetry.c](../src/telemetry/telemetry.c) |
-| `AT+VERSION`, `AT+RESET`, `AT+HELP` | [`at_cmd_init()`](../src/cmd/at_cmd.c#L336) |
+| `AT+VERSION`, `AT+RESET`, `AT+HELP` | [`at_cmd_init()`](../src/cmd/at_cmd.c#L353) |
 | Build flags | `AT_CMD_HELP`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `CONSOLE_ECHO` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Syntax
@@ -99,6 +99,7 @@ one response are consistent with each other.
 | `AT+PID` | Toggle the balance PID (`AT_CMD_PID_TOGGLE`, default ON) |
 | `AT+PIDON` / `AT+PIDOFF` | Enable / disable the PID; `PIDOFF` also zeroes the motors |
 | `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET`/`SETPOINT` |
+| `AT+UPDATE` | Restart into the bootloader for a firmware update (`BOOTLOADER` boards; used by `scripts/flash_usb.py`) |
 | `AT+RESET` | Reply `OK`, wait 100 ms, then reset the MCU |
 | `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
 | `AT+HELP` | Command summary, only with `AT_CMD_HELP=ON` (default OFF) |
@@ -170,7 +171,7 @@ AT+KP?
 +KP:15.0000
 ```
 
-Gains are lost on reset: write the final values into `ROBOT_DEFAULT_KP/KI/KD`
+Gains are lost on reset: write the final values into the board config (`BOARD_DEFAULT_KP/KI/KD`, `BOARD_BALANCE_SETPOINT`; `ROBOT_DEFAULT_KP/KI/KD` in robot.c are the fallback)
 in [robot.c](../src/robot/robot.c#L40). The procedure is in
 [09 — Tuning and Experiments](09-tuning-and-experiments.md).
 

@@ -21,6 +21,9 @@
 #include "config.h"
 #include "cmd/at_cmd.h"
 #include "drivers/uart.h"
+#if BOOTLOADER
+#include "bootloader/boot_shared.h"
+#endif // BOOTLOADER
 
 /* ==========================================================================
  * Private Definitions
@@ -289,6 +292,17 @@ static AT_Result_t exec_reset(void) {
     return AT_OK;
 }
 
+#if BOOTLOADER
+/** Restart into the bootloader, which then waits for scripts/flash_usb.py */
+static AT_Result_t exec_update(void) {
+    at_reply_result(AT_OK);
+    vTaskDelay(pdMS_TO_TICKS(100));  /* Let the reply leave the UART */
+    BOOT_FLAG = BOOT_FLAG_UPDATE;
+    scb_reset_system();
+    return AT_OK;
+}
+#endif // BOOTLOADER
+
 #if AT_CMD_HELP
 /** List every registered command, with its syntax, from the tables themselves */
 static AT_Result_t exec_help(void) {
@@ -315,6 +329,9 @@ static AT_Result_t exec_help(void) {
 static const AT_Command_Def_t system_commands[] = {
     { .name = "VERSION", .query = query_version, .help = AT_HELP("Firmware version") },
     { .name = "RESET",   .exec = exec_reset,     .help = AT_HELP("Reset the MCU") },
+#if BOOTLOADER
+    { .name = "UPDATE",  .exec = exec_update,    .help = AT_HELP("Restart into the bootloader (scripts/flash_usb.py)") },
+#endif // BOOTLOADER
 #if AT_CMD_HELP
     { .name = "HELP",    .exec = exec_help,      .help = AT_HELP("This list") },
 #endif // AT_CMD_HELP

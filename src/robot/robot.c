@@ -35,16 +35,39 @@
  * Constants
  * ========================================================================== */
 
-/** Balance PID gains at startup and after AT+DEFAULT */
+/** Balance PID gains at startup and after AT+DEFAULT. Tuned values are robot
+ * properties: a board config overrides them with BOARD_DEFAULT_KP/KI/KD */
+#ifdef BOARD_DEFAULT_KP
+#define ROBOT_DEFAULT_KP        BOARD_DEFAULT_KP
+#else
 #define ROBOT_DEFAULT_KP        25.0f
+#endif // BOARD_DEFAULT_KP
+#ifdef BOARD_DEFAULT_KI
+#define ROBOT_DEFAULT_KI        BOARD_DEFAULT_KI
+#else
 #define ROBOT_DEFAULT_KI        0.5f
+#endif // BOARD_DEFAULT_KI
+#ifdef BOARD_DEFAULT_KD
+#define ROBOT_DEFAULT_KD        BOARD_DEFAULT_KD
+#else
 #define ROBOT_DEFAULT_KD        0.8f
+#endif // BOARD_DEFAULT_KD
+
+/** Balance output limit at startup, percent of full power (AT+OUTLIMIT) */
+#ifndef BOARD_DEFAULT_OUTLIMIT
+#define BOARD_DEFAULT_OUTLIMIT  100
+#endif // BOARD_DEFAULT_OUTLIMIT
 
 /** Clamp on the accumulated angle error (deg x s) */
 #define PID_INTEGRAL_LIMIT      100.0f
 
-/** Balance target at startup and after AT+DEFAULT (degrees from vertical) */
+/** Balance target at startup and after AT+DEFAULT (degrees from vertical): the
+ * robot's balance point, so a board config can trim it */
+#ifdef BOARD_BALANCE_SETPOINT
+#define BALANCE_SETPOINT        BOARD_BALANCE_SETPOINT
+#else
 #define BALANCE_SETPOINT        0.0f
+#endif // BOARD_BALANCE_SETPOINT
 
 /** Beyond this tilt recovery is impossible: stop instead (degrees) */
 #define MAX_TILT_ANGLE          45.0f
@@ -77,7 +100,7 @@ Robot_t robot = {
         .ki = ROBOT_DEFAULT_KI,
         .kd = ROBOT_DEFAULT_KD,
         .integral_limit = PID_INTEGRAL_LIMIT,
-        .output_limit = (float)MOTOR_COMMAND_MAX,
+        .output_limit = BOARD_DEFAULT_OUTLIMIT * MOTOR_COMMAND_MAX / 100.0f,
     },
     .pid_enabled = true,
     .setpoint = BALANCE_SETPOINT,

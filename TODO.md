@@ -27,10 +27,12 @@ the linked [docs](docs/README.md) chapter.
       ([10](docs/10-at-commands.md#bluetooth-console-f407-board)).
 - [ ] Log a long balancing run over USB and confirm `test_no_lost_records`
       holds under real load on both boards.
-- [ ] Verify the `flash-serial` DTR/RTS boot sequence (`SERIAL_BOOT_SEQUENCE`)
-      and update [02](docs/02-build-and-configuration.md) with the working value.
-      Blue Pill only: the F407 Type-C port is USART3 on PD8/PD9, which the ROM
-      bootloader does not serve, so the F407 is flashed over SWD.
+- [ ] Blue Pill: verify the `flash-serial` DTR/RTS boot sequence
+      (`SERIAL_BOOT_SEQUENCE`) and update [02](docs/02-build-and-configuration.md).
+- [x] F407: own bootloader in sector 0, updates over USB-C with `flash-usb`
+      (tested: normal update 8.7 s, interrupted update recovered).
+- [ ] F407: try `flash_usb.py --power-cycle` (recovery when the firmware hangs).
+- [ ] F407: firmware updates over Bluetooth (9600 baud, about 1 minute).
 - [x] Back up the F407 vendor firmware before the first flash
       (`~/git/hiwonder-vendor-fw/vendor_fw.bin`, RDP level 0, read twice and
       identical; restore with `st-flash write vendor_fw.bin 0x08000000`).

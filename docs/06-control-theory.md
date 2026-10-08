@@ -10,7 +10,7 @@ walks through the code line by line.
 
 | Concept | Where |
 |---------|-------|
-| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L47) |
+| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L67) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27) |
 | Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L24) |
 | Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L72) |

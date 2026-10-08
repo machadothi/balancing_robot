@@ -262,19 +262,53 @@ Or manually:
 st-flash write build-f103/balancing-robot.bin 0x8000000
 ```
 
-### USB serial bootloader (F407 board)
+### USB-C, through our bootloader (F407 board)
 
-The Hiwonder board can be flashed through its Type-C USB-serial port (UART1),
-which uses DTR/RTS to reset into the STM32 ROM bootloader. This requires
-`stm32flash` (`sudo apt install stm32flash`):
+The F407's USB-C serial port is USART3 on PD8/PD9, which the STM32's built-in
+ROM bootloader does not serve, and its DTR/RTS lines do not reset the MCU. The
+`BOOTLOADER` feature (on by default for this board) adds a small bootloader of
+our own in flash sector 0 ([src/bootloader](../src/bootloader/bootloader.c)):
+
+| Address | Content |
+|---------|---------|
+| 0x08000000 | Bootloader, 16 KB sector, never erased by an update |
+| 0x08004000 | Application header: magic, size, CRC-32 (written last) |
+| 0x08004200 | Robot firmware (`stm32f407vet6_app.ld`) |
+
+**Once, over the ST-Link:**
 
 ```bash
-cmake --build --preset f407 --target flash-serial
+cmake --build --preset f407 --target flash-bootloader   # sector 0
+cmake --build --preset f407 --target flash              # header + firmware
+```
+
+**Every update after that, over the USB-C cable only** (about 9 s):
+
+```bash
+cmake --build --preset f407 --target flash-usb          # port: CONSOLE_PORT, /dev/ttyACM0
+```
+
+[`scripts/flash_usb.py`](../scripts/flash_usb.py) sends `AT+UPDATE`, which
+restarts into the bootloader; uploads at 115200 baud in 256-byte blocks, each
+with a CRC; and lets the bootloader check the CRC of the whole firmware before
+it writes the header. Without a valid header the bootloader never starts the
+firmware, so an interrupted update (cable pulled, power lost) leaves it waiting:
+rerun with `--no-request`. If the firmware runs but no longer answers
+`AT+UPDATE`, run with `--power-cycle` and switch the board off and on: the
+bootloader listens for "BOOT" for 200 ms after every reset. The ST-Link stays
+the last resort.
+
+### USB serial ROM bootloader (Blue Pill)
+
+The Blue Pill can be flashed through a USB-serial adapter on USART1 with
+`stm32flash` (`sudo apt install stm32flash`), BOOT0 high:
+
+```bash
+cmake --build --preset f103 --target flash-serial
 ```
 
 The port and boot sequence are the `SERIAL_PORT` (default `/dev/ttyUSB0`) and
-`SERIAL_BOOT_SEQUENCE` cache variables. The default sequence has not been
-tested on the board yet.
+`SERIAL_BOOT_SEQUENCE` cache variables.
 
 ## Serial Monitor
 

@@ -73,7 +73,7 @@ These constants mirror firmware settings; update them if you change those:
 
 | Test constant | Firmware setting |
 |---------------|------------------|
-| `DEFAULT_GAINS` in `test_console.py` | `ROBOT_DEFAULT_KP/KI/KD` in `src/robot/robot.c` |
+| `DEFAULT_GAINS` in `test_console.py` | names only; the values are read from the firmware (`BOARD_DEFAULT_KP/KI/KD`) |
 | `SAMPLE_PERIOD_MS` in `test_stream.py` | `IMU_SAMPLE_RATE_MS` |
 | `--baud` | `UART_BAUDRATE` |
 

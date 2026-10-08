@@ -14,7 +14,7 @@ Pin assignments come from the vendor firmware project
 | Function | Pins | Peripheral | Notes |
 |----------|------|------------|-------|
 | User LED | PE10 | GPIO | Active low; heartbeat |
-| Console | PD8 (TX), PD9 (RX) | USART3 | Type-C USB-serial (CH9102), found from the vendor firmware. Not a ROM bootloader port (those are USART1 PA9/PA10 and USART3 on PB10/PB11 or PC10/PC11): flash over SWD |
+| Console | PD8 (TX), PD9 (RX) | USART3 | Type-C USB-serial (CH9102), found from the vendor firmware. Not a ROM bootloader port (those are USART1 PA9/PA10 and USART3 on PB10/PB11 or PC10/PC11), and DTR/RTS do not reset the MCU: updates go through our bootloader (`flash-usb`, [02](../02-build-and-configuration.md#usb-c-through-our-bootloader-f407-board)) |
 | Bluetooth console | PD5 (TX → module RXD), PD6 (RX ← module TXD) | USART2 | HC-06 (ZS-040) at `BT_BAUDRATE` = 9600, PIN 1234; check the header's supply voltage before connecting |
 | MPU-6050 | PB10 (SCL), PB11 (SDA) | I2C2 | DMA1 stream 7 (TX) / stream 2 (RX), channel 7 |
 | motor1 | Port M1 | see below | `BOARD_MOTOR1_PORT` in `src/board/f407/board_config.h` |

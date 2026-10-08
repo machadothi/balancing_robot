@@ -124,6 +124,12 @@ robot_feature(WATCHDOG ON "Independent watchdog refreshed by the control task" R
 robot_feature(I2C_BUS_RECOVERY ON "Free a stuck I2C slave at start-up" REQUIRES "NOT APP_BLINK_ONLY")
 robot_feature(BUTTON_ENABLE ${BOARD_HAS_BUTTON} "Board button arms balancing (starts when lifted upright) and stops it"
     REQUIRES "NOT APP_BLINK_ONLY" BOARD_HAS_BUTTON SOURCES ${SRC_DIR}/ui/button.c)
+robot_feature(BOOTLOADER ${BOARD_HAS_BOOTLOADER} "Serial bootloader in flash sector 0: updates over the console (AT+UPDATE)"
+    REQUIRES BOARD_HAS_BOOTLOADER CONSOLE_USB)
+if(BOOTLOADER)
+    # The firmware is linked behind the bootloader and its header
+    set(LINKER_SCRIPT ${BOARD_APP_LINKER_SCRIPT})
+endif()
 robot_feature(AUTO_ENABLE OFF "Start balancing once per boot after the robot is held upright"
     REQUIRES "NOT APP_BLINK_ONLY")
 
@@ -267,6 +273,7 @@ target_link_libraries(${PROJECT_NAME}.elf PRIVATE
 # Linker flags
 target_link_options(${PROJECT_NAME}.elf PRIVATE
     -T${LINKER_SCRIPT}
+    -L${SRC_DIR}  # INCLUDE stm32f4_sections.ld
     -Wl,-Map=${PROJECT_NAME}.map
     -Wl,--gc-sections
     --static
@@ -290,12 +297,55 @@ add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
 )
 
 # =============================================================================
+# Bootloader (BOOTLOADER feature, src/bootloader)
+# =============================================================================
+
+if(BOOTLOADER)
+    find_package(Python3 REQUIRED COMPONENTS Interpreter)
+
+    add_executable(bootloader.elf ${SRC_DIR}/bootloader/bootloader.c)
+    target_include_directories(bootloader.elf PRIVATE
+        ${SRC_DIR} ${BOARD_INCLUDE_DIR} ${LIBOPENCM3_DIR}/include)
+    target_link_libraries(bootloader.elf PRIVATE ${LIBOPENCM3_LIB})
+    target_link_options(bootloader.elf PRIVATE
+        -T${BOARD_BOOTLOADER_LINKER_SCRIPT} -L${SRC_DIR}
+        -Wl,-Map=bootloader.map -Wl,--gc-sections --static -nostartfiles
+        -specs=nano.specs -specs=nosys.specs)
+    set_property(TARGET bootloader.elf APPEND PROPERTY LINK_DEPENDS ${BOARD_BOOTLOADER_LINKER_SCRIPT})
+    add_custom_command(TARGET bootloader.elf POST_BUILD
+        COMMAND ${CMAKE_OBJCOPY} -Obinary bootloader.elf bootloader.bin
+        COMMAND ${CMAKE_SIZE} bootloader.elf
+        COMMENT "Generating bootloader.bin")
+
+    # Header (magic, size, CRC32) + firmware, as the bootloader would write it:
+    # what the ST-Link flashes at 0x08004000
+    add_custom_command(TARGET ${PROJECT_NAME}.elf POST_BUILD
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/make_app_image.py
+            ${PROJECT_NAME}.bin ${PROJECT_NAME}.img
+        COMMENT "Generating ${PROJECT_NAME}.img (application header + firmware)")
+    add_dependencies(${PROJECT_NAME}.elf bootloader.elf)
+endif()
+
+# =============================================================================
 # Flash Targets
 # =============================================================================
 
 find_program(STFLASH st-flash)
 
-if(STFLASH)
+set(CONSOLE_PORT /dev/ttyACM0 CACHE STRING "USB console serial port (flash-usb)")
+
+if(STFLASH AND BOOTLOADER)
+    add_custom_target(flash
+        COMMAND ${STFLASH} --reset write ${PROJECT_NAME}.img 0x08004000
+        DEPENDS ${PROJECT_NAME}.elf
+        COMMENT "Flashing ${PROJECT_NAME}.img behind the bootloader over ST-Link"
+    )
+    add_custom_target(flash-bootloader
+        COMMAND ${STFLASH} --reset write bootloader.bin 0x08000000
+        DEPENDS bootloader.elf
+        COMMENT "Flashing bootloader.bin to sector 0 over ST-Link"
+    )
+elseif(STFLASH)
     add_custom_target(flash
         COMMAND ${STFLASH} write ${PROJECT_NAME}.bin 0x8000000
         DEPENDS ${PROJECT_NAME}.elf
@@ -309,6 +359,16 @@ set(SERIAL_PORT /dev/ttyUSB0 CACHE STRING "Serial port for flash-serial")
 # stm32flash -i syntax: <enter sequence>:<exit sequence>
 set(SERIAL_BOOT_SEQUENCE "-dtr&rts,dtr:-rts" CACHE STRING
     "DTR/RTS sequence stm32flash uses to enter the ROM bootloader")
+
+if(BOOTLOADER)
+    add_custom_target(flash-usb
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/scripts/flash_usb.py
+            --port ${CONSOLE_PORT} ${PROJECT_NAME}.bin
+        DEPENDS ${PROJECT_NAME}.elf
+        COMMENT "Updating the firmware over ${CONSOLE_PORT} (bootloader)"
+        USES_TERMINAL
+    )
+endif()
 
 find_program(STM32FLASH stm32flash)
 

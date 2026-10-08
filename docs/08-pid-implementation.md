@@ -3,7 +3,7 @@
 The balance controller exactly as coded: every term, limit and safety check in
 [`pid_update()`](../src/control/pid.c#L27),
 [`mixer_mix()`](../src/control/mixer.c#L24) and
-[`robot_balance_step()`](../src/robot/robot.c#L159), why each is there, and
+[`robot_balance_step()`](../src/robot/robot.c#L182), why each is there, and
 what to improve. The theory is in [06](06-control-theory.md).
 
 ## Where in the code
@@ -12,10 +12,10 @@ what to improve. The theory is in [06](06-control-theory.md).
 |------|-------|
 | Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
 | Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L45) |
-| Integral limit | [`integral_limit`](../src/robot/robot.c#L79) |
+| Integral limit | [`integral_limit`](../src/robot/robot.c#L102) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27), state in [`PID_t`](../src/control/pid.h) |
-| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L24), [`robot_balance_step()`](../src/robot/robot.c#L159) |
-| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L190), [robot_commands.c](../src/robot/robot_commands.c) |
+| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L24), [`robot_balance_step()`](../src/robot/robot.c#L182) |
+| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L213), [robot_commands.c](../src/robot/robot_commands.c) |
 
 ## Signal chain
 
