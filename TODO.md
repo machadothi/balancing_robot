@@ -3,69 +3,61 @@
 Recommended next steps, most important first. Background for each item is in
 the linked [docs](docs/README.md) chapter.
 
-## 1. Commit and verify on hardware
+## 1. Next on the F407 robot
 
-- [ ] Commit the pending work in three commits: F407 port + CMake presets;
-      control-path fixes + docs book; safety fixes (IMU stall, fault motor stop,
-      watchdog, I2C timeouts, AT input validation).
-- [ ] **Blue Pill regression**: flash `f103`, confirm it still balances with the
-      new 1 kHz tick, 42 Hz sensor low-pass filter and task priorities. The extra
-      ~5 ms of sensor delay may need slightly more `KD`
-      ([06 §4](docs/06-control-theory.md#4-going-digital-sampling-and-delay)).
-- [ ] Run the hardware test suite on both boards: `pytest` (robot still), then
-      `--motors` (lifted), then `--motors --interactive`
-      ([test/README.md](test/README.md)). It covers the safety checks: IMU-loss
-      and tilt cut-offs, no watchdog resets, `ERROR:3` for `nan`/garbage
-      parameters, `AT+PIDON`/`AT+PIDOFF`/`AT+SAVE` replies.
-- [ ] **F407 bring-up** in order: LED blink → console on Type-C → `AT+ANGLE?` →
-      motor direction per port → balancing
-      ([09](docs/09-tuning-and-experiments.md#bring-up-checklist)).
-- [x] F407 Bluetooth console: HC-06 at 9600 (`cmake/boards/f407.conf`), paired
-      with PIN 1234; `AT`, `AT+ANGLE?` answer over RFCOMM.
-- [ ] Run `pytest --port /dev/rfcomm0 --bluetooth` (needs `sudo rfcomm bind 0
-      98:DA:60:05:77:01`)
-      ([10](docs/10-at-commands.md#bluetooth-console-f407-board)).
-- [ ] Log a long balancing run over USB and confirm `test_no_lost_records`
-      holds under real load on both boards.
-- [ ] Blue Pill: verify the `flash-serial` DTR/RTS boot sequence
-      (`SERIAL_BOOT_SEQUENCE`) and update [02](docs/02-build-and-configuration.md).
+- [ ] **Battery operation** (in progress: wiring). Then:
+      - battery monitor and low-voltage cut-off (section 8);
+      - re-measure the dead zone on battery voltage (`pid_tune.py deadband --write`);
+      - re-check KP/KD with one sweep each ([09](docs/09-tuning-and-experiments.md#pid-tuning-procedure)).
+- [ ] **Driving:** `AT+VELOCITY` (target speed, already followed by the speed loop)
+      and `AT+TURN`, ramped so a step does not tip the robot; then from the phone
+      over Bluetooth.
+- [ ] Show `ARMED` in `AT+STATUS?`: a button press that did not register is
+      invisible today.
+- [ ] Parameter storage in flash for `AT+SAVE` / `AT+LOAD`, so tuning survives a
+      power cycle without a rebuild.
+
+## 2. Verify on hardware
+
+- [x] F407 bring-up: LED, console on USB-C (USART3), QMI8658 IMU, motors and
+      encoders, Bluetooth (HC-06 at 9600), button, balancing in place
+      ([09 case study](docs/09-tuning-and-experiments.md#case-study-the-f407-robot)).
 - [x] F407: own bootloader in sector 0, updates over USB-C with `flash-usb`
       (tested: normal update 8.7 s, interrupted update recovered).
-- [ ] F407: try `flash_usb.py --power-cycle` (recovery when the firmware hangs).
-- [ ] F407: firmware updates over Bluetooth (9600 baud, about 1 minute).
 - [x] Back up the F407 vendor firmware before the first flash
       (`~/git/hiwonder-vendor-fw/vendor_fw.bin`, RDP level 0, read twice and
       identical; restore with `st-flash write vendor_fw.bin 0x08000000`).
-
-## 2. Hardware questions to settle
-
-- [x] **F407 encoders**: no pulses on any motor was a cable problem, not firmware:
-      the encoder's 5V/GND pins (2 and 5) were not connected right, so the
-      encoders had no supply (0 V at the plug), then a loose pin. Fixed by
-      re-pinning; both motors count ~3400-3600 counts/s at 80%, symmetric in both
-      directions. Always measure 5 V between pins 2 and 5 at the motor plug first.
-- [ ] Spin both motors together (`AT+SPEED=80,80`) and compare their speed: the
-      M1 motor measured ~5.5% slower than the other one alone (per-wheel trim or
-      the velocity loop).
-- [ ] Blue Pill: the TB6612 PWM pins are configured open-drain
-      ([motor.c](src/motor/motor.c)). Confirm the board has pull-ups, otherwise
-      switch to push-pull.
-- [ ] Measure the robot's effective pendulum length and motor deadband; replace
-      the illustrative values in [06](docs/06-control-theory.md) and
-      `MOTOR_DEADBAND`.
+- [ ] **Blue Pill regression**: flash `f103`, confirm it still balances. Since
+      its tuning: control-law sign fix with its tilt mapping negated (should be
+      neutral), 1 kHz tick, 42 Hz sensor low-pass, gyro bias measured at power-on,
+      continuous dead-zone compensation.
+- [ ] Run the hardware test suite on both boards: `pytest` (robot still), then
+      `--motors` (lifted), then `--motors --interactive`
+      ([test/README.md](test/README.md)), and over Bluetooth with
+      `--port /dev/rfcomm0 --bluetooth`.
+- [ ] Log a long balancing run over USB and confirm `test_no_lost_records`
+      holds under real load.
+- [ ] F407: try `flash_usb.py --power-cycle` (recovery when the firmware hangs).
+- [ ] F407: firmware updates over Bluetooth (9600 baud, about 1 minute).
+- [ ] Blue Pill: verify the `flash-serial` DTR/RTS boot sequence
+      (`SERIAL_BOOT_SEQUENCE`) and update [02](docs/02-build-and-configuration.md).
 
 ## 3. Control improvements
 
-Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-next-steps)):
-
-- [ ] Use the gyro rate as the D input instead of differencing the angle.
-- [x] Continuous deadband compensation (offset mapping instead of 1…19 → 20),
-      per wheel, measured with `pid_tune.py deadband`.
-- [ ] Conditional integration while the output is saturated.
-- [ ] Tune the outer speed loop (implemented: `AT+VLOOP`, `AT+VKP/VKI`); then an outer velocity PI loop so
-      `AT+VELOCITY` works and the robot stops drifting
-      ([06 §6](docs/06-control-theory.md#6-cascade-control-the-next-step)).
+- [x] D term from the gyro rate (`AT+DGYRO`, F407 default).
+- [x] Continuous dead-zone compensation, per wheel, measured with `pid_tune.py deadband`.
+- [x] Outer speed loop from the encoders (`AT+VLOOP`, `AT+VKP/VKI`), tuned on
+      the F407 robot: it stays in place.
+- [x] Complementary filter weight per board (`AT+ALPHA`): the wheels'
+      acceleration fed back through the accelerometer.
+- [ ] Compensate the accelerometer for the wheel acceleration measured by the
+      encoders, then α could come down again ([07](docs/07-sensor-fusion.md#what-wheel-acceleration-does)).
+- [ ] Per-wheel speed trim: the M1 motor runs ~4-5 % slower at the same command
+      (a slow turn when driving straight).
+- [ ] Conditional integration while the output is saturated (speed loop).
 - [ ] Optional: discrete LQR on [θ, θ̇, x, ẋ] as a comparison to the cascade.
+- [ ] Measure the robot's effective pendulum length; replace the illustrative
+      values in [06](docs/06-control-theory.md).
 
 ## 4. Sensing
 
@@ -78,12 +70,16 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
       ([07 §4](docs/07-sensor-fusion.md#4-the-next-step-estimating-the-gyro-bias)).
 - [ ] Re-initialise the IMU after repeated read failures instead of staying
       stopped.
+- [ ] QMI8658: gravity reads 0.91 g on Z; an accelerometer offset/scale
+      calibration (flat and flipped) would correct it.
 
 ## 5. Firmware robustness
 
 - [ ] Fix or remove the multi-byte path of polled `i2c_read()` (index incremented
       twice per byte).
-- [ ] Parameter storage in flash for `AT+SAVE` / `AT+LOAD` (gains, calibration).
+- [ ] Blue Pill: the TB6612 PWM pins are configured open-drain
+      ([motor.c](src/motor/motor.c)). Confirm the board has pull-ups, otherwise
+      switch to push-pull.
 - [ ] Measure task stack usage (`INCLUDE_uxTaskGetStackHighWaterMark`) and size
       stacks from data.
 - [ ] Decide whether the watchdog should also supervise the UART tasks.
@@ -94,9 +90,13 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 
 ## 6. Instrumentation and tests
 
+- [x] Tuning tool: [test/pid_tune.py](test/pid_tune.py) captures telemetry to
+      CSV, analyses and plots it, sweeps gains, measures the dead zone and noise.
+- [x] Speed (`v`) and effective setpoint (`spe`) in the telemetry record.
 - [ ] Add per-wheel PWM and encoder counts to the telemetry record
       ([09](docs/09-tuning-and-experiments.md#what-to-observe)).
-- [ ] Host script that captures telemetry to CSV and plots tilt and PID terms.
+- [ ] `pid_tune.py`: a `wait` helper (start when balancing begins) instead of
+      the inline scripts used during tuning; skip the setpoint advice on falls.
 - [ ] [test/filter_comparison.py](test/filter_comparison.py): reuse `at_console.py` (port and
       baud options, sends `AT+STREAM=1` itself) and update its docstring to the
       current `acc_deg | kalman | comp` format.
@@ -147,8 +147,8 @@ decompiled code before use.
       only (vendor setting; SBUS is also inverted). Drive and turn from a radio
       remote through `target_velocity` and `turn_rate`.
 - [ ] Lower priority:
-      - bus servos (`serial_servo_rx_complete`, USART3 on PD8/PD9 at 1 Mbaud)
-      - USART6 (PC6/PC7, 115200): purpose unknown, maybe the Raspberry Pi header
+      - bus servos (`serial_servo_rx_complete`): USART6 on PC6/PC7, 115200,
+        half-duplex with PE7/PE8 as direction enables (pin doc)
       - USB-host gamepad (`USBH_Queue`, PA11/PA12)
       - the vendor's PC packet protocol (`packet_rx_task`/`packet_tx_task`),
         for compatibility with their ROS tools
