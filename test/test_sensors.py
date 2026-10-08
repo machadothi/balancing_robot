@@ -38,8 +38,8 @@ def test_gravity_magnitude_is_one_g(robot):
 
 def test_gyro_is_quiet_at_rest(robot):
     gx, gy, gz = averaged_axes(robot, "GYRO")
-    # X includes GYRO_CALIBRATION_OFFSET; Y and Z are not calibrated
-    assert abs(gx) < 1.0, f"gyro X reads {gx:.3f} °/s at rest: recalibrate GYRO_CALIBRATION_OFFSET"
+    # All axes have the start-up bias (AT+GYROBIAS?) removed
+    assert abs(gx) < 1.0, f"gyro X reads {gx:.3f} °/s at rest: was the robot still at power-on?"
     assert abs(gy) < 5.0 and abs(gz) < 5.0, f"gyro Y/Z at rest: {gy:.3f}, {gz:.3f} °/s"
 
 

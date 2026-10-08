@@ -111,7 +111,8 @@ bool imu_wait_sample(IMU_Data_t *out, TickType_t timeout);
  * @brief IMU acquisition task
  *
  * Initializes the sensor (retrying every second), then reads it every
- * IMU_SAMPLE_RATE_MS, applies the gyro calibration and publishes the sample.
+ * IMU_SAMPLE_RATE_MS, subtracts the gyro bias measured at start-up (robot still
+ * for the first second, AT+GYROBIAS?) and publishes the sample.
  * A failed read publishes nothing, so consumers time out instead of acting
  * on a repeated old sample.
  */

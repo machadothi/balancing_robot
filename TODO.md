@@ -69,8 +69,8 @@ Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-n
 - [ ] Retune the Kalman filter from measured variances (R from `acc_deg` at rest,
       Q from gyro noise × T²) and re-run the filter comparison
       ([07 §3](docs/07-sensor-fusion.md#3-the-kalman-filter-as-implemented)).
-- [ ] Measure gyro bias at start-up while the robot is still, instead of the
-      fixed `GYRO_CALIBRATION_OFFSET`.
+- [x] Measure gyro bias at start-up while the robot is still, instead of the
+      fixed `GYRO_CALIBRATION_OFFSET`. Done: 1 s average at power-on, `AT+GYROBIAS?`.
 - [ ] Two-state Kalman filter (angle + gyro bias)
       ([07 §4](docs/07-sensor-fusion.md#4-the-next-step-estimating-the-gyro-bias)).
 - [ ] Re-initialise the IMU after repeated read failures instead of staying

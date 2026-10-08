@@ -59,7 +59,7 @@ run f407-everything         f407 ok -DAT_CMD_HELP=ON -DAT_CMD_ALL_QUERY=ON -DLOG
 run f407-bt-only            f407 ok -DCONSOLE_USB=OFF
 run f407-no-console         f407 ok -DCONSOLE_USB=OFF -DCONSOLE_BT=OFF -DAUTO_ENABLE=ON
 run f103-bt                 f103 reject -DCONSOLE_BT=ON
-run f407-no-console-manual  f407 reject -DCONSOLE_USB=OFF -DCONSOLE_BT=OFF
+run f407-no-console-manual  f407 reject -DCONSOLE_USB=OFF -DCONSOLE_BT=OFF -DBUTTON_ENABLE=OFF
 run bad-filter              f103 reject -DATTITUDE_FILTER=lqr
 
 echo "$failures failure(s)"

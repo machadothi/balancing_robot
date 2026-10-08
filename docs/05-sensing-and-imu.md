@@ -10,11 +10,11 @@ the calibration and sampling choices that affect the controller.
 | Sensor interface | [`IMU_Ops_t`](../src/imu/imu.h#L90), implemented by [`mpu6050_ops`](../src/imu/mpu6050.c#L172) |
 | Sensor initialisation | [`mpu6050_init()`](../src/imu/mpu6050.c#L109) |
 | Burst read, parsing and scaling | [`mpu6050_read()`](../src/imu/mpu6050.c#L143), [`transfer_callback()`](../src/imu/mpu6050.c#L79) |
-| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L60) |
+| Calibration and publishing | [`imu_task()`](../src/imu/imu.c#L137) |
 | Scale factors | [mpu6050.h](../src/imu/mpu6050.h#L30) |
-| Calibration constant | [`GYRO_CALIBRATION_OFFSET`](../src/config.h#L55) |
-| Sampling task | [`imu_task()`](../src/imu/imu.c#L60) |
-| Accelerometer tilt and rate | [`imu_tilt()`](../src/imu/imu.c#L48), mounting in `BOARD_TILT_*` ([f103](../src/board/f103/board_config.h), [f407](../src/board/f407/board_config.h)) |
+| Gyro bias calibration | [`calibrate_gyro()`](../src/imu/imu.c#L65), `AT+GYROBIAS?` |
+| Sampling task | [`imu_task()`](../src/imu/imu.c#L137) |
+| Accelerometer tilt and rate | [`imu_tilt()`](../src/imu/imu.c#L125), mounting in `BOARD_TILT_*` ([f103](../src/board/f103/board_config.h), [f407](../src/board/f407/board_config.h)) |
 
 ## Configuration
 
@@ -36,7 +36,7 @@ every second until the sensor answers.
 flowchart LR
     REG["14 bytes from 0x3B<br/>ACCEL_XOUT_H…GYRO_ZOUT_L"] --> PARSE["Big-endian → int16<br/>(DMA callback, ISR)"]
     PARSE --> SCALE["÷ 16384 → g<br/>÷ 131 → °/s"]
-    SCALE --> CAL["gyro_x += GYRO_CALIBRATION_OFFSET"]
+    SCALE --> CAL["gyro −= bias<br/>(measured at power-on)"]
     CAL --> QUEUE[["sample mailbox<br/>imu_wait_sample()"]]
     QUEUE --> ACC["θ_acc = atan2(a_y, −a_x)"]
     QUEUE --> GYR["ω = gyro_x"]
@@ -65,7 +65,7 @@ taken at different instants.
 
 How the sensor sits is a **board property**. Each `board_config.h` names the
 two accelerometer axes that span the balance plane and the gyro axis the robot
-pitches about, and [`imu_tilt()`](../src/imu/imu.c#L48) turns a sample into
+pitches about, and [`imu_tilt()`](../src/imu/imu.c#L125) turns a sample into
 `acc_deg = atan2(NUM, DEN)` and `rate_dps`: 0° upright, positive when leaning
 forward. The control task only sees those two numbers.
 
@@ -81,15 +81,20 @@ must be the time derivative of the accelerometer angle, or the filters fight.
 ## Gyro calibration
 
 MEMS gyros report a non-zero rate at rest (bias), which integrates into drift.
-The firmware adds a constant offset to `gyro_x` only.
+The bias differs between chips and boards (about 1 to 2.5 °/s per axis on the
+F407 board's QMI8658), so it is measured, not configured.
 
-The value is **−0.69 °/s**, `GYRO_CALIBRATION_OFFSET` in
-[config.h](../src/config.h#L63). To calibrate, read `AT+GYRO_X?` with the
-robot still and adjust the config.h value by the negative of the reading
-([09](09-tuning-and-experiments.md#2-gyro-calibration)).
+At power-on, [`calibrate_gyro()`](../src/imu/imu.c#L65) averages 100 samples
+(1 s) of all three axes and subtracts that bias from every later sample. If
+any axis varies by more than 2 °/s during that second, the robot was moved: the
+measurement is repeated until it is still. Meanwhile no samples are published,
+so the control loop treats it as an IMU stall and keeps the motors off.
 
-A fixed offset does not follow temperature changes; the complementary filter
-tolerates the residual error ([07 §2](07-sensor-fusion.md#what-gyro-bias-does)).
+**Keep the robot still for the first second after power-on.** `AT+GYROBIAS?`
+returns the measured bias.
+
+The bias drifts slowly with temperature; the complementary filter tolerates the
+residual error ([07 §2](07-sensor-fusion.md#what-gyro-bias-does)).
 
 ## Sampling and aliasing
 

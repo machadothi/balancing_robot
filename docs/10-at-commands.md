@@ -61,6 +61,7 @@ The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 | `AT+ANGLE?` | `+ANGLE:1.23` | Filtered tilt, 0 = upright, positive = leaning forward |
 | `AT+KP?` `AT+KI?` `AT+KD?` | `+KP:25.0000` | Current PID gains |
 | `AT+SETPOINT?` | `+SETPOINT:0.00` | Balance target angle |
+| `AT+GYROBIAS?` | `+GYROBIAS:0.560,-2.500,-0.109` | Gyro bias x,y,z (°/s) measured at power-on |
 | `AT+ENC?` | `+ENC:1234,-56` | Encoder counts left,right since boot (`test/pid_tune.py motor-test`) |
 | `AT+TURN?` | `+TURN:0.00` | |
 | `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |

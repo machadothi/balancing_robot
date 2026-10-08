@@ -28,7 +28,7 @@ extern "C" {
 /** Gyroscope sensitivity for ±250°/s range (LSB/(°/s)) */
 #define GYRO_SENS_SCALE_FACTOR  131.0f
 
-/* Gyroscope calibration offset: GYRO_CALIBRATION_OFFSET in config.h */
+/* Gyro bias: measured at start-up by the IMU task (imu.c) */
 
 /* ==========================================================================
  * Driver

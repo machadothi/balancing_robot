@@ -10,7 +10,7 @@ step is in [06 — Control Theory](06-control-theory.md); the commands are in
 | What | Where |
 |------|-------|
 | Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
-| Gyro calibration | `GYRO_CALIBRATION_OFFSET` ([05](05-sensing-and-imu.md)) |
+| Gyro calibration | Automatic at power-on, `AT+GYROBIAS?` ([05](05-sensing-and-imu.md#gyro-calibration)) |
 | Deadband, saturation, fall cut-off | [robot.c constants](../src/robot/robot.c#L45) |
 | Filter choice | `ATTITUDE_FILTER` ([02](02-build-and-configuration.md#build-options)) |
 
@@ -41,15 +41,16 @@ the board's `BOARD_TILT_*` mounting macros
 
 ### 2. Gyro calibration
 
-With the robot perfectly still:
+The bias is measured automatically during the first second after power-on, so
+keep the robot still then. To check it, with the robot still:
 
 ```
-AT+GYRO_X?
+AT+GYROBIAS?     measured bias x,y,z
+AT+GYRO_X?       should read near 0 °/s
 ```
 
-Repeat a few times. The reading should be near 0 °/s; if it sits at a
-constant value, adjust `GYRO_CALIBRATION_OFFSET` by the negative of that value
-and rebuild. A residual bias shows up as a steady angle error of b·τ in the
+If `AT+GYRO_X?` is not near 0, the robot moved at power-on, or the bias has
+drifted with temperature: reset or power-cycle with the robot still. A residual bias shows up as a steady angle error of b·τ in the
 complementary filter ([07](07-sensor-fusion.md#what-gyro-bias-does)).
 
 ### 3. Motor direction

@@ -33,7 +33,7 @@
 #define AT_PARAM_SIZE               64
 
 /** Parser, robot and telemetry tables, plus room for one more module */
-#define AT_MAX_TABLES               4
+#define AT_MAX_TABLES               6
 
 typedef enum {
     AT_TYPE_TEST,

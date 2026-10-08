@@ -50,9 +50,7 @@ extern "C" {
 #define IMU_STALL_TIMEOUT_MS    (5 * IMU_SAMPLE_RATE_MS)  /**< No sample for this long: motors are stopped */
 #define IMU_DLPF_MODE           MPU6050_DLPF_BW_42        /**< ~42 Hz sensor bandwidth, ~4.8 ms delay */
 
-/** Gyroscope calibration offset (degrees/second)
- *  Measure with IMU stationary and adjust to get ~0 output */
-#define GYRO_CALIBRATION_OFFSET -0.69f
+/* Gyro bias: measured at start-up by the IMU task (AT+GYROBIAS?) */
 /** @} */
 
 /* ==========================================================================
