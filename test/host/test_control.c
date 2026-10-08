@@ -73,31 +73,47 @@ static void test_pid_reset_keeps_gains(void) {
 }
 
 static void test_mixer_turn_and_saturation(void) {
-    Mixer_Output_t m = mixer_mix(250.0f, 100.0f, 255, 20);
+    Mixer_Output_t m = mixer_mix(250.0f, 100.0f, 255, 20, 20);
     CHECK(m.left == 255);
-    CHECK(m.right == 150);
+    CHECK(m.right == 158);           /* 20 + 150 * 235/255 */
 
-    m = mixer_mix(-250.0f, 100.0f, 255, 20);
-    CHECK(m.left == -150);
+    m = mixer_mix(-250.0f, 100.0f, 255, 20, 20);
+    CHECK(m.left == -158);
     CHECK(m.right == -255);
 }
 
 /* 300 once wrapped to 44 when narrowed to uint8_t: full power became low power */
 static void test_mixer_saturates_before_narrowing(void) {
-    Mixer_Output_t m = mixer_mix(255.0f, 45.0f, 255, 20);
+    Mixer_Output_t m = mixer_mix(255.0f, 45.0f, 255, 20, 20);
     CHECK(m.left == 255);
-    CHECK(m.right == 210);
+    CHECK(m.right == 213);           /* 20 + 210 * 235/255 */
 }
 
 static void test_mixer_deadband(void) {
-    Mixer_Output_t m = mixer_mix(-5.0f, 0.0f, 255, 20);
-    CHECK(m.left == -20 && m.right == -20);
+    Mixer_Output_t m = mixer_mix(-5.0f, 0.0f, 255, 20, 20);
+    CHECK(m.left == -24 && m.right == -24);         /* 20 + 5 * 235/255 */
 
-    m = mixer_mix(0.4f, 0.0f, 255, 20);     /* below one count: stays stopped */
+    m = mixer_mix(0.4f, 0.0f, 255, 20, 20);         /* below one count: stays stopped */
     CHECK(m.left == 0 && m.right == 0);
 
-    m = mixer_mix(30.0f, 0.0f, 255, 20);    /* above the deadband: unchanged */
-    CHECK(m.left == 30 && m.right == 30);
+    m = mixer_mix(1.0f, 0.0f, 255, 20, 20);         /* smallest command: the deadband */
+    CHECK(m.left == 20 && m.right == 20);
+
+    m = mixer_mix(255.0f, 0.0f, 255, 20, 20);       /* full command unchanged */
+    CHECK(m.left == 255 && m.right == 255);
+
+    m = mixer_mix(10.0f, 0.0f, 255, 46, 20);        /* each wheel its own deadband */
+    CHECK(m.left == 54 && m.right == 29);
+}
+
+/* No jump and never decreasing: the old mapping raised 1..19 straight to 20 */
+static void test_mixer_continuous(void) {
+    int16_t previous = mixer_mix(1.0f, 0.0f, 255, 46, 46).left;
+    for (int u = 2; u <= 255; u++) {
+        int16_t now = mixer_mix((float)u, 0.0f, 255, 46, 46).left;
+        CHECK(now >= previous && now - previous <= 2);
+        previous = now;
+    }
 }
 
 int main(void) {
@@ -109,5 +125,6 @@ int main(void) {
     test_mixer_turn_and_saturation();
     test_mixer_saturates_before_narrowing();
     test_mixer_deadband();
+    test_mixer_continuous();
     return UNIT_RESULT();
 }

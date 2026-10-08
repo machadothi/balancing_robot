@@ -17,6 +17,7 @@
 #include <semphr.h>
 
 #include "config.h"
+#include "board_config.h"
 #include "app/module.h"
 #include "board/board.h"
 #include "control/mixer.h"
@@ -51,8 +52,14 @@
 /** Reported as BALANCED below this tilt (degrees) */
 #define BALANCED_TILT_ANGLE     5.0f
 
-/** Minimum non-zero motor command, to overcome static friction */
-#define MOTOR_DEADBAND          20
+/** Smallest command that keeps each wheel turning (motor and supply property:
+ * the board sets it, `pid_tune.py deadband` measures it, AT+DEADBAND changes it) */
+#ifndef BOARD_MOTOR_DEADBAND_LEFT
+#define BOARD_MOTOR_DEADBAND_LEFT   20
+#endif // BOARD_MOTOR_DEADBAND_LEFT
+#ifndef BOARD_MOTOR_DEADBAND_RIGHT
+#define BOARD_MOTOR_DEADBAND_RIGHT  20
+#endif // BOARD_MOTOR_DEADBAND_RIGHT
 
 /* ==========================================================================
  * Shared State
@@ -68,6 +75,8 @@ Robot_t robot = {
     },
     .pid_enabled = true,
     .setpoint = BALANCE_SETPOINT,
+    .deadband_left = BOARD_MOTOR_DEADBAND_LEFT,
+    .deadband_right = BOARD_MOTOR_DEADBAND_RIGHT,
 };
 
 /** Guards `robot` and motor commands against the AT handlers (UART RX task) */
@@ -147,7 +156,8 @@ static void robot_balance_step(float tilt) {
     }
 
     float output = pid_update(&robot.pid, robot.setpoint - tilt, IMU_SAMPLE_RATE_S);
-    Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX, MOTOR_DEADBAND);
+    Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX,
+                                     robot.deadband_left, robot.deadband_right);
 
     motor_set(MOTOR_LEFT, wheels.left);
     motor_set(MOTOR_RIGHT, wheels.right);

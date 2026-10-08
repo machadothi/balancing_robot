@@ -2,8 +2,8 @@
 
 The balance controller exactly as coded: every term, limit and safety check in
 [`pid_update()`](../src/control/pid.c#L27),
-[`mixer_mix()`](../src/control/mixer.c#L20) and
-[`robot_balance_step()`](../src/robot/robot.c#L143), why each is there, and
+[`mixer_mix()`](../src/control/mixer.c#L24) and
+[`robot_balance_step()`](../src/robot/robot.c#L152), why each is there, and
 what to improve. The theory is in [06](06-control-theory.md).
 
 ## Where in the code
@@ -12,10 +12,10 @@ what to improve. The theory is in [06](06-control-theory.md).
 |------|-------|
 | Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
 | Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L45) |
-| Integral limit | [`integral_limit`](../src/robot/robot.c#L66) |
+| Integral limit | [`integral_limit`](../src/robot/robot.c#L73) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27), state in [`PID_t`](../src/control/pid.h) |
-| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L20), [`robot_balance_step()`](../src/robot/robot.c#L143) |
-| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L170), [robot_commands.c](../src/robot/robot_commands.c) |
+| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L24), [`robot_balance_step()`](../src/robot/robot.c#L152) |
+| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L180), [robot_commands.c](../src/robot/robot_commands.c) |
 
 ## Signal chain
 
@@ -123,9 +123,9 @@ low-pass the difference quotient with a time constant of a few samples.
 ### Saturation and mixing
 
 ```c
-/* mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX, MOTOR_DEADBAND) */
-.left  = mixer_wheel(output + turn, limit, deadband),
-.right = mixer_wheel(output - turn, limit, deadband),
+/* mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX, deadband_left, deadband_right) */
+.left  = mixer_wheel(output + turn, limit, deadband_left),
+.right = mixer_wheel(output - turn, limit, deadband_right),
 
 /* in mixer_wheel(): saturate before narrowing */
 int16_t magnitude = (int16_t)fminf(fabsf(value), (float)limit);
@@ -145,22 +145,36 @@ the PWM duty. Positive output means drive forward, towards a positive
 
 ### Deadband compensation
 
-```c
-if (magnitude > 0 && magnitude < deadband) {
-    magnitude = deadband;
-}
-```
-
-Static friction means small duty cycles do not move the wheels. Lifting any
-non-zero command to 20 counts makes the controller effective near upright.
-
-The mapping is **discontinuous**: commands 1–19 all become 20. Around the
-balance point the output keeps jumping between 0 and 20 counts, which can cause
-a small limit cycle. An offset mapping keeps it continuous and monotonic:
+Static friction means small duty cycles do not move the wheels: below the dead
+zone `d` the motor does nothing, so the controller's small corrections are lost.
+Each wheel command is therefore mapped continuously onto `d … 255`:
 
 ```math
-u' = \operatorname{sign}(u)\left(d + |u|\,\frac{255 - d}{255}\right), \qquad u \ne 0
+u' = \operatorname{sign}(u)\left(d + |u|\,\frac{255 - d}{255}\right), \qquad |u| \ge 1
 ```
+
+```c
+/* mixer_wheel() */
+if (magnitude < 1.0f) {
+    return 0;                                 /* below one count: stopped */
+}
+mapped = deadband + magnitude * (limit - deadband) / limit;
+```
+
+The smallest command already turns the wheel, the full command is unchanged,
+and the mapping never jumps or decreases. (The first version raised 1…19 to 20,
+so the output hopped between 0 and 20 around upright: a small limit cycle.)
+
+`d` is a property of the motor, gearbox and supply voltage, so it is measured,
+per wheel:
+
+- **Board default:** `BOARD_MOTOR_DEADBAND_LEFT/RIGHT` in `board_config.h`
+  (46 counts, 18 %, on the F407 robot from the bench supply; 20 by default).
+- **Live:** `AT+DEADBAND=left,right` / `AT+DEADBAND?`.
+- **Measured:** `test/pid_tune.py deadband` (wheels in the air) finds, per wheel,
+  where it starts from rest and the lowest command that keeps it turning, and
+  applies the latter. `--write` also updates the board config. Run it again
+  after replacing a motor or changing the supply voltage.
 
 ## Enabling, disabling and safety
 

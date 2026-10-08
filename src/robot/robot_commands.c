@@ -70,6 +70,16 @@ static AT_Result_t query_speed(char *value, size_t size) {
     return AT_OK;
 }
 
+static AT_Result_t query_deadband(char *value, size_t size) {
+    robot_lock();
+    int left = robot.deadband_left;
+    int right = robot.deadband_right;
+    robot_unlock();
+
+    snprintf(value, size, "%d,%d", left, right);
+    return AT_OK;
+}
+
 static AT_Result_t query_encoders(char *value, size_t size) {
     int32_t left = motor_get_encoder(MOTOR_LEFT);
     int32_t right = motor_get_encoder(MOTOR_RIGHT);
@@ -112,6 +122,14 @@ DEFINE_FLOAT_SET(set_kp, robot.pid.kp)
 DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
 DEFINE_FLOAT_SET(set_setpoint, robot.setpoint)
+
+static AT_Result_t set_deadband(const float *values) {
+    robot_lock();
+    robot.deadband_left = (int16_t)values[0];
+    robot.deadband_right = (int16_t)values[1];
+    robot_unlock();
+    return AT_OK;
+}
 
 static AT_Result_t set_speed(const float *values) {
     robot_lock();
@@ -225,6 +243,8 @@ static const AT_Command_Def_t robot_commands[] = {
       .help = AT_HELP("PID integral gain") },
     { .name = "KD",       .query = query_kd,       .set = set_kd,     .params = 1, .min = 0.0f, .max = FLT_MAX,
       .help = AT_HELP("PID derivative gain") },
+    { .name = "DEADBAND", .query = query_deadband, .set = set_deadband, .params = 2, .integer = true,
+      .min = 0.0f, .max = 200.0f, .help = AT_HELP("Motor dead zone left,right (counts of 255)") },
     { .name = "SETPOINT", .query = query_setpoint, .set = set_setpoint, .params = 1, .min = -10.0f, .max = 10.0f,
       .help = AT_HELP("Balance target angle (deg): trim, or step tests") },
     { .name = "ENABLE",   .exec = exec_enable,     .help = AT_HELP("Start balancing") },

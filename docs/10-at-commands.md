@@ -62,6 +62,7 @@ The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 | `AT+KP?` `AT+KI?` `AT+KD?` | `+KP:25.0000` | Current PID gains |
 | `AT+SETPOINT?` | `+SETPOINT:0.00` | Balance target angle |
 | `AT+GYROBIAS?` | `+GYROBIAS:0.560,-2.500,-0.109` | Gyro bias x,y,z (°/s) measured at power-on |
+| `AT+DEADBAND?` | `+DEADBAND:46,46` | Motor dead zone left,right (counts of 255) |
 | `AT+ENC?` | `+ENC:1234,-56` | Encoder counts left,right since boot (`test/pid_tune.py motor-test`) |
 | `AT+TURN?` | `+TURN:0.00` | |
 | `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |
@@ -78,6 +79,7 @@ one response are consistent with each other.
 |---------|-------|--------|
 | `AT+KP=n` `AT+KI=n` `AT+KD=n` | ≥ 0 | PID gains, effective on the next sample |
 | `AT+SETPOINT=n` | −10 … 10 | Balance target angle in degrees: trims the balance point, or drives step tests (`test/pid_tune.py step`) |
+| `AT+DEADBAND=l,r` | 0 … 200 each, integers | Motor dead zone per wheel; measured by `test/pid_tune.py deadband` |
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
 | `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Stored in `target_velocity`, not used by the control law |

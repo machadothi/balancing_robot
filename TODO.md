@@ -57,7 +57,8 @@ the linked [docs](docs/README.md) chapter.
 Ordered by expected payoff ([08](docs/08-pid-implementation.md#limitations-and-next-steps)):
 
 - [ ] Use the gyro rate as the D input instead of differencing the angle.
-- [ ] Continuous deadband compensation (offset mapping instead of 1…19 → 20).
+- [x] Continuous deadband compensation (offset mapping instead of 1…19 → 20),
+      per wheel, measured with `pid_tune.py deadband`.
 - [ ] Conditional integration while the output is saturated.
 - [ ] Velocity estimate from the encoders, then an outer velocity PI loop so
       `AT+VELOCITY` works and the robot stops drifting

@@ -23,10 +23,16 @@ typedef struct {
  * @brief Turn a balance output and a turn rate into two wheel commands
  *
  * left = output + turn, right = output - turn. Each wheel is saturated to
- * +/- limit, and any non-zero magnitude below `deadband` is raised to it so
- * the motors overcome static friction.
+ * +/- limit, then compensated for the motor's dead zone continuously:
+ * magnitudes 1..limit map linearly onto deadband..limit, so the smallest
+ * command already turns the wheel and the mapping has no jump. Below one count
+ * the wheel stays stopped.
+ *
+ * @param deadband_left   Smallest command that keeps the left wheel turning
+ * @param deadband_right  Same for the right wheel
  */
-Mixer_Output_t mixer_mix(float output, float turn, int16_t limit, int16_t deadband);
+Mixer_Output_t mixer_mix(float output, float turn, int16_t limit,
+                         int16_t deadband_left, int16_t deadband_right);
 
 #ifdef __cplusplus
 }

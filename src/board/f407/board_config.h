@@ -79,4 +79,9 @@
 #define BOARD_MOTOR1_REVERSED    1
 #define BOARD_MOTOR2_REVERSED    0
 
+/* Smallest command that keeps each wheel turning (counts of 255), measured
+ * with `test/pid_tune.py deadband` (18% on the bench supply) */
+#define BOARD_MOTOR_DEADBAND_LEFT    46
+#define BOARD_MOTOR_DEADBAND_RIGHT   46
+
 #endif // BOARD_CONFIG_H

@@ -16,6 +16,7 @@ JSON header line, so runs can be compared later.
   sweep {kp,ki,kd} VALUE... [-s SECONDS]         one capture per value, compared
   motor-test                     wheels in the air: dead zone, direction, wiring (encoders)
   noise [-s SECONDS]             robot held still: motor command produced by sensor noise
+  deadband [--write]             wheels in the air: measure each motor's dead zone, apply it
 
 With --bt MAC, commands go over the Bluetooth console and telemetry is read
 from USB, so command replies and the 100 Hz stream never share a line.
@@ -33,6 +34,7 @@ import argparse
 import csv
 import json
 import math
+import re
 import socket
 import sys
 import time
@@ -532,10 +534,98 @@ def cmd_motor_test(args) -> None:
         crosstalk = any(abs(r["other_cps"]) > abs(r["own_cps"]) for r in moving)
         top = max(forward, key=lambda r: r["cmd_pct"], default=None)
         print(f"{wheel}: starts at {first['cmd_pct'] if first else '?'}% "
-              f"(~{round(first['cmd_pct'] * 2.55) if first else '?'} counts -> MOTOR_DEADBAND)"
+              f"(~{round(first['cmd_pct'] * 2.55) if first else '?'} counts; `deadband` measures it precisely)"
               + (f", {top['own_cps']} counts/s at {top['cmd_pct']}%" if top else "")
               + ("" if sign_ok else "; encoder counts backwards for a forward command (encoder or motor polarity)")
               + ("; the OTHER encoder moves more: left/right wiring swapped" if crosstalk else ""))
+
+
+def measure_thresholds(cmd: AtConsole, wheel: int, top: int, threshold: float) -> tuple[int | None, int | None]:
+    """(start-from-rest %, keep-running %) for one wheel, in 1 % steps up to `top`."""
+    def set_wheel(pct):
+        speeds = [0, 0]
+        speeds[wheel] = pct
+        cmd.send(f"AT+SPEED={speeds[0]},{speeds[1]}")
+
+    def rate(window):
+        a, t0 = int(cmd.query("ENC").split(",")[wheel]), time.monotonic()
+        time.sleep(window)
+        b = int(cmd.query("ENC").split(",")[wheel])
+        return (b - a) / (time.monotonic() - t0)
+
+    start = None
+    for pct in range(5, top + 1):
+        set_wheel(0)
+        time.sleep(0.5)
+        set_wheel(pct)
+        time.sleep(0.4)
+        if rate(0.5) > threshold:
+            start = pct
+            break
+
+    keep = None
+    if start is not None:
+        set_wheel(top)
+        time.sleep(0.8)
+        for pct in range(top - 1, 4, -1):
+            set_wheel(pct)
+            time.sleep(0.3)
+            if rate(0.4) <= threshold:
+                break
+            keep = pct
+    set_wheel(0)
+    return start, keep
+
+
+def write_board_deadband(board: str, left: int, right: int) -> Path:
+    """Replace BOARD_MOTOR_DEADBAND_LEFT/RIGHT in the board config."""
+    path = Path(__file__).resolve().parent.parent / "src" / "board" / board / "board_config.h"
+    text = path.read_text()
+    for side, value in (("LEFT", left), ("RIGHT", right)):
+        pattern = rf"(#define BOARD_MOTOR_DEADBAND_{side}\s+)\d+"
+        if not re.search(pattern, text):
+            sys.exit(f"{path}: no BOARD_MOTOR_DEADBAND_{side} line to update; add one first")
+        text = re.sub(pattern, rf"\g<1>{value}", text)
+    path.write_text(text)
+    return path
+
+
+def cmd_deadband(args) -> None:
+    """Wheels in the air: each motor's dead zone, from its encoder; applied with AT+DEADBAND."""
+    cmd, tele = connect(args)
+    old = cmd.query("DEADBAND")
+    results = {}
+    cmd.expect_ok("AT+PIDOFF")
+    cmd.expect_ok("AT+ENABLE")
+    try:
+        for wheel, name in enumerate(("left", "right")):
+            print(f"measuring {name} wheel ...", flush=True)
+            results[name] = measure_thresholds(cmd, wheel, args.max, args.threshold)
+    finally:
+        safe_stop(cmd)
+        try:
+            cmd.send("AT+PIDON")
+        except Exception:
+            pass
+
+    counts = {}
+    for name, (start, keep) in results.items():
+        if keep is None:
+            sys.exit(f"{name}: did not turn up to {args.max}% (motor, cable or encoder?); nothing changed")
+        counts[name] = round(keep * 2.55)
+        print(f"{name:5}: starts from rest at {start}%, keeps turning down to {keep}% "
+              f"-> dead zone {counts[name]} counts")
+        if start - keep >= 5:
+            print(f"       ({start - keep}% between starting and running: strong static friction)")
+
+    cmd.expect_ok(f"AT+DEADBAND={counts['left']},{counts['right']}")
+    print(f"\nAT+DEADBAND={counts['left']},{counts['right']} applied (was {old}); lost at reset unless written")
+    if args.write:
+        path = write_board_deadband(args.board, counts["left"], counts["right"])
+        print(f"{path} updated: rebuild and flash to keep it")
+    else:
+        print(f"keep it: rerun with --write, or set BOARD_MOTOR_DEADBAND_LEFT/RIGHT in "
+              f"src/board/{args.board}/board_config.h")
 
 
 def cmd_noise(args) -> None:
@@ -559,7 +649,7 @@ def cmd_noise(args) -> None:
     print(f"{len(samples)} records -> {path}")
     print(f"  output from noise: {m.get('out_rms')} counts RMS, sign flips {m.get('out_flips_per_s')}/s, "
           f"P {m.get('p_rms')} / D {m.get('d_rms')} counts RMS")
-    deadband = args.deadband
+    deadband = args.deadband or min(int(x) for x in cmd.query("DEADBAND").split(","))
     if m.get("d_rms", 0) > deadband:
         kd_max = gains["kd"] * deadband / m["d_rms"]
         print(f"  D turns noise alone into {m['d_rms']} counts, above the {deadband}-count dead zone: "
@@ -593,9 +683,16 @@ def main() -> None:
     p.add_argument("--threshold", type=float, default=20, help="counts/s that count as moving")
     p.set_defaults(func=cmd_motor_test)
 
+    p = sub.add_parser("deadband", help="wheels in the air: measure each motor's dead zone and apply it")
+    p.add_argument("--max", type=int, default=40, help="highest command tried, percent")
+    p.add_argument("--threshold", type=float, default=30, help="counts/s that count as turning")
+    p.add_argument("--write", action="store_true", help="also update the board config")
+    p.add_argument("--board", default="f407")
+    p.set_defaults(func=cmd_deadband)
+
     p = sub.add_parser("noise", help="robot held still: motor command produced by sensor noise")
     p.add_argument("-s", "--seconds", type=float, default=5.0)
-    p.add_argument("--deadband", type=float, default=20, help="MOTOR_DEADBAND in counts")
+    p.add_argument("--deadband", type=float, help="dead zone in counts (default: AT+DEADBAND?)")
     p.set_defaults(func=cmd_noise)
 
     p = sub.add_parser("capture")

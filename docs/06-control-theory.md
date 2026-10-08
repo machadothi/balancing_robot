@@ -10,9 +10,9 @@ walks through the code line by line.
 
 | Concept | Where |
 |---------|-------|
-| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L46) |
+| Setpoint, safety limits | [`BALANCE_SETPOINT`, `MAX_TILT_ANGLE`](../src/robot/robot.c#L47) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27) |
-| Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L20) |
+| Actuation (mixing, saturation, deadband) | [`mixer_mix()`](../src/control/mixer.c#L24) |
 | Sample period | `IMU_SAMPLE_RATE_MS` → [`vTaskDelayUntil`](../src/imu/imu.c#L72) |
 | Unused hooks for an outer loop | `target_velocity` in [robot_internal.h](../src/robot/robot_internal.h), [`motor_get_encoder()`](../src/motor/motor.h) |
 
@@ -151,8 +151,9 @@ acceleration. A DC motor produces torque
   The effective loop gain falls, which is one reason a robot that balances in
   place struggles once it is moving fast.
 - **Static friction** creates a dead zone: small duty cycles produce no motion.
-  `MOTOR_DEADBAND` in [robot.c](../src/robot/robot.c#L51) lifts any non-zero
-  command to a minimum PWM of 20/255 (8 %).
+  The mixer maps every non-zero command continuously onto the measured dead
+  zone and above (46/255, 18 %, on the F407 robot;
+  [08](08-pid-implementation.md#deadband-compensation)).
 - **Saturation**: duty is limited to ±255. A disturbance that needs more
   acceleration than full voltage provides cannot be recovered, whatever the
   gains.

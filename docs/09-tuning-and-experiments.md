@@ -71,9 +71,16 @@ Then restore the PID with `AT+PIDON`.
 
 ### 4. Deadband
 
-Increase `AT+SPEED=n,n` from 0 in small steps and note where the wheels start
-turning (on the floor, not in the air). Convert to PWM (n × 2.55) and set
-`MOTOR_DEADBAND` just below it.
+With the wheels in the air:
+
+```sh
+python3 test/pid_tune.py deadband --write
+```
+
+It measures, per wheel, where the motor starts from rest and the lowest command
+that keeps it turning, applies the latter with `AT+DEADBAND`, and with `--write`
+stores it in the board config (rebuild to keep it after a reset). Repeat after
+replacing a motor or changing the supply ([08](08-pid-implementation.md#deadband-compensation)).
 
 ## PID tuning procedure
 
