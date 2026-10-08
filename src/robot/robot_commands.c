@@ -41,6 +41,7 @@ DEFINE_FLOAT_QUERY(query_kp, robot.pid.kp, 4)
 DEFINE_FLOAT_QUERY(query_ki, robot.pid.ki, 4)
 DEFINE_FLOAT_QUERY(query_kd, robot.pid.kd, 4)
 DEFINE_FLOAT_QUERY(query_setpoint, robot.setpoint, 2)
+DEFINE_FLOAT_QUERY(query_alpha, robot.comp_alpha, 3)
 
 static AT_Result_t query_velocity(char *value, size_t size) {
     /* There is no velocity estimate yet */
@@ -77,6 +78,15 @@ static AT_Result_t query_deadband(char *value, size_t size) {
     robot_unlock();
 
     snprintf(value, size, "%d,%d", left, right);
+    return AT_OK;
+}
+
+static AT_Result_t query_outlimit(char *value, size_t size) {
+    robot_lock();
+    float limit = robot.pid.output_limit;
+    robot_unlock();
+
+    snprintf(value, size, "%d", (int)(limit * 100.0f / MOTOR_COMMAND_MAX + 0.5f));
     return AT_OK;
 }
 
@@ -122,11 +132,20 @@ DEFINE_FLOAT_SET(set_kp, robot.pid.kp)
 DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
 DEFINE_FLOAT_SET(set_setpoint, robot.setpoint)
+DEFINE_FLOAT_SET(set_alpha, robot.comp_alpha)
 
 static AT_Result_t set_deadband(const float *values) {
     robot_lock();
     robot.deadband_left = (int16_t)values[0];
     robot.deadband_right = (int16_t)values[1];
+    robot_unlock();
+    return AT_OK;
+}
+
+/** Percent of full power; caps the balance output, e.g. for quiet first tests */
+static AT_Result_t set_outlimit(const float *values) {
+    robot_lock();
+    robot.pid.output_limit = values[0] * MOTOR_COMMAND_MAX / 100.0f;
     robot_unlock();
     return AT_OK;
 }
@@ -245,6 +264,10 @@ static const AT_Command_Def_t robot_commands[] = {
       .help = AT_HELP("PID derivative gain") },
     { .name = "DEADBAND", .query = query_deadband, .set = set_deadband, .params = 2, .integer = true,
       .min = 0.0f, .max = 200.0f, .help = AT_HELP("Motor dead zone left,right (counts of 255)") },
+    { .name = "OUTLIMIT", .query = query_outlimit, .set = set_outlimit, .params = 1, .integer = true,
+      .min = 20.0f, .max = 100.0f, .help = AT_HELP("Balance output limit, percent of full power") },
+    { .name = "ALPHA",    .query = query_alpha,    .set = set_alpha,  .params = 1, .min = 0.9f, .max = 0.999f,
+      .help = AT_HELP("Complementary filter gyro weight (0.9..0.999)") },
     { .name = "SETPOINT", .query = query_setpoint, .set = set_setpoint, .params = 1, .min = -10.0f, .max = 10.0f,
       .help = AT_HELP("Balance target angle (deg): trim, or step tests") },
     { .name = "ENABLE",   .exec = exec_enable,     .help = AT_HELP("Start balancing") },

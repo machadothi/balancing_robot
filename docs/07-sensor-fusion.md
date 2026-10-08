@@ -11,7 +11,7 @@ the two filters in the firmware, and shows how to measure them on your robot.
 | Accelerometer tilt and rate | [`imu_tilt()`](../src/imu/imu.c#L125) |
 | Complementary filter | [`complementary_update()`](../src/filter/complementary.c#L32), `COMPLEMENTARY_ALPHA` in [config.h](../src/config.h#L82) |
 | Kalman filter | [`kalman_update()`](../src/filter/kalman.c#L34), `KALMAN_Q_ANGLE` / `KALMAN_R_MEASURE` in [config.h](../src/config.h#L74) |
-| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L180), `ATTITUDE_FILTER` CMake option |
+| Filter selection, seeding | [`robot_task()`](../src/robot/robot.c#L190), `ATTITUDE_FILTER` CMake option |
 | Telemetry for analysis | `AT+STREAM`, [telemetry.c](../src/telemetry/telemetry.c), [test/filter_comparison.py](../test/filter_comparison.py) |
 
 ## 1. Two sensors, two error models
@@ -91,12 +91,29 @@ band. The discrete coefficient maps to the time constant as
 
 | Parameter | Value in this firmware |
 |-----------|------------------------|
-| α | 0.96 |
+| α | 0.96 (Blue Pill), 0.99 (F407 robot) |
 | T | 10 ms |
-| τ | 0.24 s |
-| Crossover f_c = 1/(2πτ) | 0.66 Hz |
+| τ | 0.24 s / 0.99 s |
+| Crossover f_c = 1/(2πτ) | 0.66 Hz / 0.16 Hz |
 
-Below 0.66 Hz the estimate follows the accelerometer; above it, the gyroscope.
+Below f_c the estimate follows the accelerometer; above it, the gyroscope.
+α is `BOARD_COMPLEMENTARY_ALPHA` in the board config, changeable live with
+`AT+ALPHA`.
+
+### What wheel acceleration does
+
+The accelerometer measures gravity **plus the robot's own acceleration**. When
+the wheels accelerate the base, it reports that as extra tilt. On the F407 robot
+this error reached 22° RMS and 64° peaks while balancing, correlated +0.87 with
+the motor command 10 ms earlier, and in the same direction as the push: drive
+forward, and the accelerometer says "leaning further forward".
+
+Through the filter's accelerometer share this becomes a **positive feedback
+loop**: push → larger estimated lean → bigger push. With α = 0.96, 4 % of that
+error enters the estimate every 10 ms; the robot wobbled and fell whatever the
+PID gains. A larger α keeps the accelerometer for the slow drift only, which
+works because the start-up calibration removes the gyro bias. Compensating the
+measured acceleration with the wheel encoders would be the next step.
 
 ### What gyro bias does
 

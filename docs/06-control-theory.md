@@ -20,15 +20,20 @@ walks through the code line by line.
 
 ```mermaid
 flowchart LR
-    REF["θ_ref = 0°"] --> SUM(("Σ"))
+    REF["θ_ref = 0°"] -->|"−"| SUM(("Σ"))
     SUM -->|"e"| PID["PID<br/>pid_update()"]
     PID -->|"u ∈ [−255, 255]"| MIX["Mixer + deadband<br/>mixer_mix()"]
     MIX -->|"PWM duty"| MOT["DC motors<br/>+ wheels"]
     MOT -->|"wheel acceleration a"| BODY["Pendulum body"]
-    BODY -->|"θ"| IMU["MPU-6050"]
+    BODY -->|"θ"| IMU["IMU<br/>MPU-6050 / QMI8658"]
     IMU -->|"accel, gyro"| FUS["Sensor fusion<br/>07"]
-    FUS -->|"−θ̂"| SUM
+    FUS -->|"+θ̂"| SUM
 ```
+
+The error is **e = θ̂ − θ_ref**, not the usual reference minus measurement: the
+wheels must accelerate *toward* the lean (a = K_p·θ + …, §2), so a forward lean
+has to produce a forward command. With e = θ_ref − θ̂ the wheels push away from
+the lean and the robot falls immediately, at full power.
 
 Everything to the left of the motors runs once per sample (10 ms by default);
 everything to the right is continuous physics. The rest of this chapter models
@@ -293,10 +298,10 @@ existing angle loop and wraps a slower velocity loop around it:
 flowchart LR
     VREF["v_ref<br/>AT+VELOCITY"] --> VS(("Σ"))
     VS -->|"velocity error"| VPI["Velocity PI<br/>(slow, ~1 Hz)"]
-    VPI -->|"θ_ref"| AS(("Σ"))
+    VPI -->|"−θ_ref"| AS(("Σ"))
     AS -->|"angle error"| APID["Angle PID<br/>(fast, 100 Hz)"]
     APID -->|"PWM"| ROBOT["Robot"]
-    ROBOT -->|"−θ̂"| AS
+    ROBOT -->|"+θ̂"| AS
     ROBOT -->|"−v (encoders)"| VS
 ```
 

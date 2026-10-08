@@ -69,7 +69,7 @@ extern "C" {
  *  @brief Complementary filter tuning parameters
  *  @{
  */
-#define COMPLEMENTARY_ALPHA     0.96f   /**< Filter coefficient (0.90-0.99) */
+#define COMPLEMENTARY_ALPHA     0.96f   /**< Default gyro weight; boards override with BOARD_COMPLEMENTARY_ALPHA, AT+ALPHA live */
 /** @} */
 
 /* ==========================================================================

@@ -165,6 +165,14 @@ static void test_values(void) {
     EXPECT("AT+DEADBAND?", "+DEADBAND:46,20");
     EXPECT("AT+DEADBAND=46", "ERROR:3");
     EXPECT("AT+DEADBAND=46.5,20", "ERROR:4");
+    EXPECT("AT+OUTLIMIT?", "+OUTLIMIT:100");
+    EXPECT("AT+OUTLIMIT=60", "OK");
+    EXPECT("AT+OUTLIMIT?", "+OUTLIMIT:60");
+    CHECK(robot.pid.output_limit == 153.0f);
+    EXPECT("AT+OUTLIMIT=10", "ERROR:4");
+    EXPECT("AT+ALPHA=0.99", "OK");
+    EXPECT("AT+ALPHA?", "+ALPHA:0.990");
+    EXPECT("AT+ALPHA=1", "ERROR:4");
     EXPECT("AT+ALL?", "+ALL:0.000,0.000,0.000,0.000,0.000,0.000,0.00");
     EXPECT("AT+STREAM=1", "OK");
     CHECK(streaming);

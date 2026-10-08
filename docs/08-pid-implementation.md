@@ -3,7 +3,7 @@
 The balance controller exactly as coded: every term, limit and safety check in
 [`pid_update()`](../src/control/pid.c#L27),
 [`mixer_mix()`](../src/control/mixer.c#L24) and
-[`robot_balance_step()`](../src/robot/robot.c#L152), why each is there, and
+[`robot_balance_step()`](../src/robot/robot.c#L159), why each is there, and
 what to improve. The theory is in [06](06-control-theory.md).
 
 ## Where in the code
@@ -12,16 +12,16 @@ what to improve. The theory is in [06](06-control-theory.md).
 |------|-------|
 | Default gains | [`ROBOT_DEFAULT_KP/KI/KD`](../src/robot/robot.c#L40) |
 | Setpoint, fall limit, deadband, PWM limit | [robot.c constants](../src/robot/robot.c#L45) |
-| Integral limit | [`integral_limit`](../src/robot/robot.c#L73) |
+| Integral limit | [`integral_limit`](../src/robot/robot.c#L79) |
 | Control law | [`pid_update()`](../src/control/pid.c#L27), state in [`PID_t`](../src/control/pid.h) |
-| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L24), [`robot_balance_step()`](../src/robot/robot.c#L152) |
-| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L180), [robot_commands.c](../src/robot/robot_commands.c) |
+| Mixing and actuation | [`mixer_mix()`](../src/control/mixer.c#L24), [`robot_balance_step()`](../src/robot/robot.c#L159) |
+| Loop, safety, enabling | [`robot_task()`](../src/robot/robot.c#L190), [robot_commands.c](../src/robot/robot_commands.c) |
 
 ## Signal chain
 
 ```mermaid
 flowchart LR
-    TILT["tilt θ̂ (°)"] --> ERR["e = 0 − θ̂"]
+    TILT["tilt θ̂ (°)"] --> ERR["e = θ̂ − θ_ref"]
     ERR --> P["P = Kp·e"]
     ERR --> INT["∫e dt<br/>clamped ±100"] --> I["I = Ki·∫e"]
     ERR --> DIFF["(e − e_prev) / dt"] --> D["D = Kd·ė"]
@@ -38,7 +38,8 @@ flowchart LR
 ## The control law
 
 ```c
-float error = BALANCE_SETPOINT - angle;
+/* lean forward -> drive forward: the wheels move under the falling body */
+float error = tilt - robot.setpoint;
 
 /* pid_update(&robot.pid, error, IMU_SAMPLE_RATE_S) */
 pid->p_term = pid->kp * error;
@@ -99,7 +100,7 @@ Trade-offs of this scheme:
 ## Derivative
 
 The D term differentiates the **error**. With a constant setpoint this equals
-−Kd × dθ̂/dt, so there is no "derivative kick". That changes as soon as an outer
+Kd × dθ̂/dt, so there is no "derivative kick". That changes as soon as an outer
 loop moves the setpoint (cascade control, [06 §6](06-control-theory.md#6-cascade-control-the-next-step)):
 a setpoint step would then produce a one-sample spike. Differentiating the
 measurement avoids it.
@@ -217,14 +218,15 @@ stateDiagram-v2
 
 ## A worked sample
 
-Robot at rest upright, then pushed to 2° in one sample, with the default gains:
+Robot at rest upright, then pushed forward to 2° in one sample, with the default
+gains (e = 2):
 
 | Term | Calculation | Counts |
 |------|-------------|--------|
-| P | 25 × (−2) | −50 |
-| I | 0.5 × (−2 × 0.01) | −0.01 |
-| D | 0.8 × (−2 − 0) / 0.01 | −160 |
-| Output | clamp(−210.01, ±255) | −210 |
+| P | 25 × 2 | 50 |
+| I | 0.5 × (2 × 0.01) | 0.01 |
+| D | 0.8 × (2 − 0) / 0.01 | 160 |
+| Output | clamp(210.01, ±255) | 210: wheels forward, under the lean |
 
 A sudden change is dominated by D on the first sample, then P takes over. This
 is also why a single noisy angle sample can produce a large motor pulse, the

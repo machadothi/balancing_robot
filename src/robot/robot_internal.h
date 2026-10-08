@@ -29,6 +29,7 @@ typedef struct {
     bool armed;                 /**< Start balancing once upright (robot_toggle_armed) */
     int16_t deadband_left;      /**< Smallest command keeping the wheel turning, AT+DEADBAND */
     int16_t deadband_right;
+    float comp_alpha;           /**< Complementary filter gyro weight, AT+ALPHA */
     PID_t pid;                  /**< Balance controller, gains included */
 } Robot_t;
 

@@ -61,6 +61,12 @@
 #define BOARD_MOTOR_DEADBAND_RIGHT  20
 #endif // BOARD_MOTOR_DEADBAND_RIGHT
 
+/** Gyro weight of the complementary filter: a robot whose wheels accelerate
+ * hard needs more, since the accelerometer then reads that acceleration as tilt */
+#ifndef BOARD_COMPLEMENTARY_ALPHA
+#define BOARD_COMPLEMENTARY_ALPHA   COMPLEMENTARY_ALPHA
+#endif // BOARD_COMPLEMENTARY_ALPHA
+
 /* ==========================================================================
  * Shared State
  * ========================================================================== */
@@ -77,6 +83,7 @@ Robot_t robot = {
     .setpoint = BALANCE_SETPOINT,
     .deadband_left = BOARD_MOTOR_DEADBAND_LEFT,
     .deadband_right = BOARD_MOTOR_DEADBAND_RIGHT,
+    .comp_alpha = BOARD_COMPLEMENTARY_ALPHA,
 };
 
 /** Guards `robot` and motor commands against the AT handlers (UART RX task) */
@@ -155,8 +162,11 @@ static void robot_balance_step(float tilt) {
         return;
     }
 
-    float output = pid_update(&robot.pid, robot.setpoint - tilt, IMU_SAMPLE_RATE_S);
-    Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, MOTOR_COMMAND_MAX,
+    /* Lean forward (tilt > 0) -> drive forward (output > 0): the wheels move
+     * under the falling body. error = setpoint - tilt would push them away. */
+    float output = pid_update(&robot.pid, tilt - robot.setpoint, IMU_SAMPLE_RATE_S);
+    /* The PID's output limit (AT+OUTLIMIT) also caps each wheel after mixing */
+    Mixer_Output_t wheels = mixer_mix(output, robot.turn_rate, (int16_t)robot.pid.output_limit,
                                      robot.deadband_left, robot.deadband_right);
 
     motor_set(MOTOR_LEFT, wheels.left);
@@ -183,7 +193,7 @@ void robot_task(void *args) {
     KalmanFilter_t kalman;
     ComplementaryFilter_t complementary;
     kalman_init(&kalman);
-    complementary_init(&complementary);
+    complementary_init_custom(&complementary, robot.comp_alpha);
 
     AttitudeFilter_t filters[FILTER_COUNT] = {
         [FILTER_COMPLEMENTARY] = complementary_filter_interface(&complementary),
@@ -240,6 +250,9 @@ void robot_task(void *args) {
         float tilt = angles[CONTROL_FILTER];
 
         robot_lock();
+
+        /* AT+ALPHA takes effect on the next sample */
+        complementary.alpha = robot.comp_alpha;
 
         robot.imu = imu_data;
         robot.tilt = tilt;

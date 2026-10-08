@@ -84,4 +84,8 @@
 #define BOARD_MOTOR_DEADBAND_LEFT    46
 #define BOARD_MOTOR_DEADBAND_RIGHT   43
 
+/* The wheels' acceleration reaches the accelerometer as up to 60 deg of false
+ * tilt, in phase with the motor command (measured): trust the gyro more */
+#define BOARD_COMPLEMENTARY_ALPHA    0.99f
+
 #endif // BOARD_CONFIG_H

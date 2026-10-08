@@ -102,7 +102,9 @@ def connect(args) -> tuple[AtConsole, AtConsole]:
 
 
 def read_gains(con: AtConsole) -> dict:
-    return {name.lower(): con.query_float(name) for name in ("KP", "KI", "KD", "SETPOINT")}
+    gains = {name.lower(): con.query_float(name) for name in ("KP", "KI", "KD", "SETPOINT")}
+    gains["outlimit_counts"] = round(con.query_float("OUTLIMIT") * 2.55, 1)
+    return gains
 
 
 def status_text(con: AtConsole) -> str:
@@ -190,13 +192,17 @@ def oscillation(times, values, hysteresis=0.2) -> float:
 def balancing_part(rows: list[dict]) -> tuple[list[dict], float | None]:
     """Rows while the controller was active, and the time of a fall if any."""
     active = [r for r in rows if r["out"] != 0 or r["p"] != 0]
-    fall = next((r["host_s"] for r in rows if abs(r["tilt"]) > FALL_ANGLE), None)
+    if not active:
+        return [], None
+    # Only a fall after balancing started counts (the robot lies down before arming)
+    start = active[0]["host_s"]
+    fall = next((r["host_s"] for r in rows if r["host_s"] > start and abs(r["tilt"]) > FALL_ANGLE), None)
     if fall is not None:
         active = [r for r in active if r["host_s"] < fall]
     return active, fall
 
 
-def metrics(rows: list[dict]) -> dict:
+def metrics(rows: list[dict], limit: float = OUTPUT_LIMIT) -> dict:
     active, fall = balancing_part(rows)
     if len(active) < 20:
         return {"samples": len(rows), "active": len(active), "fall_s": fall}
@@ -213,7 +219,7 @@ def metrics(rows: list[dict]) -> dict:
         "tilt_mean": round(mean(err), 3),
         "tilt_peak": round(max(abs(e) for e in err), 2),
         "osc_hz": round(oscillation(t, err), 2),
-        "sat_pct": round(100 * sum(abs(o) >= OUTPUT_LIMIT - 0.5 for o in out) / len(out), 1),
+        "sat_pct": round(100 * sum(abs(o) >= limit - 0.5 for o in out) / len(out), 1),
         "out_rms": round(rms(out), 1),
         "out_flips_per_s": round(flips / max(t[-1] - t[0], 1e-3), 1),
         "p_rms": round(rms(r["p"] for r in active), 1),
@@ -292,6 +298,9 @@ def step_metrics(rows: list[dict]) -> list[dict]:
 
 
 def print_table(rows: list[dict], columns: list[str]) -> None:
+    if not rows:
+        print("(no results)")
+        return
     widths = {c: max(len(c), *(len(f"{r.get(c)}") for r in rows)) for c in columns}
     print("  ".join(c.rjust(widths[c]) for c in columns))
     for r in rows:
@@ -300,7 +309,7 @@ def print_table(rows: list[dict], columns: list[str]) -> None:
 
 def report(path: Path | str) -> None:
     meta, rows = load(str(path))
-    m = metrics(rows)
+    m = metrics(rows, meta.get("outlimit_counts", OUTPUT_LIMIT))
     print(f"{path}\n  gains: kp={meta.get('kp')} ki={meta.get('ki')} kd={meta.get('kd')} "
           f"setpoint={meta.get('setpoint')}  status at start: {meta.get('status')}")
     for key, value in m.items():
@@ -424,7 +433,7 @@ def cmd_sweep(args) -> None:
             samples = record(cmd, tele, args.seconds, gains["setpoint"])
             meta = {**gains, args.param: value, "status": "sweep"}
             path = save(samples, meta, f"sweep_{args.param}{value:g}")
-            results.append({args.param: value, **metrics(samples), "file": path.name})
+            results.append({args.param: value, **metrics(samples, gains["outlimit_counts"]), "file": path.name})
     finally:
         cmd.send(f"AT+{args.param.upper()}={original}")
         print(f"{args.param} restored to {original}")
