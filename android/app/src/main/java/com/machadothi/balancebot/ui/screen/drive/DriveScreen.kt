@@ -22,6 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.machadothi.balancebot.model.ConnectionState
+import com.machadothi.balancebot.model.LinkKind
+import com.machadothi.balancebot.ui.components.CameraView
 import com.machadothi.balancebot.ui.components.Joystick
 import com.machadothi.balancebot.ui.components.RobotAttitude
 import com.machadothi.balancebot.ui.components.ValueTile
@@ -36,6 +38,8 @@ fun DriveScreen(viewModel: DriveViewModel = hiltViewModel()) {
     val maxTurn by viewModel.maxTurn.collectAsStateWithLifecycle()
     val command by viewModel.command.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val cameraUrl by viewModel.cameraUrl.collectAsStateWithLifecycle()
+    val showCamera by viewModel.showCamera.collectAsStateWithLifecycle()
     val connected = connection is ConnectionState.Connected
 
     Column(
@@ -47,6 +51,21 @@ fun DriveScreen(viewModel: DriveViewModel = hiltViewModel()) {
     ) {
         if (!connected) {
             Text("Connect to the robot first (Connect tab).", color = MaterialTheme.colorScheme.error)
+        }
+
+        cameraUrl?.let { url ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Switch(checked = showCamera, onCheckedChange = viewModel::setShowCamera)
+                Text("Camera", style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(start = 12.dp))
+            }
+            if (showCamera) CameraView(url, Modifier.fillMaxWidth())
+        } ?: run {
+            if ((connection as? ConnectionState.Connected)?.device?.kind == LinkKind.BLE) {
+                Text(
+                    "Camera: waiting for the Atom's Wi-Fi. Set the network in Settings → Camera Wi-Fi.",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
 
         RobotAttitude(live, Modifier.fillMaxWidth())

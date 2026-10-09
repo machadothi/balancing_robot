@@ -18,6 +18,15 @@ class DriveViewModel @Inject constructor(
 
     val connection = repository.connection
     val live = repository.live
+    val cameraUrl = repository.cameraUrl
+
+    /** Video costs the Atom's Wi-Fi and the phone's battery: off with a tap */
+    private val _showCamera = MutableStateFlow(true)
+    val showCamera = _showCamera.asStateFlow()
+
+    fun setShowCamera(on: Boolean) {
+        _showCamera.value = on
+    }
 
     /** The jog only sends while this is on: a pocketed phone does not drive */
     private val _driveEnabled = MutableStateFlow(false)

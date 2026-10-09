@@ -3,8 +3,10 @@ package com.machadothi.balancebot.ui.screen.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.machadothi.balancebot.model.ConnectionState
+import com.machadothi.balancebot.model.LinkKind
 import com.machadothi.balancebot.model.RobotParam
 import com.machadothi.balancebot.model.RobotParams
+import com.machadothi.balancebot.model.WifiNetwork
 import com.machadothi.balancebot.repository.RobotRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -22,6 +24,18 @@ data class ParamUi(
     val error: String? = null,
 )
 
+data class WifiUi(
+    val ssid: String = "",
+    val password: String = "",
+    /** off, connecting or connected */
+    val state: String = "?",
+    val ip: String = "",
+    val error: String? = null,
+    /** Last AT+WIFISCAN? result */
+    val networks: List<WifiNetwork> = emptyList(),
+    val scanning: Boolean = false,
+)
+
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: RobotRepository,
@@ -35,9 +49,71 @@ class SettingsViewModel @Inject constructor(
     private val _message = MutableStateFlow<String?>(null)
     val message = _message.asStateFlow()
 
+    /** The Atom's Wi-Fi for the camera (AT+WIFI?), null over the HC-06 */
+    private val _wifi = MutableStateFlow<WifiUi?>(null)
+    val wifi = _wifi.asStateFlow()
+
     init {
         viewModelScope.launch {
-            repository.connection.collect { if (it is ConnectionState.Connected) load() }
+            repository.connection.collect {
+                _wifi.value = null
+                if (it is ConnectionState.Connected) {
+                    load()
+                    if (it.device.kind == LinkKind.BLE) readWifi()
+                }
+            }
+        }
+    }
+
+    fun readWifi() {
+        viewModelScope.launch {
+            repository.wifiStatus()
+                .onSuccess { status ->
+                    val parts = status.split(',')
+                    val ssid = parts.getOrElse(0) { "" }
+                    _wifi.update { old ->
+                        (old ?: WifiUi(ssid = ssid)).copy(
+                            state = parts.getOrElse(1) { "?" },
+                            ip = parts.getOrElse(2) { "" },
+                        )
+                    }
+                }
+                .onFailure { e -> _wifi.update { (it ?: WifiUi()).copy(error = e.message) } }
+        }
+    }
+
+    /** Ask the Atom which networks it sees; a single one in range is picked right away */
+    fun scanWifi() {
+        _wifi.update { (it ?: WifiUi()).copy(scanning = true, error = null) }
+        viewModelScope.launch {
+            repository.scanWifi()
+                .onSuccess { list ->
+                    _wifi.update { w ->
+                        val current = w ?: WifiUi()
+                        current.copy(
+                            networks = list,
+                            scanning = false,
+                            ssid = if (current.ssid.isBlank() && list.size == 1) list[0].ssid else current.ssid,
+                            error = if (list.isEmpty()) "No 2.4 GHz network found" else null,
+                        )
+                    }
+                }
+                .onFailure { e -> _wifi.update { (it ?: WifiUi()).copy(scanning = false, error = "Scan failed: ${e.message}") } }
+        }
+    }
+
+    fun onWifiEdit(ssid: String, password: String) =
+        _wifi.update { (it ?: WifiUi()).copy(ssid = ssid, password = password, error = null) }
+
+    fun saveWifi() {
+        val w = _wifi.value ?: return
+        viewModelScope.launch {
+            repository.setWifi(w.ssid.trim(), w.password)
+                .onSuccess {
+                    _wifi.update { it?.copy(password = "", state = "connecting", ip = "", error = null) }
+                    _message.value = "Atom joins \"${w.ssid.trim()}\"; the camera appears in Drive once it is connected"
+                }
+                .onFailure { e -> _wifi.update { it?.copy(error = e.message) } }
         }
     }
 

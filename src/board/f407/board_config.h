@@ -22,9 +22,11 @@
 #define BOARD_UART_RX_PIN        GPIO9
 #define BOARD_UART_AF            GPIO_AF7
 
-/* Bluetooth AT console (HC-05/HC-06 module): USART2 on the Bluetooth header
- * (PD5 = TX to the module's RXD, PD6 = RX from the module's TXD) */
-/* Name the Bluetooth module advertises; AT+BTNAME writes it into the module */
+/* Bluetooth AT console: USART2 on the Bluetooth header (PD5 = TX to the
+ * module's RXD, PD6 = RX from the module's TXD). The module is BT_MODULE: an
+ * HC-06, or the AtomS3R-CAM bridge in atom/ (Grove G2 = RX, G1 = TX). */
+/* Name the HC-06 advertises; AT+BTNAME writes it into the module. The Atom
+ * advertises the same name over BLE (atom/main/Kconfig.projbuild). */
 #define BOARD_BT_NAME            "balancing robot"
 
 #define BOARD_BT_UART            USART2

@@ -224,9 +224,18 @@ the `acc_deg`, `kalman` and `comp` fields.
 
 ## Bluetooth console (F407 board)
 
-An HC-05 or HC-06 module (for example on a ZS-040 breakout) on the board's
-Bluetooth header gives a wireless AT console alongside USB. It is built when
-`CONSOLE_BT` is on, the default on this board ([02](02-build-and-configuration.md#features)).
+A module on the board's Bluetooth header (USART2) gives a wireless AT console
+alongside USB. It is built when `CONSOLE_BT` is on, the default on this board
+([02](02-build-and-configuration.md#features)). `BT_MODULE` in
+[cmake/boards/f407.conf](../cmake/boards/f407.conf) says which module sits there:
+
+| `BT_MODULE` | Module | Phone link | Baud | Extras |
+|-------------|--------|------------|------|--------|
+| `hc06` (default) | HC-05/HC-06, e.g. on a ZS-040 breakout | Classic Bluetooth serial, paired | 9600 | `AT+BTNAME` |
+| `atom` | AtomS3R-CAM running [atom/](../atom/README.md) | BLE (Nordic UART Service), no pairing | 115200 | Camera over Wi-Fi, `AT+CAM?`, `AT+WIFI` |
+
+Both carry the same AT commands; the Android app talks to either. The steps
+below are for the HC-06; the Atom's are in [atom/README.md](../atom/README.md).
 
 1. **Supply.** The ZS-040 needs 3.6–6 V on VCC. Measure the header's supply pin
    first; if it provides only 3.3 V, power the module from a 5 V pin instead.

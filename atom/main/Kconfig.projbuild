@@ -1,0 +1,36 @@
+menu "Balancing robot link"
+
+    config ATOM_BLE_NAME
+        string "BLE name"
+        default "balancing robot"
+        help
+            Name the Atom advertises; the app lists devices with "robot" in the name.
+
+    config ATOM_ROBOT_BAUDRATE
+        int "Robot UART baud rate"
+        default 115200
+        help
+            Must match BT_BAUDRATE of the robot firmware (BT_MODULE=atom: 115200).
+
+    config ATOM_ROBOT_TX_GPIO
+        int "GPIO to the robot's RX (Grove G1, white)"
+        default 1
+
+    config ATOM_ROBOT_RX_GPIO
+        int "GPIO from the robot's TX (Grove G2, yellow)"
+        default 2
+
+    config ATOM_WIFI_SSID
+        string "Wi-Fi network for the camera (empty: set it with AT+WIFI=)"
+        default ""
+
+    config ATOM_WIFI_PASSWORD
+        string "Wi-Fi password"
+        default ""
+
+    config ATOM_JPEG_QUALITY
+        int "JPEG quality of the video (1-100)"
+        range 1 100
+        default 60
+
+endmenu

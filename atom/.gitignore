@@ -1,0 +1,6 @@
+build/
+managed_components/
+dependencies.lock
+# Holds the Wi-Fi password once set in menuconfig
+sdkconfig
+sdkconfig.old

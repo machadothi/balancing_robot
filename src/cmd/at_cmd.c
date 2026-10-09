@@ -303,7 +303,7 @@ static AT_Result_t exec_update(void) {
 }
 #endif // BOOTLOADER
 
-#if CONSOLE_BT && defined(BOARD_BT_NAME)
+#if CONSOLE_BT && BT_MODULE_HC06 && defined(BOARD_BT_NAME)
 /**
  * Rename the Bluetooth module to BOARD_BT_NAME (HC-06: "AT+NAME<name>", no line
  * ending). The module takes commands only while nothing is connected to it over
@@ -319,7 +319,7 @@ static AT_Result_t exec_btname(void) {
     uart_discard_rx(UART_PORT_BT);
     return AT_OK;
 }
-#endif // CONSOLE_BT && defined(BOARD_BT_NAME)
+#endif // CONSOLE_BT && BT_MODULE_HC06 && defined(BOARD_BT_NAME)
 
 #if AT_CMD_HELP
 /** List every registered command, with its syntax, from the tables themselves */
@@ -350,9 +350,9 @@ static const AT_Command_Def_t system_commands[] = {
 #if BOOTLOADER
     { .name = "UPDATE",  .exec = exec_update,    .help = AT_HELP("Restart into the bootloader (scripts/flash_usb.py)") },
 #endif // BOOTLOADER
-#if CONSOLE_BT && defined(BOARD_BT_NAME)
+#if CONSOLE_BT && BT_MODULE_HC06 && defined(BOARD_BT_NAME)
     { .name = "BTNAME",  .exec = exec_btname,    .help = AT_HELP("Rename the Bluetooth module (USB console, nothing connected over BT)") },
-#endif // CONSOLE_BT && defined(BOARD_BT_NAME)
+#endif // CONSOLE_BT && BT_MODULE_HC06 && defined(BOARD_BT_NAME)
 #if AT_CMD_HELP
     { .name = "HELP",    .exec = exec_help,      .help = AT_HELP("This list") },
 #endif // AT_CMD_HELP

@@ -17,6 +17,12 @@ the linked [docs](docs/README.md) chapter.
       and Bluetooth, ~8 `AT+LIVE?` replies/s); module renamed "balancing robot".
 - [ ] Try the app on the phone: connect, Live tab, Settings read/write, then the
       jog with a small max speed.
+- [ ] **AtomS3R-CAM bridge** ([atom/](atom/README.md), `BT_MODULE=atom`):
+      firmware runs (BLE "balancing robot", GC0308 camera found, local commands
+      tested over BLE from the PC); app has BLE scan, camera view and Wi-Fi setup.
+      Next: measure the header's VCC, wire it, flash the robot with
+      `BT_MODULE=atom`, connect from the app, set the Wi-Fi, check the video
+      (orientation, frame rate) and the robot's 5 V under the extra load.
 - [ ] Show `ARMED` in `AT+STATUS?`: a button press that did not register is
       invisible today.
 - [ ] Parameter storage in flash for `AT+SAVE` / `AT+LOAD`, so tuning survives a

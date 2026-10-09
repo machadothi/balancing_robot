@@ -6,6 +6,8 @@
 #define APP_BLINK_ONLY              0
 #define CONSOLE_USB                 1
 #define CONSOLE_BT                  0
+#define BT_MODULE_HC06              1
+#define BT_MODULE_ATOM              0
 #define CONSOLE_ANY                 1
 #define CONSOLE_ECHO                0
 #define TELEMETRY                   1

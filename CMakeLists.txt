@@ -75,7 +75,14 @@ robot_load_configuration()
 
 robot_option(APP_BLINK_ONLY BOOL OFF "Only run the LED heartbeat task (no drivers, all features off)")
 robot_option(UART_BAUDRATE INT 921600 "USB console baud rate (telemetry and AT commands)")
-robot_option(BT_BAUDRATE INT 115200 "Bluetooth console baud rate")
+robot_option(BT_MODULE STRING hc06 "Module on the Bluetooth header: HC-06 (classic Bluetooth) or the AtomS3R-CAM bridge (BLE + camera, atom/)"
+    CHOICES hc06 atom)
+if(BT_MODULE STREQUAL "atom")
+    set(BT_DEFAULT_BAUDRATE 115200)     # atom/main/Kconfig.projbuild: ATOM_ROBOT_BAUDRATE
+else()
+    set(BT_DEFAULT_BAUDRATE 9600)       # HC-06 factory speed
+endif()
+robot_option(BT_BAUDRATE INT ${BT_DEFAULT_BAUDRATE} "Bluetooth console baud rate; must match the module")
 robot_option(IMU_SAMPLE_RATE_MS INT 10 "IMU and control loop period in ms")
 robot_option(FREERTOS_TICK_RATE_HZ INT 1000 "FreeRTOS tick rate in Hz")
 robot_option(FREERTOS_TOTAL_HEAP_SIZE INT ${BOARD_DEFAULT_HEAP_SIZE} "FreeRTOS heap size in bytes")

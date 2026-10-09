@@ -6,7 +6,8 @@ import android.bluetooth.BluetoothManager
 import android.bluetooth.BluetoothSocket
 import android.content.Context
 import android.util.Log
-import com.machadothi.balancebot.model.PairedDevice
+import com.machadothi.balancebot.model.LinkKind
+import com.machadothi.balancebot.model.RobotDevice
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -31,10 +32,10 @@ class BluetoothTransport @Inject constructor(
     fun isEnabled(): Boolean = adapter?.isEnabled == true
 
     @SuppressLint("MissingPermission")
-    fun pairedDevices(): List<PairedDevice> = try {
+    fun pairedDevices(): List<RobotDevice> = try {
         adapter?.bondedDevices.orEmpty()
-            .map { PairedDevice(it.name ?: it.address, it.address) }
-            .sortedWith(compareByDescending<PairedDevice> { it.looksLikeRobot }.thenBy { it.name })
+            .map { RobotDevice(it.name ?: it.address, it.address, LinkKind.CLASSIC) }
+            .sortedWith(compareByDescending<RobotDevice> { it.looksLikeRobot }.thenBy { it.name })
     } catch (e: SecurityException) {
         emptyList()
     }
@@ -45,7 +46,7 @@ class BluetoothTransport @Inject constructor(
      * No discovery is involved (cancelDiscovery() would need BLUETOOTH_SCAN).
      */
     @SuppressLint("MissingPermission")
-    suspend fun open(address: String): BluetoothSocket = withContext(Dispatchers.IO) {
+    suspend fun open(address: String): RobotLink = withContext(Dispatchers.IO) {
         val bt = adapter ?: throw IOException("Bluetooth is not available")
         if (!bt.isEnabled) throw IOException("Bluetooth is off")
         val device = bt.getRemoteDevice(address)
@@ -65,7 +66,7 @@ class BluetoothTransport @Inject constructor(
                 socket = create()
                 socket.connect()
                 Log.i(TAG, "connected to $address with $name")
-                return@withContext socket
+                return@withContext SocketLink(socket)
             } catch (e: Exception) {
                 Log.w(TAG, "$name to $address failed: ${e.message}", e)
                 lastError = e

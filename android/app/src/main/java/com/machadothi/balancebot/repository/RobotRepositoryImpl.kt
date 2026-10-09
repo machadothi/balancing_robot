@@ -1,15 +1,18 @@
 package com.machadothi.balancebot.repository
 
-import android.bluetooth.BluetoothSocket
 import android.util.Log
 import com.machadothi.balancebot.data.at.AtReply
 import com.machadothi.balancebot.data.at.AtSession
+import com.machadothi.balancebot.data.link.BleTransport
 import com.machadothi.balancebot.data.link.BluetoothTransport
+import com.machadothi.balancebot.data.link.RobotLink
 import com.machadothi.balancebot.model.ConnectionState
 import com.machadothi.balancebot.model.DriveCommand
+import com.machadothi.balancebot.model.LinkKind
 import com.machadothi.balancebot.model.LiveState
-import com.machadothi.balancebot.model.PairedDevice
+import com.machadothi.balancebot.model.RobotDevice
 import com.machadothi.balancebot.model.RobotParam
+import com.machadothi.balancebot.model.WifiNetwork
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,12 +31,13 @@ import javax.inject.Singleton
 
 @Singleton
 class RobotRepositoryImpl @Inject constructor(
-    private val transport: BluetoothTransport,
+    private val classic: BluetoothTransport,
+    private val ble: BleTransport,
 ) : RobotRepository {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    private var socket: BluetoothSocket? = null
+    private var link: RobotLink? = null
     private var session: AtSession? = null
     private var pollJob: Job? = null
 
@@ -46,26 +50,41 @@ class RobotRepositoryImpl @Inject constructor(
     private val _history = MutableStateFlow<List<LiveState>>(emptyList())
     override val history: StateFlow<List<LiveState>> = _history.asStateFlow()
 
+    private val _cameraUrl = MutableStateFlow<String?>(null)
+    override val cameraUrl: StateFlow<String?> = _cameraUrl.asStateFlow()
+
     @Volatile private var driveCommand = DriveCommand.STOP
     @Volatile private var driveActive = false
 
-    override fun bluetoothEnabled(): Boolean = transport.isEnabled()
+    override fun bluetoothEnabled(): Boolean = classic.isEnabled()
 
-    override fun pairedDevices(): List<PairedDevice> = transport.pairedDevices()
+    override fun pairedDevices(): List<RobotDevice> = classic.pairedDevices()
 
-    override suspend fun connect(device: PairedDevice) {
+    override suspend fun scanBle(onFound: (RobotDevice) -> Unit): Result<Unit> = try {
+        ble.scan(onFound = onFound)
+        Result.success(Unit)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(if (e is SecurityException) IOException("Bluetooth scan permission missing") else e)
+    }
+
+    override suspend fun connect(device: RobotDevice) {
         disconnect()
         _connection.value = ConnectionState.Connecting(device)
         try {
-            val s = transport.open(device.address)
-            socket = s
-            val at = AtSession(s.inputStream, s.outputStream, scope)
+            val l = when (device.kind) {
+                LinkKind.CLASSIC -> classic.open(device.address)
+                LinkKind.BLE -> ble.open(device.address)
+            }
+            link = l
+            val at = AtSession(l.input, l.output, scope)
             session = at
             // A plain AT proves that the other end is the robot's console
             if (at.transact("AT", 3000) !is AtReply.Ok) throw IOException("no answer from the robot")
             _history.value = emptyList()
             _connection.value = ConnectionState.Connected(device)
-            pollJob = scope.launch { pollLoop(at) }
+            pollJob = scope.launch { pollLoop(at, camera = device.kind == LinkKind.BLE) }
         } catch (e: CancellationException) {
             close()
             _connection.value = ConnectionState.Disconnected
@@ -89,11 +108,12 @@ class RobotRepositoryImpl @Inject constructor(
         pollJob = null
         session = null
         try {
-            socket?.close()
+            link?.close()
         } catch (ignored: IOException) {
         }
-        socket = null
+        link = null
         _live.value = null
+        _cameraUrl.value = null
     }
 
     override fun setDrive(command: DriveCommand, active: Boolean) {
@@ -103,9 +123,11 @@ class RobotRepositoryImpl @Inject constructor(
 
     /**
      * Poll AT+LIVE? and keep the jog alive. The robot zeroes speed and turn after
-     * 1 s without a drive command, so a lost link stops it by itself.
+     * 1 s without a drive command, so a lost link stops it by itself. Over the
+     * Atom, also ask for the camera URL now and then: Wi-Fi may come up later.
      */
-    private suspend fun pollLoop(at: AtSession) {
+    private suspend fun pollLoop(at: AtSession, camera: Boolean) {
+        var lastCameraMs = 0L
         var lastDriveMs = 0L
         var stopSent = true
         var misses = 0
@@ -121,6 +143,12 @@ class RobotRepositoryImpl @Inject constructor(
                 } else if (!active && !stopSent) {
                     sendDrive(at, DriveCommand.STOP)
                     stopSent = true
+                }
+
+                if (camera && now - lastCameraMs >= CAMERA_CHECK_MS) {
+                    lastCameraMs = now
+                    val reply = at.transact("AT+CAM?")
+                    if (reply is AtReply.Value && reply.name == "CAM") _cameraUrl.value = reply.value.ifEmpty { null }
                 }
 
                 when (val reply = at.transact("AT+LIVE?")) {
@@ -151,13 +179,30 @@ class RobotRepositoryImpl @Inject constructor(
         _history.value = (_history.value + state).dropWhile { it.timeMs < cutoff }
     }
 
-    private suspend fun command(text: String): Result<Unit> {
+    /** One command from a screen; a link that breaks meanwhile is a failure, not a crash */
+    private suspend fun ask(text: String, timeoutMs: Long = AtSession.DEFAULT_TIMEOUT_MS): Result<AtReply> {
         val at = session ?: return Result.failure(IOException("not connected"))
-        return when (val reply = at.transact(text)) {
-            AtReply.Ok -> Result.success(Unit)
-            is AtReply.Error -> Result.failure(IOException(reply.meaning))
-            AtReply.Timeout -> Result.failure(IOException("no reply"))
-            is AtReply.Value -> Result.success(Unit)
+        return try {
+            Result.success(at.transact(text, timeoutMs))
+        } catch (e: IOException) {
+            Result.failure(e)
+        }
+    }
+
+    private suspend fun command(text: String): Result<Unit> = ask(text).mapCatching { reply ->
+        when (reply) {
+            AtReply.Ok, is AtReply.Value -> Unit
+            is AtReply.Error -> throw IOException(reply.meaning)
+            AtReply.Timeout -> throw IOException("no reply")
+        }
+    }
+
+    private suspend fun query(text: String, timeoutMs: Long = AtSession.DEFAULT_TIMEOUT_MS): Result<String> =
+        ask(text, timeoutMs).mapCatching { reply ->
+        when (reply) {
+            is AtReply.Value -> reply.value
+            is AtReply.Error -> throw IOException(reply.meaning)
+            else -> throw IOException("no reply")
         }
     }
 
@@ -171,13 +216,17 @@ class RobotRepositoryImpl @Inject constructor(
 
     override suspend fun restoreDefaults(): Result<Unit> = command("AT+DEFAULT")
 
-    override suspend fun readParam(param: RobotParam): Result<String> {
-        val at = session ?: return Result.failure(IOException("not connected"))
-        return when (val reply = at.transact("AT+${param.command}?")) {
-            is AtReply.Value -> Result.success(reply.value)
-            is AtReply.Error -> Result.failure(IOException(reply.meaning))
-            else -> Result.failure(IOException("no reply"))
-        }
+    override suspend fun readParam(param: RobotParam): Result<String> = query("AT+${param.command}?")
+
+    override suspend fun wifiStatus(): Result<String> = query("AT+WIFI?")
+
+    override suspend fun scanWifi(): Result<List<WifiNetwork>> =
+        query("AT+WIFISCAN?", WIFI_SCAN_TIMEOUT_MS).map(WifiNetwork::parseList)
+
+    override suspend fun setWifi(ssid: String, password: String): Result<Unit> {
+        if (ssid.isEmpty() || ssid.contains(',')) return Result.failure(IllegalArgumentException("SSID empty or with a comma"))
+        if (password.isNotEmpty() && password.length < 8) return Result.failure(IllegalArgumentException("WPA passwords have 8+ characters"))
+        return command("AT+WIFI=$ssid,$password").onSuccess { _cameraUrl.value = null }
     }
 
     override suspend fun writeParam(param: RobotParam, value: String): Result<Unit> {
@@ -192,5 +241,7 @@ class RobotRepositoryImpl @Inject constructor(
         const val DRIVE_PERIOD_MS = 300L      // well inside the robot's 1 s dead-man
         const val HISTORY_MS = 60_000L
         const val MAX_MISSES = 5
+        const val CAMERA_CHECK_MS = 5_000L
+        const val WIFI_SCAN_TIMEOUT_MS = 10_000L
     }
 }

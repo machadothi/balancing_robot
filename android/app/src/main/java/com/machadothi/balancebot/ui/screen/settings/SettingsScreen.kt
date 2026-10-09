@@ -1,5 +1,12 @@
 package com.machadothi.balancebot.ui.screen.settings
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -32,6 +40,7 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
     val connection by viewModel.connection.collectAsStateWithLifecycle()
     val items by viewModel.items.collectAsStateWithLifecycle()
     val message by viewModel.message.collectAsStateWithLifecycle()
+    val wifi by viewModel.wifi.collectAsStateWithLifecycle()
     val connected = connection is ConnectionState.Connected
 
     LazyColumn(
@@ -54,6 +63,8 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             }
         }
 
+        wifi?.let { w -> item(key = "wifi") { WifiCard(w, connected, viewModel) } }
+
         var lastGroup = ""
         items.forEach { item ->
             if (item.param.group != lastGroup) {
@@ -65,6 +76,81 @@ fun SettingsScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             item(key = item.param.command) { ParamCard(item, connected, viewModel) }
         }
         item { Text("", modifier = Modifier.padding(bottom = 16.dp)) }
+    }
+}
+
+/** The Atom's Wi-Fi network, used for the camera video only */
+@Composable
+private fun WifiCard(w: WifiUi, connected: Boolean, viewModel: SettingsViewModel) {
+    Card(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Camera Wi-Fi", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "The Atom joins this network for the video; the phone must be on it too. " +
+                            "The password goes over BLE unencrypted.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                OutlinedButton(onClick = viewModel::readWifi, enabled = connected) { Text("Check") }
+            }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Button(onClick = viewModel::scanWifi, enabled = connected && !w.scanning) { Text("Scan") }
+                if (w.scanning) {
+                    CircularProgressIndicator(Modifier.padding(start = 12.dp).size(24.dp))
+                    Text("The Atom is looking (2.4 GHz only) ...", style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(start = 8.dp))
+                }
+            }
+            w.networks.forEach { net ->
+                val selected = net.ssid == w.ssid
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (selected) MaterialTheme.colorScheme.primaryContainer else Color.Transparent)
+                        .clickable(enabled = connected) { viewModel.onWifiEdit(net.ssid, if (selected) w.password else "") }
+                        .padding(horizontal = 8.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(net.ssid, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                    Text(
+                        "▂▄▆█".take(net.bars).padEnd(4, ' ') + "  ${net.rssi} dBm",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+            Text(
+                if (w.state == "connected" && w.ssid.isNotBlank()) "\"${w.ssid}\": connected, ${w.ip}" else when (w.state) {
+                    "connected" -> "Connected, ${w.ip}"
+                    "connecting" -> "Connecting ..."
+                    "off" -> "Off: no network set"
+                    else -> w.state
+                },
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            OutlinedTextField(
+                value = w.ssid,
+                onValueChange = { viewModel.onWifiEdit(it, w.password) },
+                label = { Text("Network (SSID)") },
+                singleLine = true,
+                enabled = connected,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = w.password,
+                onValueChange = { viewModel.onWifiEdit(w.ssid, it) },
+                label = { Text("Password") },
+                singleLine = true,
+                enabled = connected,
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(onClick = viewModel::saveWifi, enabled = connected && w.ssid.isNotBlank()) { Text("Join") }
+            w.error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        }
     }
 }
 
