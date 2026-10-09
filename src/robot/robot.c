@@ -84,6 +84,10 @@
 #define BOARD_MOTOR_DEADBAND_RIGHT  20
 #endif // BOARD_MOTOR_DEADBAND_RIGHT
 
+/** Drive commands (AT+VELOCITY, AT+TURN) must repeat: after this long without one,
+ * speed and turn targets return to 0, so a lost phone link cannot drive the robot away */
+#define DRIVE_TIMEOUT_MS        1000
+
 /** Outer speed loop (SPEED_LOOP): every SPEED_LOOP_DIVIDER samples (100 ms) */
 #define SPEED_LOOP_DIVIDER      10
 #define SPEED_LOOP_PERIOD_S     (SPEED_LOOP_DIVIDER * IMU_SAMPLE_RATE_S)
@@ -381,6 +385,12 @@ void robot_task(void *args) {
             }
         }
 #endif // AUTO_ENABLE
+
+        if ((robot.target_velocity != 0.0f || robot.turn_rate != 0.0f) &&
+            (xTaskGetTickCount() - robot.drive_tick) > pdMS_TO_TICKS(DRIVE_TIMEOUT_MS)) {
+            robot.target_velocity = 0.0f;   /* dead-man: the driver went quiet */
+            robot.turn_rate = 0.0f;
+        }
 
 #if SPEED_LOOP
         robot_speed_step();

@@ -5,5 +5,6 @@
 #include "FreeRTOS.h"
 
 static inline void vTaskDelay(TickType_t ticks) { (void)ticks; }
+static inline TickType_t xTaskGetTickCount(void) { return 0; }
 
 #endif // HOST_TASK_H

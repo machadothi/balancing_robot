@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Night navy to teal -->
+    <path android:pathData="M0,0 H108 V108 H0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="0" android:startY="0"
+                android:endX="108" android:endY="108"
+                android:startColor="#FF0B1220"
+                android:centerColor="#FF134E5E"
+                android:endColor="#FF0D9488" />
+        </aapt:attr>
+    </path>
+    <!-- Soft glow behind the robot -->
+    <path android:pathData="M54,20 a34,34 0 1,0 0.1,0 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="radial"
+                android:centerX="54" android:centerY="54"
+                android:gradientRadius="40"
+                android:startColor="#552DD4BF"
+                android:endColor="#002DD4BF" />
+        </aapt:attr>
+    </path>
+</vector>

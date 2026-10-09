@@ -316,7 +316,7 @@ flowchart LR
 
 ### As implemented (`SPEED_LOOP`, F407 robot)
 
-[`robot_speed_step()`](../src/robot/robot.c#L252) runs every 100 ms: the average
+[`robot_speed_step()`](../src/robot/robot.c#L256) runs every 100 ms: the average
 of both encoders is the forward speed (turning cancels out), in % of
 `BOARD_WHEEL_MAX_CPS`. A PI (`PID_t` with D = 0, `AT+VKP`/`AT+VKI`) turns
 `speed − AT+VELOCITY` into a lean, clamped to ±4°, that is subtracted from the

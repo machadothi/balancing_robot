@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="M37.5,84 H58.5 A1.5,1.5 0 0 1 60,85.5 V85.5 A1.5,1.5 0 0 1 58.5,87 H37.5 A1.5,1.5 0 0 1 36,85.5 V85.5 A1.5,1.5 0 0 1 37.5,84 Z" android:fillColor="#55FFFFFF" />
+    <path android:pathData="M36,46 Q31,54 36,62" android:strokeColor="#FFF59E0B" android:strokeWidth="3" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <path android:pathData="M30,42 Q24,54 30,66" android:strokeColor="#99F59E0B" android:strokeWidth="2.5" android:strokeLineCap="round" android:fillColor="#00000000" />
+    <!-- Leaning 12 degrees around the axle: caught mid-balance -->
+    <group android:scaleX="0.88" android:scaleY="0.88" android:pivotX="54" android:pivotY="54"
+        android:translateX="-6" android:translateY="1">
+    <group android:rotation="12" android:pivotX="54" android:pivotY="72">
+        <path android:name="antenna" android:pathData="M53,22 H55 V30 H53 Z" android:fillColor="#FFFFFFFF" />
+        <path android:name="antenna_ball" android:pathData="M51,21 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z" android:fillColor="#FFF59E0B" />
+        <path android:name="body" android:pathData="M48,28 H60 A7,7 0 0 1 67,35 V57 A7,7 0 0 1 60,64 H48 A7,7 0 0 1 41,57 V35 A7,7 0 0 1 48,28 Z" android:fillColor="#FFFFFFFF" />
+        <path android:name="visor" android:pathData="M49,34 H59 A4,4 0 0 1 63,38 V42 A4,4 0 0 1 59,46 H49 A4,4 0 0 1 45,42 V38 A4,4 0 0 1 49,34 Z" android:fillColor="#FF0B1220" />
+        <path android:name="eye_left" android:pathData="M47.6,40 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 Z" android:fillColor="#FF2DD4BF" />
+        <path android:name="eye_right" android:pathData="M55.6,40 a2.4,2.4 0 1,0 4.8,0 a2.4,2.4 0 1,0 -4.8,0 Z" android:fillColor="#FF2DD4BF" />
+        <path android:name="chest" android:pathData="M50,51 H58 A2,2 0 0 1 60,53 V53 A2,2 0 0 1 58,55 H50 A2,2 0 0 1 48,53 V53 A2,2 0 0 1 50,51 Z" android:fillColor="#FF2DD4BF" />
+        <path android:name="wheel" android:pathData="M42,72 a12,12 0 1,0 24,0 a12,12 0 1,0 -24,0 Z" android:fillColor="#FFFFFFFF" />
+        <path android:name="tyre" android:pathData="M46,72 a8,8 0 1,0 16,0 a8,8 0 1,0 -16,0 Z" android:fillColor="#FF0B1220" />
+        <path android:name="hub" android:pathData="M51,72 a3,3 0 1,0 6,0 a3,3 0 1,0 -6,0 Z" android:fillColor="#FFFFFFFF" />
+    </group>
+    </group>
+</vector>

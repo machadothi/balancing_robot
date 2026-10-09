@@ -16,10 +16,10 @@ from (see [03 — Boot and RTOS](03-boot-and-rtos.md)).
 | What | Where |
 |------|-------|
 | Line parsing and dispatch | [`at_cmd_process()`](../src/cmd/at_cmd.c#L222) |
-| Command definition, registration | [`AT_Command_Def_t`](../src/cmd/at_cmd.h), [`at_cmd_register()`](../src/cmd/at_cmd.c#L344) |
+| Command definition, registration | [`AT_Command_Def_t`](../src/cmd/at_cmd.h), [`at_cmd_register()`](../src/cmd/at_cmd.c#L365) |
 | Robot commands | [robot_commands.c](../src/robot/robot_commands.c) |
 | `AT+STREAM` | [telemetry.c](../src/telemetry/telemetry.c) |
-| `AT+VERSION`, `AT+RESET`, `AT+HELP` | [`at_cmd_init()`](../src/cmd/at_cmd.c#L353) |
+| `AT+VERSION`, `AT+RESET`, `AT+HELP` | [`at_cmd_init()`](../src/cmd/at_cmd.c#L374) |
 | Build flags | `AT_CMD_HELP`, `AT_CMD_ALL_QUERY`, `AT_CMD_PID_TOGGLE`, `CONSOLE_ECHO` ([02](02-build-and-configuration.md#build-options)) |
 
 ## Syntax
@@ -65,6 +65,7 @@ The numbers are the `AT_Result_t` values in [at_cmd.h](../src/cmd/at_cmd.h).
 | `AT+ALPHA?` | `+ALPHA:0.990` | Complementary filter gyro weight |
 | `AT+OUTLIMIT?` | `+OUTLIMIT:100` | Balance output limit, percent of full power |
 | `AT+DEADBAND?` | `+DEADBAND:46,46` | Motor dead zone left,right (counts of 255) |
+| `AT+LIVE?` | `+LIVE:1,1,-0.42,0.8,-2.61,35,1234,1200` | enabled, balanced, tilt (°), speed (%), setpoint used (°), motor output, encoders L,R: one reply for remote displays (the Android app) |
 | `AT+ENC?` | `+ENC:1234,-56` | Encoder counts left,right since boot (`test/pid_tune.py motor-test`) |
 | `AT+TURN?` | `+TURN:0.00` | |
 | `AT+SPEED?` | `+SPEED:30.0,30.0` | Last values set with `AT+SPEED=` |
@@ -88,7 +89,7 @@ one response are consistent with each other.
 | `AT+DEADBAND=l,r` | 0 … 200 each, integers | Motor dead zone per wheel; measured by `test/pid_tune.py deadband` |
 | `AT+TURN=n` | −100 … 100 | Added to the left wheel and subtracted from the right |
 | `AT+SPEED=l,r` | −100 … 100 each | Drives the wheels directly (see [Direct wheel control](#direct-wheel-control)) |
-| `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Target speed in % of full wheel speed, followed by the speed loop |
+| `AT+VELOCITY=n` / `AT+TARGET=n` | −100 … 100 | Target speed in % of full wheel speed, followed by the speed loop. Drive commands are a dead-man: without a new `AT+VELOCITY` or `AT+TURN` for 1 s, speed and turn return to 0 |
 | `AT+VLOOP=0\|1` | 0 or 1 | Speed loop off/on (board default at reset: on for the F407 robot); it keeps the robot in place by leaning it against any drift |
 | `AT+VKP=n` `AT+VKI=n` | 0 … 1 | Speed loop gains: degrees of lean per % of speed error, and per %·s |
 | `AT+STREAM=0\|1` | 0 or 1 | Telemetry record every sample, on the USB console (from either console) |
@@ -104,6 +105,7 @@ one response are consistent with each other.
 | `AT+PIDON` / `AT+PIDOFF` | Enable / disable the PID; `PIDOFF` also zeroes the motors |
 | `AT+DEFAULT` | Restore the default gains (Kp 25, Ki 0.5, Kd 0.8) and zero `TURN`/`TARGET`/`SETPOINT` |
 | `AT+UPDATE` | Restart into the bootloader for a firmware update (`BOOTLOADER` boards; used by `scripts/flash_usb.py`) |
+| `AT+BTNAME` | Write `BOARD_BT_NAME` ("balancing robot") into the Bluetooth module; USB console only, nothing connected over Bluetooth (`ERROR:6` otherwise) |
 | `AT+RESET` | Reply `OK`, wait 100 ms, then reset the MCU |
 | `AT+SAVE` / `AT+LOAD` | `ERROR:1`: parameter storage is not implemented |
 | `AT+HELP` | Command summary, only with `AT_CMD_HELP=ON` (default OFF) |
@@ -232,7 +234,8 @@ Bluetooth header gives a wireless AT console alongside USB. It is built when
    no level shifting needed.
 3. **Baud rate.** `BT_BAUDRATE` must equal the module's speed. The F407 board
    sets 9600 in [cmake/boards/f407.conf](../cmake/boards/f407.conf), the
-   factory speed of HC-06 firmware (the tested ZS-040 advertises as `HC-06`).
+   factory speed of HC-06 firmware (a fresh ZS-040 advertises as `HC-06`; this
+   robot's is renamed "balancing robot" with `AT+BTNAME` from the USB console).
    To run faster, change the module first, then `BT_BAUDRATE`:
    - HC-06: send `AT+BAUD8` (115200) at the current speed with no line ending,
      while no phone or PC is connected.

@@ -9,6 +9,9 @@
 #include <float.h>
 #include <stdio.h>
 
+#include <FreeRTOS.h>
+#include <task.h>
+
 #include "config.h"
 #include "cmd/at_cmd.h"
 #include "motor/motor.h"
@@ -104,6 +107,27 @@ static AT_Result_t query_outlimit(char *value, size_t size) {
     return AT_OK;
 }
 
+/** Everything a remote display needs, in one short reply (Bluetooth is 9600 baud):
+ * enabled,balanced,tilt,speed,setpoint,output,encoder_left,encoder_right */
+static AT_Result_t query_live(char *value, size_t size) {
+    robot_lock();
+    bool enabled = robot.motors_enabled;
+    bool balanced = robot.is_balanced;
+    float tilt = robot.tilt;
+    float speed = robot.speed;
+    float setpoint = robot.setpoint - robot.speed_offset;
+    float output = robot.pid.output;
+    robot_unlock();
+    int32_t left = motor_get_encoder(MOTOR_LEFT);
+    int32_t right = motor_get_encoder(MOTOR_RIGHT);
+
+    char t[16], v[16], s[16];
+    snprintf(value, size, "%d,%d,%s,%s,%s,%d,%ld,%ld", enabled ? 1 : 0, balanced ? 1 : 0,
+             fmt_fixed(t, sizeof(t), tilt, 2), fmt_fixed(v, sizeof(v), speed, 1),
+             fmt_fixed(s, sizeof(s), setpoint, 2), (int)output, (long)left, (long)right);
+    return AT_OK;
+}
+
 static AT_Result_t query_encoders(char *value, size_t size) {
     int32_t left = motor_get_encoder(MOTOR_LEFT);
     int32_t right = motor_get_encoder(MOTOR_RIGHT);
@@ -140,8 +164,22 @@ static AT_Result_t query_all(char *value, size_t size) {
         return AT_OK;                                       \
     }
 
-DEFINE_FLOAT_SET(set_target, robot.target_velocity)
-DEFINE_FLOAT_SET(set_turn, robot.turn_rate)
+/* Drive targets: each one restarts the dead-man timeout (DRIVE_TIMEOUT_MS) */
+static AT_Result_t set_target(const float *values) {
+    robot_lock();
+    robot.target_velocity = values[0];
+    robot.drive_tick = (uint32_t)xTaskGetTickCount();
+    robot_unlock();
+    return AT_OK;
+}
+
+static AT_Result_t set_turn(const float *values) {
+    robot_lock();
+    robot.turn_rate = values[0];
+    robot.drive_tick = (uint32_t)xTaskGetTickCount();
+    robot_unlock();
+    return AT_OK;
+}
 DEFINE_FLOAT_SET(set_kp, robot.pid.kp)
 DEFINE_FLOAT_SET(set_ki, robot.pid.ki)
 DEFINE_FLOAT_SET(set_kd, robot.pid.kd)
@@ -284,6 +322,7 @@ static const AT_Command_Def_t robot_commands[] = {
     { .name = "GYRO_X",   .query = query_gyro_x,   .help = AT_HELP("X rotation rate (deg/s)") },
     { .name = "GYRO_Y",   .query = query_gyro_y,   .help = AT_HELP("Y rotation rate (deg/s)") },
     { .name = "GYRO_Z",   .query = query_gyro_z,   .help = AT_HELP("Z rotation rate (deg/s)") },
+    { .name = "LIVE",     .query = query_live,     .help = AT_HELP("en,bal,tilt,speed,setpoint,out,encL,encR") },
     { .name = "ENC",      .query = query_encoders, .help = AT_HELP("Encoder counts left,right (since boot)") },
     { .name = "ANGLE",    .query = query_angle,    .help = AT_HELP("Filtered tilt (deg, 0 = upright)") },
 #if AT_CMD_ALL_QUERY

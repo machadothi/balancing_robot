@@ -303,6 +303,24 @@ static AT_Result_t exec_update(void) {
 }
 #endif // BOOTLOADER
 
+#if CONSOLE_BT && defined(BOARD_BT_NAME)
+/**
+ * Rename the Bluetooth module to BOARD_BT_NAME (HC-06: "AT+NAME<name>", no line
+ * ending). The module takes commands only while nothing is connected to it over
+ * Bluetooth, so this runs from the USB console. It answers "OKsetname" without a
+ * line ending: dropped, or it would prefix the next command from the phone.
+ */
+static AT_Result_t exec_btname(void) {
+    if (reply_port == UART_PORT_BT) {
+        return AT_ERROR_BUSY;       /* we are talking through the module right now */
+    }
+    (void)uart_puts(UART_PORT_BT, "AT+NAME" BOARD_BT_NAME);
+    vTaskDelay(pdMS_TO_TICKS(1500));    /* HC-06 commands end by a pause, then it answers */
+    uart_discard_rx(UART_PORT_BT);
+    return AT_OK;
+}
+#endif // CONSOLE_BT && defined(BOARD_BT_NAME)
+
 #if AT_CMD_HELP
 /** List every registered command, with its syntax, from the tables themselves */
 static AT_Result_t exec_help(void) {
@@ -332,6 +350,9 @@ static const AT_Command_Def_t system_commands[] = {
 #if BOOTLOADER
     { .name = "UPDATE",  .exec = exec_update,    .help = AT_HELP("Restart into the bootloader (scripts/flash_usb.py)") },
 #endif // BOOTLOADER
+#if CONSOLE_BT && defined(BOARD_BT_NAME)
+    { .name = "BTNAME",  .exec = exec_btname,    .help = AT_HELP("Rename the Bluetooth module (USB console, nothing connected over BT)") },
+#endif // CONSOLE_BT && defined(BOARD_BT_NAME)
 #if AT_CMD_HELP
     { .name = "HELP",    .exec = exec_help,      .help = AT_HELP("This list") },
 #endif // AT_CMD_HELP

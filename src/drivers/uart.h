@@ -88,6 +88,9 @@ UART_Status_t uart_try_puts(UART_Port_t port, const char *s);
 /** Register the handler for received lines (NULL to disable) */
 void uart_set_rx_callback(UART_RxCallback_t callback);
 
+/** Drop a partly received line, e.g. a device's reply that has no line ending */
+void uart_discard_rx(UART_Port_t port);
+
 /** Echoes (on ports configured to) and dispatches received lines */
 void uart_rx_task(void *args);
 

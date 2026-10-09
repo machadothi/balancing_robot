@@ -18,8 +18,9 @@
 typedef struct {
     IMU_Data_t imu;             /**< Latest sample, physical units */
     float tilt;                 /**< Filtered tilt, degrees, 0 = upright */
-    float target_velocity;      /**< AT+VELOCITY / AT+TARGET, not used by the control law yet */
+    float target_velocity;      /**< AT+VELOCITY / AT+TARGET, % of full wheel speed (speed loop) */
     float turn_rate;            /**< Differential term added to the wheels */
+    uint32_t drive_tick;        /**< When AT+VELOCITY/AT+TURN last arrived (ticks): dead-man */
     float speed_left;           /**< Last AT+SPEED values, percent */
     float speed_right;
     bool motors_enabled;

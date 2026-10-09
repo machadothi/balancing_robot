@@ -210,6 +210,15 @@ void uart_set_rx_callback(UART_RxCallback_t callback) {
     rx_callback = callback;
 }
 
+void uart_discard_rx(UART_Port_t port) {
+    if (port >= UART_PORT_COUNT) {
+        return;
+    }
+    taskENTER_CRITICAL();
+    port_state[port].rx_pos = 0;
+    taskEXIT_CRITICAL();
+}
+
 void uart_rx_task(void *args) {
     (void)args;
     UART_Line_t line;

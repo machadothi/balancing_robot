@@ -9,9 +9,14 @@ the linked [docs](docs/README.md) chapter.
       - battery monitor and low-voltage cut-off (section 8);
       - re-measure the dead zone on battery voltage (`pid_tune.py deadband --write`);
       - re-check KP/KD with one sweep each ([09](docs/09-tuning-and-experiments.md#pid-tuning-procedure)).
-- [ ] **Driving:** `AT+VELOCITY` (target speed, already followed by the speed loop)
-      and `AT+TURN`, ramped so a step does not tip the robot; then from the phone
-      over Bluetooth.
+- [ ] **Driving:** the Android app ([android/](android/README.md)) has the
+      jog; try it with a small max speed. The firmware has a 1 s dead-man on
+      `AT+VELOCITY`/`AT+TURN`. Then: ramp the speed target in the firmware so a
+      stick step does not tip the robot.
+- [x] Firmware with `AT+LIVE?` and the drive dead-man flashed and tested (USB
+      and Bluetooth, ~8 `AT+LIVE?` replies/s); module renamed "balancing robot".
+- [ ] Try the app on the phone: connect, Live tab, Settings read/write, then the
+      jog with a small max speed.
 - [ ] Show `ARMED` in `AT+STATUS?`: a button press that did not register is
       invisible today.
 - [ ] Parameter storage in flash for `AT+SAVE` / `AT+LOAD`, so tuning survives a

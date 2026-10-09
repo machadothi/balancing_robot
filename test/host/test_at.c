@@ -160,6 +160,7 @@ static void test_values(void) {
     EXPECT("AT+TARGET=-42.5", "OK");
     EXPECT("AT+TARGET?", "+TARGET:-42.50");
     EXPECT("AT+ENC?", "+ENC:1234,-56");
+    EXPECT("AT+LIVE?", "+LIVE:0,0,0.00,0.0,0.00,0,1234,-56");
     EXPECT("AT+DEADBAND=46,20", "OK");
     EXPECT("AT+DEADBAND?", "+DEADBAND:46,20");
     EXPECT("AT+DEADBAND=46", "ERROR:3");

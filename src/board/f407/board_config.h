@@ -24,6 +24,9 @@
 
 /* Bluetooth AT console (HC-05/HC-06 module): USART2 on the Bluetooth header
  * (PD5 = TX to the module's RXD, PD6 = RX from the module's TXD) */
+/* Name the Bluetooth module advertises; AT+BTNAME writes it into the module */
+#define BOARD_BT_NAME            "balancing robot"
+
 #define BOARD_BT_UART            USART2
 #define BOARD_BT_UART_RCC        RCC_USART2
 #define BOARD_BT_UART_IRQ        NVIC_USART2_IRQ
